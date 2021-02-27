@@ -6,6 +6,9 @@
 
 build_for_git.bat
 
+*.egg
+!mod_check/dependencies/*.egg
+
 #####################################
 # Standard Python template stuff
 #####################################
@@ -34,7 +37,7 @@ sdist/
 var/
 *.egg-info/
 .installed.cfg
-*.egg
+#*.egg
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
