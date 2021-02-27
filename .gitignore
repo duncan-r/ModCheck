@@ -4,7 +4,7 @@
 # ModCheck specific stuff
 #####################################
 
-
+build_for_git.bat
 
 #####################################
 # Standard Python template stuff
