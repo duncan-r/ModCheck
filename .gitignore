@@ -8,6 +8,7 @@ build_for_git.bat
 
 *.egg
 !mod_check/dependencies/*.egg
+!plugin/dependencies/*.egg
 
 #####################################
 # Standard Python template stuff
