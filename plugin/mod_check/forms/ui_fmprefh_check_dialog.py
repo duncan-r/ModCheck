@@ -29,7 +29,7 @@ class Ui_FmpRefhCheckDialog(object):
         self.horizontalLayout.addItem(spacerItem)
         self.verticalLayout.addLayout(self.horizontalLayout)
         self.refhOutputTextbox = QtWidgets.QPlainTextEdit(FmpRefhCheckDialog)
-        self.refhOutputTextbox.setStyleSheet("font: 10pt \"Source Code Pro\";")
+        self.refhOutputTextbox.setStyleSheet("font: 10pt \"Courier\";")
         self.refhOutputTextbox.setLineWrapMode(QtWidgets.QPlainTextEdit.NoWrap)
         self.refhOutputTextbox.setObjectName("refhOutputTextbox")
         self.verticalLayout.addWidget(self.refhOutputTextbox)
