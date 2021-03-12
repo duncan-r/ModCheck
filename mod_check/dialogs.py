@@ -21,11 +21,13 @@ from .forms import ui_fmptuflow_widthcheck_dialog as fmptuflowwidthcheck_ui
 from .forms import ui_runvariables_check_dialog as fmptuflowvariablescheck_ui
 from .forms import ui_fmpsectionproperty_check_dialog as fmpsectioncheck_ui
 from .forms import ui_graph_dialog as graph_ui
+from .forms import ui_fmprefh_check_dialog as refh_ui
 
 from .tools import chainagecalculator as chain_calc
 from .tools import fmptuflowwidthcheck as fmptuflow_widthcheck
 from .tools import runvariablescheck as runvariables_check
 from .tools import fmpsectioncheck as fmpsection_check
+from .tools import refhcheck
 from .tools import settings as mrt_settings
 
 class ChainageCalculatorDialog(QDialog, chaincalc_ui.Ui_ChainageCalculator):
@@ -673,3 +675,110 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
             self.banktopCheckTable.setItem(row_position, 2, QTableWidgetItem(right_drop))
             row_position += 1
 
+
+class FmpRefhCheckDialog(QDialog, refh_ui.Ui_FmpRefhCheckDialog):
+    
+    def __init__(self, iface, project):
+        QDialog.__init__(self)
+        self.iface = iface
+        self.project = project
+        self.setupUi(self)
+        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+        
+        self.csv_results = None
+        
+        model_path = mrt_settings.loadProjectSetting(
+            'refh_file', str, self.project.readPath('./temp')
+        )
+        self.fmpFileWidget.setFilePath(model_path)
+
+        self.fmpFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'refh_file'))
+        self.fmpFileReloadBtn.clicked.connect(self.loadModelFile)
+        self.csvExportBtn.clicked.connect(self.exportCsv)
+        
+    def fileChanged(self, path, caller):
+        mrt_settings.saveProjectSetting(caller, path)
+        self.loadModelFile()
+        
+    def loadModelFile(self):
+        model_path = mrt_settings.loadProjectSetting(
+            'refh_file', str, self.project.readPath('./temp')
+        )
+        refh_compare = refhcheck.CompareFmpRefhUnits([model_path])
+        self.csv_results, text_output, failed_paths, missing_refh = refh_compare.run_tool()
+        self.formatTexbox(text_output, failed_paths, missing_refh)
+        
+    def formatTexbox(self, output, failed_paths, missing_refh):   
+
+        self.refhOutputTextbox.clear()
+        self.refhOutputTextbox.appendPlainText('\n'.join(output))
+
+        # Highlight the values that are different in red
+        cursor = self.refhOutputTextbox.textCursor()
+
+        # Setup the desired format for matches
+        text_format = QTextCharFormat()
+        text_format.setBackground(QBrush(QColor("red")))
+
+        # Setup the regex engine
+        pattern = "!!!"
+        regex = QRegExp(pattern)
+
+        # Process the displayed document
+        pos = 0
+        index = regex.indexIn(self.refhOutputTextbox.toPlainText(), pos)
+        while (index != -1):
+            # Select the matched text and apply the desired text_format
+            cursor.setPosition(index)
+            cursor.movePosition(QTextCursor.EndOfWord, 1)
+            cursor.mergeCharFormat(text_format)
+            # Move to the next match
+            pos = index + regex.matchedLength()
+            index = regex.indexIn(self.refhOutputTextbox.toPlainText(), pos)
+        
+        msg = None
+        if failed_paths:
+            msg = ['The following files could not be audited:']
+            for f in failed_paths:
+                msg.append(f)
+            msg = '\n'.join(msg)
+        
+        if missing_refh:
+            if failed_paths: msg += '\n\n'
+            msg = ['The following files contain no ReFH units:']
+            for m in missing_refh:
+                msg.append(m)
+            msg = '\n'.join(msg)
+        if msg is not None:
+            msg += '\n\n'
+            cursor.setPosition(0)
+            self.refhOutputTextbox.insertPlainText(msg)
+#         cursor.setPosition(0)
+#         self.refhOutputTextbox.centerCursor()
+        self.refhOutputTextbox.moveCursor(cursor.Start)
+        self.refhOutputTextbox.ensureCursorVisible()
+#         self.refhOutputTextbox.verticalScrollbar.setValue(
+#             self.refhOutputTextbox.verticalScrollbar.maximum()
+#         )
+            
+    def exportCsv(self):
+        if not self.csv_results:
+            QMessageBox.warning(self, "Export Failed", "No results found: Please load model first")
+            return
+            
+        csv_file = mrt_settings.loadProjectSetting(
+            'csv_file', str, self.project.readPath('./temp')
+        )
+
+        filepath = QFileDialog(self).getSaveFileName(
+            self, 'Export Results', csv_file, "CSV File (*.csv)"
+        )
+        if filepath:
+            mrt_settings.saveProjectSetting('csv_file', filepath[0])
+            r = self.csv_results[0]
+            with open(filepath[0], 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile, delimiter=',')
+                for row in r:
+                    out = row.strip('\n').split('\s')
+                    writer.writerow(out)
