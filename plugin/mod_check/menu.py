@@ -99,11 +99,18 @@ class Menu:
         self.check_fmpsections_action.triggered.connect(self.check_fmp_sections)
         self.iface.addPluginToMenu("&ModCheck", self.check_fmpsections_action)
         
+        # FMP REFH unit compare
+        self.check_fmprefh_action = QAction(icon, "Compare FMP refh units", self.iface.mainWindow())
+        self.check_fmprefh_action.triggered.connect(self.check_fmp_refh)
+        self.iface.addPluginToMenu("&ModCheck", self.check_fmprefh_action)
+        
+        
     def unload(self):
         self.iface.removePluginMenu("&ModCheck", self.check_fmptuflow_chainage_action)
         self.iface.removePluginMenu("&ModCheck", self.check_1d2dWidth_action)
         self.iface.removePluginMenu("&ModCheck", self.get_runsummary_action)
         self.iface.removePluginMenu("&ModCheck", self.check_fmpsections_action)
+        self.iface.removePluginMenu("&ModCheck", self.check_fmprefh_action)
         
     def check_fmptuflow_chainage(self):
         project = QgsProject.instance()
@@ -123,6 +130,11 @@ class Menu:
     def check_fmp_sections(self):
         project = QgsProject.instance()
         dialog = FmpSectionCheckDialog(self.iface, project)
+        dialog.exec_()
+
+    def check_fmp_refh(self):
+        project = QgsProject.instance()
+        dialog = FmpRefhCheckDialog(self.iface, project)
         dialog.exec_()
         
         
