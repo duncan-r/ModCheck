@@ -7,10 +7,6 @@ from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from qgis.core import *
 from qgis.gui import QgsMessageBar, QgsFileWidget
-# from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
-# import matplotlib
-# matplotlib.use('Qt5Agg')
-# import matplotlib.pyplot as plt
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -22,12 +18,14 @@ from .forms import ui_runvariables_check_dialog as fmptuflowvariablescheck_ui
 from .forms import ui_fmpsectionproperty_check_dialog as fmpsectioncheck_ui
 from .forms import ui_graph_dialog as graph_ui
 from .forms import ui_fmprefh_check_dialog as refh_ui
+from .forms import ui_tuflowstability_check_dialog as tuflowstability_ui
 
 from .tools import chainagecalculator as chain_calc
 from .tools import fmptuflowwidthcheck as fmptuflow_widthcheck
 from .tools import runvariablescheck as runvariables_check
 from .tools import fmpsectioncheck as fmpsection_check
 from .tools import refhcheck
+from .tools import tuflowstabilitycheck as tmb_check
 from .tools import settings as mrt_settings
 
 class ChainageCalculatorDialog(QDialog, chaincalc_ui.Ui_ChainageCalculator):
@@ -754,13 +752,8 @@ class FmpRefhCheckDialog(QDialog, refh_ui.Ui_FmpRefhCheckDialog):
             msg += '\n\n'
             cursor.setPosition(0)
             self.refhOutputTextbox.insertPlainText(msg)
-#         cursor.setPosition(0)
-#         self.refhOutputTextbox.centerCursor()
         self.refhOutputTextbox.moveCursor(cursor.Start)
         self.refhOutputTextbox.ensureCursorVisible()
-#         self.refhOutputTextbox.verticalScrollbar.setValue(
-#             self.refhOutputTextbox.verticalScrollbar.maximum()
-#         )
             
     def exportCsv(self):
         if not self.csv_results:
@@ -782,3 +775,70 @@ class FmpRefhCheckDialog(QDialog, refh_ui.Ui_FmpRefhCheckDialog):
                 for row in r:
                     out = row.strip('\n').split('\s')
                     writer.writerow(out)
+
+
+class TuflowStabilityCheck(QDialog, tuflowstability_ui.Ui_TuflowStabilityCheckDialog):
+    
+    def __init__(self, iface, project):
+        QDialog.__init__(self)
+        self.iface = iface
+        self.project = project
+        self.setupUi(self)
+        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+        
+        mb_file = mrt_settings.loadProjectSetting(
+            'mb_file', str, self.project.readPath('./temp')
+        )
+        self.mbFileWidget.setFilePath(mb_file)
+        self.mbFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'mb_file'))
+        self.mbReloadBtn.clicked.connect(self.loadMbFile)
+        
+    def fileChanged(self, path, caller):
+        mrt_settings.saveProjectSetting(caller, path)
+        self.loadMbFile()
+    
+    def loadMbFile(self):
+        mb_path = mrt_settings.loadProjectSetting(
+            'mb_file', str, self.project.readPath('./temp')
+        )
+        mb_check = tmb_check.TuflowStabilityCheck(mb_path)
+        results = mb_check.run_tool()
+        self.graphResults(results)
+        
+    def graphResults(self, results):
+    
+        scene = QGraphicsScene()
+        view = self.mbGraphicsView.setScene(scene)
+        fig = Figure()
+        axes = fig.gca()
+        
+        x = results['time']
+        cme = results['cme']
+        dvol = results['dvol']
+        
+#         axes.set_title(self.title)
+        axes.set_ylabel('CME (%)', color='r')
+        axes.set_xlabel('Time (h)')
+        
+        cme_min = [1 for i in x]
+        cme_max = [-1 for i in x]
+
+        mb_plot = axes.plot(x, cme, "-r", label="CME")
+        mb_max_plot = axes.plot(x, cme_min, "-g", alpha=0.5, label="CME max recommended", dashes=[6,2])
+        mb_min_plot = axes.plot(x, cme_max, "-g", alpha=0.5, label="CME min recommended", dashes=[6,2])
+
+        axes2 = axes.twinx()
+        dvol_plot = axes2.plot(x, dvol, "-b", label="dVol")
+        axes2.set_ylabel('dVol (m3/s/s)', color='b')
+        
+        plot_lines = mb_max_plot
+        labels = [l.get_label() for l in plot_lines]
+        axes.legend(plot_lines, labels, loc='lower right')
+
+        axes.grid(True)
+        canvas = FigureCanvas(fig)
+        proxy_widget = scene.addWidget(canvas)
+
+        
+        

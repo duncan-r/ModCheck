@@ -104,6 +104,10 @@ class Menu:
         self.check_fmprefh_action.triggered.connect(self.check_fmp_refh)
         self.iface.addPluginToMenu("&ModCheck", self.check_fmprefh_action)
         
+        # TUFLOW stability outputs viewer (MB, Dvol, etc)
+        self.check_tuflowstability_action = QAction(icon, "Check TUFLOW MB", self.iface.mainWindow())
+        self.check_tuflowstability_action.triggered.connect(self.check_tuflow_stability)
+        self.iface.addPluginToMenu("&ModCheck", self.check_tuflowstability_action)
         
     def unload(self):
         self.iface.removePluginMenu("&ModCheck", self.check_fmptuflow_chainage_action)
@@ -111,6 +115,7 @@ class Menu:
         self.iface.removePluginMenu("&ModCheck", self.get_runsummary_action)
         self.iface.removePluginMenu("&ModCheck", self.check_fmpsections_action)
         self.iface.removePluginMenu("&ModCheck", self.check_fmprefh_action)
+        self.iface.removePluginMenu("&ModCheck", self.check_tuflowstability_action)
         
     def check_fmptuflow_chainage(self):
         project = QgsProject.instance()
@@ -137,7 +142,11 @@ class Menu:
         dialog = FmpRefhCheckDialog(self.iface, project)
         dialog.exec_()
         
-        
+    def check_tuflow_stability(self): 
+        project = QgsProject.instance()
+        dialog = TuflowStabilityCheck(self.iface, project)
+        dialog.exec_()
+
         
         
         
