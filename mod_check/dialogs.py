@@ -609,7 +609,7 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
                 self.graphSection(id, caller)
                 
     def _banktopCheckTableContext(self, pos):
-         self._setupTableContext(pos, self.banktopCheckTable, 'bad_banks')
+        self._setupTableContext(pos, self.banktopCheckTable, 'bad_banks')
 
     def graphSection(self, node_id, caller):
         """
@@ -625,6 +625,7 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
         
     def showSelectedNode(self, node_id):
         node_layer = self.fmpNodesLayerCbox.currentLayer()
+        self.iface.mainWindow().findChild(QAction, 'mActionDeselectAll').trigger()
         node_layer.removeSelection()
         found_node = False
         for f in node_layer.getFeatures():
@@ -632,8 +633,12 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
             if id == node_id:
                 found_node = True
                 node_layer.select(f.id())
-                self.iface.actionZoomToSelected().trigger()
+                self.iface.mapCanvas().zoomToSelected(node_layer)
+#                 box = node_layer.boundingBoxOfSelected()
+#                 self.iface.mapCanvas().setExtent(box)
+#                 self.iface.mapCanvas().refresh()
                 break
+
         if not found_node:
             QMessageBox.warning(
                 self, "FMP Node Not Found", 
