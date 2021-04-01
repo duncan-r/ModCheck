@@ -2,6 +2,7 @@
 
 import os
 import csv
+from datetime import datetime
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
@@ -10,7 +11,11 @@ from qgis.gui import QgsMessageBar, QgsFileWidget
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib import dates as mdates
+from matplotlib.dates import DateFormatter
 import numpy as np
+
+# import pyqtgraph as pg
 
 from .forms import ui_chainage_calculator_dialog as chaincalc_ui
 from .forms import ui_fmptuflow_widthcheck_dialog as fmptuflowwidthcheck_ui
@@ -19,6 +24,8 @@ from .forms import ui_fmpsectionproperty_check_dialog as fmpsectioncheck_ui
 from .forms import ui_graph_dialog as graph_ui
 from .forms import ui_fmprefh_check_dialog as refh_ui
 from .forms import ui_tuflowstability_check_dialog as tuflowstability_ui
+from .forms import ui_nrfa_viewer_dialog as nrfa_ui
+from .forms import ui_pyqtgraph_dialog as pyqtgraph_ui
 
 from .tools import chainagecalculator as chain_calc
 from .tools import fmptuflowwidthcheck as fmptuflow_widthcheck
@@ -26,6 +33,7 @@ from .tools import runvariablescheck as runvariables_check
 from .tools import fmpsectioncheck as fmpsection_check
 from .tools import refhcheck
 from .tools import tuflowstabilitycheck as tmb_check
+from .tools import nrfaviewer as nrfa_viewer
 from .tools import settings as mrt_settings
 
 class ChainageCalculatorDialog(QDialog, chaincalc_ui.Ui_ChainageCalculator):
@@ -45,13 +53,13 @@ class ChainageCalculatorDialog(QDialog, chaincalc_ui.Ui_ChainageCalculator):
         
         # Load existing settings
         working_dir = mrt_settings.loadProjectSetting(
-            'working_directory', str, self.project.readPath('./temp')
+            'working_directory', self.project.readPath('./temp')
         )
         dat_path = mrt_settings.loadProjectSetting(
-            'dat_file', str, self.project.readPath('./temp')
+            'dat_file', self.project.readPath('./temp')
         )
         chainage_results = mrt_settings.loadProjectSetting(
-            'chainage_results', str, self.project.readPath('./temp')
+            'chainage_results', self.project.readPath('./temp')
         )
         # Connect file widgets and update slots
         self.workingDirFileWidget.setFilePath(working_dir)
@@ -77,10 +85,10 @@ class ChainageCalculatorDialog(QDialog, chaincalc_ui.Ui_ChainageCalculator):
         """
         """
         working_dir = mrt_settings.loadProjectSetting(
-            'working_directory', str, self.project.readPath('./temp')
+            'working_directory', self.project.readPath('./temp')
         )
         dat_path = mrt_settings.loadProjectSetting(
-            'dat_file', str, self.project.readPath('./temp')
+            'dat_file', self.project.readPath('./temp')
         )
         if working_dir is None or dat_path is None:
             self.loggingTextedit.appendPlainText("Please set working directory and FMP dat path first")
@@ -99,10 +107,10 @@ class ChainageCalculatorDialog(QDialog, chaincalc_ui.Ui_ChainageCalculator):
         """
         """
         working_dir = mrt_settings.loadProjectSetting(
-            'working_directory', str, self.project.readPath('./temp')
+            'working_directory', self.project.readPath('./temp')
         )
         dat_path = mrt_settings.loadProjectSetting(
-            'dat_file', str, self.project.readPath('./temp')
+            'dat_file', self.project.readPath('./temp')
         )
         
         nwk_layer = self.estryNwkLayerCBox.currentLayer()
@@ -140,10 +148,10 @@ class FmpTuflowWidthCheckDialog(QDialog, fmptuflowwidthcheck_ui.Ui_FmpTuflowWidt
         
         # Load existing settings
         working_dir = mrt_settings.loadProjectSetting(
-            'working_directory', str, self.project.readPath('./')
+            'working_directory', self.project.readPath('./')
         )
         dat_path = mrt_settings.loadProjectSetting(
-            'dat_file', str, self.project.readPath('./')
+            'dat_file', self.project.readPath('./')
         )
         
         # Connect the slots
@@ -162,10 +170,10 @@ class FmpTuflowWidthCheckDialog(QDialog, fmptuflowwidthcheck_ui.Ui_FmpTuflowWidt
             
     def checkWidths(self):
         working_dir = mrt_settings.loadProjectSetting(
-            'working_directory', str, self.project.readPath('./temp')
+            'working_directory', self.project.readPath('./temp')
         )
         dat_path = mrt_settings.loadProjectSetting(
-            'dat_file', str, self.project.readPath('./')
+            'dat_file', self.project.readPath('./')
         )
         if working_dir is None or dat_path is None:
             self.loggingTextedit.appendPlainText("Please set working directory and FMP dat path first")
@@ -227,13 +235,13 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
         self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
         
         tlf_path = mrt_settings.loadProjectSetting(
-            'tlf_file', str, self.project.readPath('./temp')
+            'tlf_file', self.project.readPath('./temp')
         )
         ief_path = mrt_settings.loadProjectSetting(
-            'ief_file', str, self.project.readPath('./temp')
+            'ief_file', self.project.readPath('./temp')
         )
         zzd_path = mrt_settings.loadProjectSetting(
-            'zzd_file', str, self.project.readPath('./temp')
+            'zzd_file', self.project.readPath('./temp')
         )
         
         # Connect the slots
@@ -279,7 +287,7 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
         
 
         ief_path = mrt_settings.loadProjectSetting(
-            'ief_file', str, self.project.readPath('./temp')
+            'ief_file', self.project.readPath('./temp')
         )
         variables_check = runvariables_check.IefVariablesCheck(self.project, ief_path)
         file_paths, variables = variables_check.run_tool()
@@ -309,7 +317,7 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
 
     def loadZzdResults(self):
         zzd_path = mrt_settings.loadProjectSetting(
-            'zzd_file', str, self.project.readPath('./temp')
+            'zzd_file', self.project.readPath('./temp')
         )
         zzd_check = runvariables_check.ZzdFileCheck(self.project, zzd_path)
         diagnostics, warnings = zzd_check.run_tool()
@@ -362,7 +370,7 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
             self.tuflowVariablesTable.setItem(row_position, 5, QTableWidgetItem(details['description']))
 
         tlf_path = mrt_settings.loadProjectSetting(
-            'tlf_file', str, self.project.readPath('./temp')
+            'tlf_file', self.project.readPath('./temp')
         )
         variables_check = runvariables_check.TlfDetailsCheck(self.project, tlf_path)
         variables_check.run_tool()
@@ -549,13 +557,13 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
         
         # Load existing settings
         temp_dir = mrt_settings.loadProjectSetting(
-            'temp_dir', str, self.project.readPath('./temp')
+            'temp_dir', self.project.readPath('./temp')
         )
         dat_path = mrt_settings.loadProjectSetting(
-            'dat_file', str, self.project.readPath('./temp')
+            'dat_file', self.project.readPath('./temp')
         )
         chainage_results = mrt_settings.loadProjectSetting(
-            'fmp_conveyance_data', str, self.project.readPath('./temp')
+            'fmp_conveyance_data', self.project.readPath('./temp')
         )
         # Connect file widgets and update slots
         self.datFileWidget.setFilePath(dat_path)
@@ -641,10 +649,10 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
 #         k_tol = 10
         k_tol = self.kTolSpinbox.value()
         working_dir = mrt_settings.loadProjectSetting(
-            'working_directory', str, self.project.readPath('./temp')
+            'working_directory', self.project.readPath('./temp')
         )
         dat_path = mrt_settings.loadProjectSetting(
-            'dat_file', str, self.project.readPath('./temp')
+            'dat_file', self.project.readPath('./temp')
         )
         section_check = fmpsection_check.CheckFmpSections(working_dir, dat_path, k_tol)
         self.properties = section_check.run_tool()
@@ -687,7 +695,7 @@ class FmpRefhCheckDialog(QDialog, refh_ui.Ui_FmpRefhCheckDialog):
         self.csv_results = None
         
         model_path = mrt_settings.loadProjectSetting(
-            'refh_file', str, self.project.readPath('./temp')
+            'refh_file', self.project.readPath('./temp')
         )
         self.fmpFileWidget.setFilePath(model_path)
 
@@ -701,7 +709,7 @@ class FmpRefhCheckDialog(QDialog, refh_ui.Ui_FmpRefhCheckDialog):
         
     def loadModelFile(self):
         model_path = mrt_settings.loadProjectSetting(
-            'refh_file', str, self.project.readPath('./temp')
+            'refh_file', self.project.readPath('./temp')
         )
         refh_compare = refhcheck.CompareFmpRefhUnits([model_path])
         self.csv_results, text_output, failed_paths, missing_refh = refh_compare.run_tool()
@@ -761,7 +769,7 @@ class FmpRefhCheckDialog(QDialog, refh_ui.Ui_FmpRefhCheckDialog):
             return
             
         csv_file = mrt_settings.loadProjectSetting(
-            'csv_file', str, self.project.readPath('./temp')
+            'csv_file', self.project.readPath('./temp')
         )
 
         filepath = QFileDialog(self).getSaveFileName(
@@ -777,7 +785,7 @@ class FmpRefhCheckDialog(QDialog, refh_ui.Ui_FmpRefhCheckDialog):
                     writer.writerow(out)
 
 
-class TuflowStabilityCheck(QDialog, tuflowstability_ui.Ui_TuflowStabilityCheckDialog):
+class TuflowStabilityCheckDialog(QDialog, tuflowstability_ui.Ui_TuflowStabilityCheckDialog):
     
     def __init__(self, iface, project):
         QDialog.__init__(self)
@@ -788,7 +796,7 @@ class TuflowStabilityCheck(QDialog, tuflowstability_ui.Ui_TuflowStabilityCheckDi
         self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
         
         mb_file = mrt_settings.loadProjectSetting(
-            'mb_file', str, self.project.readPath('./temp')
+            'mb_file', self.project.readPath('./temp')
         )
         self.mbFileWidget.setFilePath(mb_file)
         self.mbFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'mb_file'))
@@ -800,7 +808,7 @@ class TuflowStabilityCheck(QDialog, tuflowstability_ui.Ui_TuflowStabilityCheckDi
     
     def loadMbFile(self):
         mb_path = mrt_settings.loadProjectSetting(
-            'mb_file', str, self.project.readPath('./temp')
+            'mb_file', self.project.readPath('./temp')
         )
         mb_check = tmb_check.TuflowStabilityCheck(mb_path)
         results = mb_check.run_tool()
@@ -840,5 +848,490 @@ class TuflowStabilityCheck(QDialog, tuflowstability_ui.Ui_TuflowStabilityCheckDi
         canvas = FigureCanvas(fig)
         proxy_widget = scene.addWidget(canvas)
 
+
+class AmaxGraphDialog(QDialog, graph_ui.Ui_GraphDialog):
+    
+    def __init__(self, title="AMAX"):
+        QDialog.__init__(self)
+        self.setupUi(self)
+        self.title = title
+        self.setWindowTitle(title)
+
+    def setupGraph(self, series, station):
+        try:
+            self.setWindowTitle('{} - {} {}'.format(self.title, station['id']))
+        except: pass
+        
+        flow = []
+        years = []
+        for s in series:
+            flow.append(s[0])
+            years.append(int(s[1][:4]))
+            
+        scene = QGraphicsScene()
+        view = self.graphGraphicsView.setScene(scene)
+        fig = Figure()
+        axes = fig.gca()
+        
+        axes.bar(years, flow)
+#         axes.xaxis.set_major_formatter(DateFormatter("%Y"))
+#         axes.xaxis.set_major_locator(mdates.YearLocator(5, month=1, day=1))
+        axes.set(
+            xlabel="Year",
+            ylabel="Flow (m3/s)",
+            title="AMAX Flow Data at ({0}) {1}".format(station['id'], station['name'])
+        )
+        canvas = FigureCanvas(fig)
+        proxy_widget = scene.addWidget(canvas)
+
+
+class PotGraphDialog(QDialog, graph_ui.Ui_GraphDialog):
+    
+    def __init__(self, title="POT"):
+        QDialog.__init__(self)
+        self.setupUi(self)
+        self.title = title
+        self.setWindowTitle(title)
+
+    def setupGraph(self, series, station):
+        try:
+            self.setWindowTitle('{} - {} {}'.format(self.title, station['id']))
+        except: pass
+        
+        flow = []
+        years = []
+        for s in series:
+            flow.append(s['flow'])
+            years.append(int(s['datetime'][:4]))
+            
+        scene = QGraphicsScene()
+        view = self.graphGraphicsView.setScene(scene)
+        fig = Figure()
+        axes = fig.gca()
+        
+        axes.scatter(years, flow, marker='x', s=3, alpha=0.7)
+#         axes.xaxis.set_major_formatter(DateFormatter("%Y"))
+#         axes.xaxis.set_major_locator(mdates.YearLocator(5, month=1, day=1))
+        axes.set(
+            xlabel="Year",
+            ylabel="Flow (m3/s)",
+            title="POT Flow Data at ({0}) {1}".format(station['id'], station['name'])
+        )
+        canvas = FigureCanvas(fig)
+        proxy_widget = scene.addWidget(canvas)
         
         
+class DailyFlowsGraphDialog(QDialog, graph_ui.Ui_GraphDialog):
+    
+    def __init__(self, title="Daily Flows"):
+        QDialog.__init__(self)
+        self.setupUi(self)
+        self.title = title
+        self.setWindowTitle(title)
+
+    def setupGraph(self, series, station, year):
+        try:
+            self.setWindowTitle('{0} {1} - {2}'.format(self.title, year, station['id']))
+        except: pass
+        
+        flow = []
+        dates = []
+        for s in series:
+            flow.append(s['flow'])
+            date = datetime.strptime(s['date'], '%Y-%m-%d').date()
+            dates.append(date)
+            
+        scene = QGraphicsScene()
+        view = self.graphGraphicsView.setScene(scene)
+        fig = Figure()
+        axes = fig.gca()
+        
+        plot = axes.plot(dates, flow, "-b", label="Flow")
+        axes.xaxis.set_major_formatter(DateFormatter("%m-%d"))
+#         axes.xaxis.set_major_locator(mdates.YearLocator(5, month=1, day=1))
+        axes.set(
+            xlabel="Date",
+            ylabel="Flow (m3/s)",
+            title="{0} Daily Flow Data: ({1}) {2}".format(year, station['id'], station['name'])
+        )
+        canvas = FigureCanvas(fig)
+        proxy_widget = scene.addWidget(canvas)
+
+
+class NrfaStationViewerDialog(QDialog, nrfa_ui.Ui_NrfaViewerDialog):
+    
+    NRFA_STATIONS = './data/nrfa_viewer/NRFA_Station_Info.shp'
+    closing = pyqtSignal(name='closing')
+
+    def __init__(self, iface, project):
+        QDialog.__init__(self)
+        self.iface = iface
+        self.project = project
+        self.setupUi(self)
+        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+        
+        self.station_points = None
+        self.cur_station = {}
+        self.cache_tracker = {
+            'full_info': -1,
+            'amax': -1,
+            'pot': -1,
+            'daily_flows': -1,
+        }
+        self.do_dailyflow_update = False
+        
+        self.workingDirFileWidget.setStorageMode(QgsFileWidget.GetDirectory)
+        self.nrfa_stations = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)),
+            NrfaStationViewerDialog.NRFA_STATIONS
+        )
+
+        working_dir = mrt_settings.loadProjectSetting(
+            'working_directory', self.project.readPath('./temp')
+        )
+        distance = mrt_settings.loadProjectSetting('nrfa_max_distance', 15)
+
+        self.workingDirFileWidget.setFilePath(working_dir)
+        self.maxDistanceSpinbox.setValue(distance)
+        self.workingDirFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'working_directory'))
+        self.maxDistanceSpinbox.valueChanged.connect(self.maxDistanceChanged)
+        self.fetchStationsBtn.clicked.connect(self.fetchStations)
+        self.stationNamesCbox.currentIndexChanged.connect(self.showStationInfo)
+        self.buttonBox.clicked.connect(self.signalClose)
+        self.stationTabWidget.currentChanged.connect(self.stationTabChanged)
+        self.showAmaxGraphBtn.clicked.connect(self.graphAmax)
+        self.exportAmaxCsvBtn.clicked.connect(self.exportAmaxCsv)
+        self.showPotGraphBtn.clicked.connect(self.graphPot)
+        self.exportPotCsvBtn.clicked.connect(self.exportPotCsv)
+        self.showDailyFlowsGraphBtn.clicked.connect(self.graphDailyFlows)
+        self.exportDailyFlowsCsvBtn.clicked.connect(self.exportDailyFlowsCsv)
+        self.dailyFlowsYearCbox.currentTextChanged.connect(self.updateDailyFlowsTable)
+        
+    def signalClose(self):
+        self.closing.emit()
+        
+    def closeEvent(self, *args, **kwargs):
+        self.signalClose()
+        return QDialog.closeEvent(self, *args, **kwargs)
+
+    def fileChanged(self, path, caller):
+        mrt_settings.saveProjectSetting(caller, path)
+        
+    def maxDistanceChanged(self, value):
+        mrt_settings.saveProjectSetting('nrfa_max_distance', value)
+        
+    def stationTabChanged(self, index):
+        if index == 0:
+            pass
+        elif index == 1:
+            self.loadAdditionalInfo()
+        elif index == 2:
+            self.loadAmaxData()
+        elif index == 3:
+            self.loadPotData()
+        elif index == 4:
+            self.loadDailyFlowData()
+        
+    def fetchStations(self):
+        nrfa_layer = QgsVectorLayer(self.nrfa_stations, "nrfa_stations", "ogr")
+#         nrfa_layer = QgsVectorLayer(NRFA_STATIONS, "nrfa_stations", "ogr")
+        if not nrfa_layer.isValid():
+            QMessageBox.warning(
+                self, "Unable to load NRFA layer", 
+                "NRFA Station info layer could not be loaded, please reimport the data."
+            )
+            return
+
+        self.stationNamesCbox.clear()
+#         working_dir = mrt_settings.loadProjectSetting(
+#             'working_directory', str, self.project.readPath('./temp')
+#         )
+        search_radius = self.maxDistanceSpinbox.value() * 1000
+        canvas_centre = self.iface.mapCanvas().center()
+        distance = QgsDistanceArea()
+        distance.setSourceCrs(nrfa_layer.crs(), self.project.transformContext())
+        
+        self.stations = {}
+        for point in nrfa_layer.getFeatures():
+            p = point.geometry()
+            name = point['name']
+            id = point['id']
+            p.convertToSingleType()
+            if distance.measureLine(p.asPoint(), canvas_centre) <= search_radius:
+                self.stations[point['id']] = {'layer': point, 'name': point['name']}
+                
+        self.stationNamesCbox.blockSignals(True)
+        for k, v in self.stations.items():
+            s = '({0}) {1}'.format(k, v['name'])
+            self.stationNamesCbox.addItem(s)
+        self.stationNamesCbox.blockSignals(False)
+                
+        if len(self.stations.keys()) == 0:
+            QMessageBox.information(
+                self, "No NRFA station found in given radius", 
+                "There are no NRFA stations in the given radius. Try increasing the distance."
+            )
+        else:
+            self.stationInfoGroupbox.setEnabled(True)
+            existing_layers = self.project.instance().mapLayersByName("NRFA Stations Selection")
+            if existing_layers:
+                self.project.instance().removeMapLayers([existing_layers[0].id()])
+            self.station_points = QgsVectorLayer("Point", "NRFA Stations Selection", "memory")
+            self.station_points.setCrs(nrfa_layer.crs())
+            provider = self.station_points.dataProvider()
+            provider.addAttributes([
+                QgsField("ID", QVariant.Int),
+                QgsField("Name", QVariant.String),
+            ])
+            self.station_points.updateFields()
+            for k, v in self.stations.items():
+                feat = QgsFeature()
+                feat.setGeometry(v['layer'].geometry())
+                feat.setAttributes([k, v['name']])
+                provider.addFeature(feat)
+            self.station_points.updateExtents()
+            
+            # Set labels to the station ID
+            text_format = QgsTextFormat()
+            label = QgsPalLayerSettings()
+            label.fieldName = 'ID'
+            label.enabled = True
+            label.setFormat(text_format)
+            labeler = QgsVectorLayerSimpleLabeling(label)
+            self.station_points.setLabelsEnabled(True)
+            self.station_points.setLabeling(labeler)
+            
+            self.project.instance().addMapLayer(self.station_points)
+            self.showStationInfo()
+
+    def showStationInfo(self, *args): 
+        self.stationTabWidget.setCurrentIndex(0)
+        stn_type_link = 'https://nrfa.ceh.ac.uk/hydrometric-information'
+        text = self.stationNamesCbox.currentText()
+        if text == '': 
+            return
+        station_id, station_name = text.split(')')
+        self.cur_station['id'] = int(station_id[1:])
+        self.cur_station['name'] = station_name.strip()
+        self.selected_station = self.stations[self.cur_station['id']]['layer']
+        self.stationInfoTextbox.clear()
+
+        self.station_points.removeSelection()
+        for f in self.station_points.getFeatures():
+            id = f['ID']
+            if id == self.cur_station['id']:
+                self.station_points.select(f.id())
+                box = self.station_points.boundingBoxOfSelected()
+                self.iface.mapCanvas().setExtent(box)
+                self.iface.mapCanvas().refresh()
+                break
+
+        output = [
+            '{0:<20} {1}'.format('ID:', self.cur_station['id']),
+            '{0:<20} {1}'.format('Name:', self.selected_station['name']),
+            '{0:<20} {1}'.format('River:', self.selected_station['river']),
+            '{0:<20} {1}'.format('Location:', self.selected_station['location']),
+            '{0:<20} {1} (details - {2})'.format('Station Type:', self.selected_station['stn-type'], stn_type_link),
+            '{0:<20} {1}'.format('BNG:', self.selected_station['BNG']),
+            '{0:<20} {1}'.format('Easting:', self.selected_station['easting']),
+            '{0:<20} {1}'.format('Northing:', self.selected_station['northing']),
+            '{0:<20} {1} km2'.format('Catchment Area:', self.selected_station['catch-area']),
+            '{0:<20} {1} mAOD'.format('Station Level:', self.selected_station['stn-level']),
+        ]
+        self.stationInfoTextbox.append('\n'.join(output)) 
+        
+    def loadAdditionalInfo(self):
+        if not self.cache_tracker['full_info'] == self.cur_station['id']:
+            nrfa = nrfa_viewer.NrfaViewer()
+            output = nrfa.fetchStationData(self.cur_station['id'], fields='all')
+            self.fullDetailsTextbox.clear()
+            self.fullDetailsTextbox.append(output)
+            self.cache_tracker['full_info'] = self.cur_station['id']
+
+    def loadAmaxData(self):
+        if not self.cache_tracker['amax'] == self.cur_station['id']:
+            self.cur_amax_series = None
+            nrfa = nrfa_viewer.NrfaViewer()
+            try:
+                flow_meta, series = nrfa.fetchAmaxData(self.cur_station['id'])
+            except RuntimeError as err:
+                QMessageBox.warning(
+                    self, "Failed to load AMAX data", 
+                    err.args[0]
+                )
+
+            summary = [
+                '{0:<40} {1:<40}'.format('ID', 'amax-stage', 'amax-flow'),
+                '{0:<40} {1:<40}'.format('Name', flow_meta['name']),
+                '{0:<40} {1:<40}'.format('Parameter', flow_meta['parameter']),
+                '{0:<40} {1:<40}'.format('Units', flow_meta['units']),
+                '{0:<40} {1:<40}'.format('Measurement type', flow_meta['measurement-type']),
+                '{0:<40} {1:<40}'.format('Period', flow_meta['period']),
+            ]
+            self.amaxSummaryTextbox.clear()
+            self.amaxSummaryTextbox.append('\n'.join(summary))
+            
+            row_position = 0
+            self.amaxResultsTable.setRowCount(row_position)
+            self.cur_amax_series = series
+            for s in series:
+                flow = '{:.2f}'.format(s[0])
+                self.amaxResultsTable.insertRow(row_position)
+                self.amaxResultsTable.setItem(row_position, 0, QTableWidgetItem(flow))
+                self.amaxResultsTable.setItem(row_position, 1, QTableWidgetItem(s[1]))
+                row_position += 1
+            
+            self.cache_tracker['amax'] = self.cur_station['id']
+
+
+    def graphAmax(self, results):
+        dlg = AmaxGraphDialog()
+        dlg.setupGraph(self.cur_amax_series, self.cur_station)
+        dlg.exec_()
+    
+    def exportAmaxCsv(self):
+        working_dir = mrt_settings.loadProjectSetting(
+            'working_directory', self.project.readPath('./temp')
+        )
+        file_name = '{0}_AMAX_Data.csv'.format(str(self.cur_station['id']))
+        file_name = os.path.join(working_dir, file_name)
+        if self.cur_amax_series is not None:
+            with open(file_name, 'w', newline='\n') as save_file:
+                writer = csv.writer(save_file, delimiter=',')
+                writer.writerow(['Date', 'Flow (m3/s)'])
+                for row in self.cur_amax_series:
+                    writer.writerow([row[1], row[0]])
+            
+    def loadPotData(self):
+        if not self.cache_tracker['pot'] == self.cur_station['id']:
+            self.cur_pot_series = None
+            nrfa = nrfa_viewer.NrfaViewer()
+            try:
+#                 stage_meta, flow_meta, series = nrfa.fetchPotData(self.cur_station['id'])
+                flow_meta, series = nrfa.fetchPotData(self.cur_station['id'])
+            except RuntimeError as err:
+                QMessageBox.warning(
+                    self, "Failed to load POT data", 
+                    err.args[0]
+                )
+
+            summary = [
+                '{0:<40} {1:<40}'.format('ID', 'pot-flow'),
+                '{0:<40} {1:<40}'.format('Name', flow_meta['name']),
+                '{0:<40} {1:<40}'.format('Parameter', flow_meta['parameter']),
+                '{0:<40} {1:<40}'.format('Units', flow_meta['units']),
+                '{0:<40} {1:<40}'.format('Measurement type', flow_meta['measurement-type']),
+                '{0:<40} {1:<40}'.format('Period', flow_meta['period']),
+            ]
+            self.potSummaryTextbox.clear()
+            self.potSummaryTextbox.append('\n'.join(summary))
+            
+            row_position = 0
+            self.potResultsTable.setRowCount(row_position)
+            self.cur_pot_series = series
+            for s in series:
+                flow = '{:.2f}'.format(s['flow'])
+                self.potResultsTable.insertRow(row_position)
+                self.potResultsTable.setItem(row_position, 0, QTableWidgetItem(flow))
+                self.potResultsTable.setItem(row_position, 1, QTableWidgetItem(s['datetime']))
+                row_position += 1
+            
+            self.cache_tracker['pot'] = self.cur_station['id']
+            
+    def graphPot(self, results):
+        dlg = PotGraphDialog()
+        dlg.setupGraph(self.cur_pot_series, self.cur_station)
+        dlg.exec_()
+    
+    def exportPotCsv(self):
+        working_dir = mrt_settings.loadProjectSetting(
+            'working_directory', self.project.readPath('./temp')
+        )
+        file_name = '{0}_POT_Data.csv'.format(str(self.cur_station['id']))
+        file_name = os.path.join(working_dir, file_name)
+        if self.cur_pot_series is not None:
+            with open(file_name, 'w', newline='\n') as save_file:
+                writer = csv.writer(save_file, delimiter=',')
+                writer.writerow(['Date', 'Flow (m3/s)'])
+                for row in self.cur_pot_series:
+                    writer.writerow([row['datetime'], row['flow']])
+        
+    def loadDailyFlowData(self):
+        if not self.cache_tracker['daily_flows'] == self.cur_station['id']:
+            self.cur_dailyflow_series = None
+            nrfa = nrfa_viewer.NrfaViewer()
+            try:
+                meta, series, latest_year = nrfa.fetchDailyFlowData(self.cur_station['id'])
+            except RuntimeError as err:
+                QMessageBox.warning(
+                    self, "Failed to load daily flow data", 
+                    err.args[0]
+                )
+            
+            self.do_dailyflow_update = False
+            self.cur_dailyflow_series = series
+            self.cur_dailyflow_year = latest_year
+            self.dailyFlowsYearCbox.clear()
+            for year in series.keys():
+                self.dailyFlowsYearCbox.addItem(str(year))
+
+            self.dailyFlowsYearCbox.setCurrentText(str(latest_year))
+            self.do_dailyflow_update = True
+            self.updateDailyFlowsTable(str(latest_year))
+            self.cache_tracker['daily_flows'] = self.cur_station['id']
+            
+    def updateDailyFlowsTable(self, year):
+        if not self.do_dailyflow_update: return
+        year = int(year)
+        self.cur_dailyflow_year = year
+        row_position = 0
+        self.dailyFlowsTable.setRowCount(row_position)
+        for s in self.cur_dailyflow_series[year]:
+            flow = '{:.2f}'.format(s['flow'])
+            self.dailyFlowsTable.insertRow(row_position)
+            self.dailyFlowsTable.setItem(row_position, 0, QTableWidgetItem(str(year)))
+            self.dailyFlowsTable.setItem(row_position, 1, QTableWidgetItem(s['date']))
+            self.dailyFlowsTable.setItem(row_position, 2, QTableWidgetItem(flow))
+            self.dailyFlowsTable.setItem(row_position, 3, QTableWidgetItem(s['flag']))
+            row_position += 1
+            
+    def graphDailyFlows(self):
+        series_year = self.cur_dailyflow_year
+        series = self.cur_dailyflow_series[series_year]
+        dlg = DailyFlowsGraphDialog()
+        dlg.setupGraph(series, self.cur_station, series_year)
+        dlg.exec_()
+    
+    def exportDailyFlowsCsv(self):
+        working_dir = mrt_settings.loadProjectSetting(
+            'working_directory', self.project.readPath('./temp')
+        )
+        export_type = self.dailyFlowExportTypeCbox.currentIndex()
+        if export_type == 0:
+            export_all = False
+            file_name = '{0}_DailyFlow_Data_{1}.csv'.format(
+                self.cur_station['id'], self.cur_dailyflow_year
+            )
+        else:
+            export_all = True
+            file_name = '{0}_DailyFlow_Data.csv'.format(
+                self.cur_station['id']
+            )
+        file_name = os.path.join(working_dir, file_name)
+        if self.cur_dailyflow_series is not None:
+            with open(file_name, 'w', newline='\n') as save_file:
+                writer = csv.writer(save_file, delimiter=',')
+                writer.writerow(['Year', 'Date', 'Flow (m3/s)', 'Q Flag'])
+                if not export_all:
+                    for row in self.cur_dailyflow_series[self.cur_dailyflow_year]:
+                        writer.writerow([
+                            self.cur_dailyflow_year, row['date'], row['flow'], row['flag']
+                        ])
+                else:
+                    for year, data in self.cur_dailyflow_series.items():
+                        for row in data:
+                            writer.writerow([
+                                str(year), row['date'], row['flow'], row['flag']
+                            ])
+            

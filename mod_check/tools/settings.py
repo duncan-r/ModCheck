@@ -39,18 +39,20 @@ def saveProjectSetting(name, value):
     if isinstance(value, float):
         proj.writeEntryDouble(PLUGIN, name, value)
     elif isinstance(value, bool):
-        proj.writeEntryBook(PLUGIN, name, value)
+        proj.writeEntryBool(PLUGIN, name, value)
     else:
         proj.writeEntry(PLUGIN, name, value)
         
-def loadProjectSetting(name, value_type, default):
+def loadProjectSetting(name, default):
     proj = QgsProject.instance()
     
     value = None
-    if isinstance(value_type, float):
-        value, conversion_ok = proj.readEntryDouble(PLUGIN, name, default)
-    if isinstance(value_type, bool):
-        value, conversion_ok = proj.readEntryBool(PLUGIN, name, default)
+    if isinstance(default, float):
+        value, conversion_ok = proj.readDoubleEntry(PLUGIN, name, default)
+    elif isinstance(default, int):
+        value, conversion_ok = proj.readNumEntry(PLUGIN, name, default)
+    elif isinstance(default, bool):
+        value, conversion_ok = proj.readBoolEntry(PLUGIN, name, default)
     else:
         value, conversion_ok = proj.readEntry(PLUGIN, name, default)
     

@@ -69,6 +69,7 @@ class Menu:
         self.dir = os.path.dirname(__file__)
         self.icon_dir = self.dir
         icon = QIcon(os.path.join(self.icon_dir, "icon.png"))
+        self.nrfa_dialog = None
 
         # submenu example: Chainage submenu
 #         self.chainage_menu = QMenu(QCoreApplication.translate("ModCheck", "&Chainage"))
@@ -108,6 +109,11 @@ class Menu:
         self.check_tuflowstability_action = QAction(icon, "Check TUFLOW MB", self.iface.mainWindow())
         self.check_tuflowstability_action.triggered.connect(self.check_tuflow_stability)
         self.iface.addPluginToMenu("&ModCheck", self.check_tuflowstability_action)
+
+        # NRFA Station viewer
+        self.nrfa_stationviewer_action = QAction(icon, "View NRFA Station Info", self.iface.mainWindow())
+        self.nrfa_stationviewer_action.triggered.connect(self.view_nrfa_station)
+        self.iface.addPluginToMenu("&ModCheck", self.nrfa_stationviewer_action)
         
     def unload(self):
         self.iface.removePluginMenu("&ModCheck", self.check_fmptuflow_chainage_action)
@@ -116,6 +122,7 @@ class Menu:
         self.iface.removePluginMenu("&ModCheck", self.check_fmpsections_action)
         self.iface.removePluginMenu("&ModCheck", self.check_fmprefh_action)
         self.iface.removePluginMenu("&ModCheck", self.check_tuflowstability_action)
+        self.iface.removePluginMenu("&ModCheck", self.nrfa_stationviewer_action)
         
     def check_fmptuflow_chainage(self):
         project = QgsProject.instance()
@@ -144,10 +151,21 @@ class Menu:
         
     def check_tuflow_stability(self): 
         project = QgsProject.instance()
-        dialog = TuflowStabilityCheck(self.iface, project)
+        dialog = TuflowStabilityCheckDialog(self.iface, project)
         dialog.exec_()
 
+    def view_nrfa_station(self): 
+        if self.nrfa_dialog is None:
+            project = QgsProject.instance()
+            self.nrfa_dialog = NrfaStationViewerDialog(self.iface, project)
+    #         dialog.exec_()
+            self.nrfa_dialog.closing.connect(self._nrfa_dialog_close)
+            self.nrfa_dialog.show()
+        else:
+            self.nrfa_dialog.setWindowState(self.nrfa_dialog.windowState() & ~Qt.WindowMinimized | Qt.WindowActive)
         
+    def _nrfa_dialog_close(self):
+        self.nrfa_dialog = None
         
         
         
