@@ -25,7 +25,7 @@ from .forms import ui_graph_dialog as graph_ui
 from .forms import ui_fmprefh_check_dialog as refh_ui
 from .forms import ui_tuflowstability_check_dialog as tuflowstability_ui
 from .forms import ui_nrfa_viewer_dialog as nrfa_ui
-from .forms import ui_pyqtgraph_dialog as pyqtgraph_ui
+# from .forms import ui_pyqtgraph_dialog as pyqtgraph_ui
 
 from .tools import chainagecalculator as chain_calc
 from .tools import fmptuflowwidthcheck as fmptuflow_widthcheck
@@ -43,35 +43,48 @@ class ChainageCalculatorDialog(QDialog, chaincalc_ui.Ui_ChainageCalculator):
         self.iface = iface
         self.project = project
         self.setupUi(self)
+        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
         
-        self.workingDirFileWidget.setStorageMode(QgsFileWidget.GetDirectory)
+        self.chainage_calculator = chain_calc.CompareFmpTuflowChainage()
         
-        # Connect the slots
         self.calcFmpChainageOnlyBtn.clicked.connect(self.calculateFmpOnlyChainage)
         self.compareChainageBtn.clicked.connect(self.compareEstryFmpChainage)
         self.fmpOnlyCheckbox.stateChanged.connect(self.compareFmpOnlyChange)
+        self.exportResultsBtn.clicked.connect(self.exportChainageResults)
+        self.exportAllCheckbox.stateChanged.connect(self.setExportAll)
+        self.exportFmpCheckbox.stateChanged.connect(self.setExportIndividual)
+        self.exportReachCheckbox.stateChanged.connect(self.setExportIndividual)
+        self.exportComparisonCheckbox.stateChanged.connect(self.setExportIndividual)
         
-        # Load existing settings
-        working_dir = mrt_settings.loadProjectSetting(
-            'working_directory', self.project.readPath('./temp')
-        )
         dat_path = mrt_settings.loadProjectSetting(
             'dat_file', self.project.readPath('./temp')
         )
-        chainage_results = mrt_settings.loadProjectSetting(
-            'chainage_results', self.project.readPath('./temp')
-        )
-        # Connect file widgets and update slots
-        self.workingDirFileWidget.setFilePath(working_dir)
+        dx_tol = mrt_settings.loadProjectSetting('chainage_dx_tol', 10)
         self.datFileWidget.setFilePath(dat_path)
-        self.workingDirFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'working_directory'))
         self.datFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'dat_file'))
         
         # Populate estry nwk layer combo (line layers only)
         self.estryNwkLayerCBox.setFilters(QgsMapLayerProxyModel.LineLayer)
+        self.dxToleranceSpinbox.valueChanged.connect(self.dxTolValueChanged)
+        self.dxToleranceSpinbox.setValue(dx_tol)
         
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)
+        
+    def dxTolValueChanged(self, value):
+        mrt_settings.saveProjectSetting('chainage_dx_tol', value)
+        
+    def setExportAll(self, checkState):
+        if checkState == 2:
+            self.exportFmpCheckbox.setChecked(False)
+            self.exportReachCheckbox.setChecked(False)
+            self.exportComparisonCheckbox.setChecked(False)
+            self.exportAllCheckbox.setChecked(True)
+        
+    def setExportIndividual(self):
+        if self.exportAllCheckbox.isChecked():
+            self.exportAllCheckbox.setChecked(False)
         
     def compareFmpOnlyChange(self, *args):
         if self.fmpOnlyCheckbox.isChecked():
@@ -80,60 +93,153 @@ class ChainageCalculatorDialog(QDialog, chaincalc_ui.Ui_ChainageCalculator):
         else:
             self.calcFmpChainageOnlyBtn.setEnabled(False)
             self.tuflowInputsGroupbox.setEnabled(True)
+        
+    def exportChainageResults(self):
+        default_folder = mrt_settings.loadProjectSetting('results_dir', './temp')
+        if default_folder == './temp':
+            default_folder = mrt_settings.loadProjectSetting('working_dir', './temp')
+        folder = QFileDialog(self).getExistingDirectory(
+            self, 'Results Ouput Folder', default_folder
+        )
+        mrt_settings.saveProjectSetting('results_dir', folder)
+        export_widgets = {
+            'all': self.exportAllCheckbox,
+            'fmp': self.exportFmpCheckbox,
+            'reach': self.exportReachCheckbox,
+            'comparison': self.exportComparisonCheckbox,
+        }
+        export_types = []
+        if export_widgets['all'].isChecked():
+            export_types = export_widgets.keys()
+        else:
+            for name, widget in export_widgets.items():
+                if name != 'all' and widget.isChecked():
+                    export_types.append(name) 
+        
+        for t in export_types:
+            self.statusLabel.setText('Exporting results for {0} ...'.format(t))
+            self.chainage_calculator.exportResults(folder, t)
+        label_path = folder if len(folder) < 100 else folder[-100:]
+        self.statusLabel.setText('Results saved to {0}'.format(label_path))
             
     def calculateFmpOnlyChainage(self):
         """
         """
-        working_dir = mrt_settings.loadProjectSetting(
-            'working_directory', self.project.readPath('./temp')
-        )
         dat_path = mrt_settings.loadProjectSetting(
             'dat_file', self.project.readPath('./temp')
         )
-        if working_dir is None or dat_path is None:
-            self.loggingTextedit.appendPlainText("Please set working directory and FMP dat path first")
-        elif not os.path.isdir(working_dir) or not os.path.exists(dat_path):
-            self.loggingTextedit.appendPlainText("Please make sure working directory and FMP dat paths exist")
+        if dat_path is None:
+            QMessageBox.warning(
+                self, "Select an FMP dat file", "Please select an FMP dat file first"
+            )
+        elif not os.path.exists(dat_path):
+            QMessageBox.warning(
+                self, "FMP dat file not found", "FMP dat file could not be found"
+            )
         else:
-            self.loggingTextedit.clear()
-            self.loggingTextedit.appendPlainText("Calculating FMP Chainage...")
-            fmp_chainage = chain_calc.FmpChainageCalculator(working_dir, dat_path)
-            fmp_chainage.run_tool()
-            self.loggingTextedit.appendPlainText("FMP Chainage calculation complete\n")
-            self.loggingTextedit.appendPlainText("Results saved to:")
-            self.loggingTextedit.appendPlainText(working_dir)
+            self.statusLabel.setText('Calculating FMP Chainage...')
+            QApplication.processEvents()
+            fmp_chainage, reach_chainage = self.chainage_calculator.fmpChainage(dat_path)
+            self._showFmpChainageResults(fmp_chainage, reach_chainage)
+            self.statusLabel.setText('FMP Chainage calculation complete')
+        self.tuflowFmpComparisonTable.setRowCount(0)
+        self.outputsTabWidget.setCurrentIndex(0)
             
     def compareEstryFmpChainage(self):
         """
         """
-        working_dir = mrt_settings.loadProjectSetting(
-            'working_directory', self.project.readPath('./temp')
-        )
         dat_path = mrt_settings.loadProjectSetting(
             'dat_file', self.project.readPath('./temp')
         )
         
         nwk_layer = self.estryNwkLayerCBox.currentLayer()
         dx_tol = self.dxToleranceSpinbox.value()
-        
-        chain_compare = chain_calc.CompareFmpTuflowChainage(
-            working_dir, dat_path, nwk_layer, dx_tol
+        self.statusLabel.setText('Calculating FMP chainage (1/3) ...')
+        QApplication.processEvents()
+        fmp_chainage, reach_chainage = self.chainage_calculator.fmpChainage(dat_path)
+        self.statusLabel.setText('Calculating TUFLOW nwk line chainage (2/3) ...')
+        QApplication.processEvents()
+        tuflow_chainage = self.chainage_calculator.tuflowChainage(nwk_layer)
+        self.statusLabel.setText('Comparing FMP-TUFLOW chainage (3/3) ...')
+        QApplication.processEvents()
+        chainage_compare = self.chainage_calculator.compareChainage(
+            fmp_chainage, tuflow_chainage, dx_tol
         )
-        problem_nodes, save_path = chain_compare.run_tool()
-                
-        self.loggingTextedit.clear()
-        self.loggingTextedit.appendPlainText("\nUsing .dat file:\n" + dat_path)
-        self.loggingTextedit.appendPlainText("\nUsing nwk layer:\n" + nwk_layer.name())
-        self.loggingTextedit.appendPlainText("")
+        self.statusLabel.setText('Chainage compare complete')
 
-        self.loggingTextedit.appendPlainText("\nNwk compare complete...")
-        self.loggingTextedit.appendPlainText("\nFMP/nwk chainage greater than tolerance ({}m):".format(dx_tol))
-        self.loggingTextedit.appendPlainText('\n'.join(problem_nodes['mismatch']))
-        self.loggingTextedit.appendPlainText("\nFMP nodes not found in nwk layer:")
-        self.loggingTextedit.appendPlainText('\n'.join(problem_nodes['no_nwk']))
+        self._showFmpChainageResults(fmp_chainage, reach_chainage)
+        self._showCompareChainageResults(chainage_compare)
+        self.outputsTabWidget.setCurrentIndex(1)
+            
+    def _showFmpChainageResults(self, unit_chainage, reach_chainage):
+        """
+        """
+        row_position = 0
+        self.fmpChainageTable.setRowCount(row_position)
+        for unit in unit_chainage:
+            chainage = '{:.2f}'.format(unit['chainage'])
+            cum_reach_chainage = '{:.2f}'.format(unit['cum_reach_chainage'])
+            cum_total_chainage = '{:.2f}'.format(unit['cum_total_chainage'])
+            self.fmpChainageTable.insertRow(row_position)
+            self.fmpChainageTable.setItem(row_position, 0, QTableWidgetItem(unit['category']))
+            self.fmpChainageTable.setItem(row_position, 1, QTableWidgetItem(unit['name']))
+            self.fmpChainageTable.setItem(row_position, 2, QTableWidgetItem(chainage))
+            self.fmpChainageTable.setItem(row_position, 3, QTableWidgetItem(cum_reach_chainage))
+            self.fmpChainageTable.setItem(row_position, 4, QTableWidgetItem(cum_total_chainage))
+            self.fmpChainageTable.setItem(row_position, 5, QTableWidgetItem(str(unit['reach_number'])))
+            row_position += 1
+
+        row_position = 0
+        self.fmpReachChainageTable.setRowCount(row_position)
+        for unit in reach_chainage:
+            total_chainage = '{:.2f}'.format(unit['total_chainage'])
+            self.fmpReachChainageTable.insertRow(row_position)
+            self.fmpReachChainageTable.setItem(row_position, 0, QTableWidgetItem(str(unit['reach_number'])))
+            self.fmpReachChainageTable.setItem(row_position, 1, QTableWidgetItem(unit['start']))
+            self.fmpReachChainageTable.setItem(row_position, 2, QTableWidgetItem(unit['end']))
+            self.fmpReachChainageTable.setItem(row_position, 3, QTableWidgetItem(str(unit['section_count'])))
+            self.fmpReachChainageTable.setItem(row_position, 4, QTableWidgetItem(total_chainage))
+
+    def _showCompareChainageResults(self, chainage_compare):
+        """
+        """
+        def addRow(details, status, row_position):
+
+            status_item = QTableWidgetItem()
+            status_item.setTextAlignment(Qt.AlignCenter|Qt.AlignVCenter)
+            status_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            status_item.setText(status)
+            if status == 'FAILED' or status == 'NOT FOUND':
+                status_item.setBackground(QColor(239, 175, 175)) # Light Red
+
+            diff = '{:.2f}'.format(details['diff'])
+            fmp_chainage = '{:.2f}'.format(details['chainage'])
+            nwk_length = '{:.2f}'.format(details['nwk_line_length'])
+            nwk_len_or_ana = '{:.2f}'.format(details['nwk_len_or_ana'])
+            self.tuflowFmpComparisonTable.insertRow(row_position)
+            self.tuflowFmpComparisonTable.setItem(row_position, 0, status_item)
+            self.tuflowFmpComparisonTable.setItem(row_position, 1, QTableWidgetItem(details['type']))
+            self.tuflowFmpComparisonTable.setItem(row_position, 2, QTableWidgetItem(details['name']))
+            self.tuflowFmpComparisonTable.setItem(row_position, 3, QTableWidgetItem(diff))
+            self.tuflowFmpComparisonTable.setItem(row_position, 4, QTableWidgetItem(fmp_chainage))
+            self.tuflowFmpComparisonTable.setItem(row_position, 5, QTableWidgetItem(nwk_length))
+            self.tuflowFmpComparisonTable.setItem(row_position, 6, QTableWidgetItem(nwk_len_or_ana))
         
-        self.loggingTextedit.appendPlainText("\nResults output to:")
-        self.loggingTextedit.appendPlainText(save_path)
+        row_position = 0
+        self.tuflowFmpComparisonTable.setRowCount(row_position)
+        for item in chainage_compare['fail']:
+            addRow(item, 'FAILED', row_position)
+            row_position += 1
+
+        self.tuflowFmpComparisonTable.setRowCount(row_position)
+        for item in chainage_compare['missing']:
+            addRow(item, 'NOT FOUND', row_position)
+            row_position += 1
+
+        self.tuflowFmpComparisonTable.setRowCount(row_position)
+        for item in chainage_compare['ok']:
+            addRow(item, 'PASS', row_position)
+            row_position += 1
 
 
 class FmpTuflowWidthCheckDialog(QDialog, fmptuflowwidthcheck_ui.Ui_FmpTuflowWidthCheckDialog):
@@ -634,9 +740,6 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
                 found_node = True
                 node_layer.select(f.id())
                 self.iface.mapCanvas().zoomToSelected(node_layer)
-#                 box = node_layer.boundingBoxOfSelected()
-#                 self.iface.mapCanvas().setExtent(box)
-#                 self.iface.mapCanvas().refresh()
                 break
 
         if not found_node:

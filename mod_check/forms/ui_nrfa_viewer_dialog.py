@@ -37,7 +37,7 @@ class Ui_NrfaViewerDialog(object):
         self.maxDistanceSpinbox.setMinimum(1)
         self.maxDistanceSpinbox.setMaximum(1000)
         self.maxDistanceSpinbox.setSingleStep(5)
-        self.maxDistanceSpinbox.setProperty("value", 25)
+        self.maxDistanceSpinbox.setProperty("value", 15)
         self.maxDistanceSpinbox.setObjectName("maxDistanceSpinbox")
         self.horizontalLayout.addWidget(self.maxDistanceSpinbox)
         self.fetchStationsBtn = QtWidgets.QPushButton(self.fetchStationsGroupbox)
