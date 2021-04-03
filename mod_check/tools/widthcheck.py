@@ -28,17 +28,16 @@ from ship.utils import utilfunctions as uf
 from ship.fmp.datunits import ROW_DATA_TYPES as rdt
 
 
-class FmpTuflowSectionWidthCheck(ti.ToolInterface):
+class SectionWidthCheck(ti.ToolInterface):
     
-    def __init__(self, project, working_dir, dat_path, node_layer, cn_layer, dw_tol):
+    def __init__(self, project): #, dat_path, node_layer, cn_layer, dw_tol):
         super().__init__()
         self.project = project
-        self.working_dir = working_dir
-        self.dat_path = dat_path
-        self.node_layer = node_layer
-        self.cn_layer = cn_layer
-        self.dw_tol = dw_tol
+        self.dat_path = None
+        self.node_layer = None
+        self.cn_layer = None
         self.results = []
+        self.failed = {}
         
         self.cn_fields = [
             "Type", "Flags", "Name", "f", "d", "td", "a", "b", 
@@ -47,16 +46,18 @@ class FmpTuflowSectionWidthCheck(ti.ToolInterface):
     def run_tool(self):
         super()
         self.results = []
-        fmp_widths = self.fetch_fmp_widths(self.dat_path)
-        cn_widths, total_found = self.fetch_cn_widths()
-        return self.check_widths(fmp_widths, cn_widths)
+        fmp_widths = self.fetchFmpWidths(self.dat_path)
+        cn_widths, total_found = self.fetchCnWidths()
+        results, failed = self.check_widths(fmp_widths, cn_widths)
+        return results, failed#, total_found
         
-    def fetch_fmp_widths(self, fmp_path):
+    def fetchFmpWidths(self, dat_path):
+        self.dat_path = dat_path
         file_loader = fl.FileLoader()
         try:
-            model = file_loader.loadFile(fmp_path)
-        except e:
-            raise e ("Problem loading FMP .dat file at:\n{}".format(fmp_path))
+            model = file_loader.loadFile(dat_path)
+        except Exception as e:
+            raise e ("Problem loading FMP .dat file at:\n{}".format(dat_path))
         unit_categories = ['river', 'interpolate']
         units = model.unitsByCategory(unit_categories)
         
@@ -110,23 +111,25 @@ class FmpTuflowSectionWidthCheck(ti.ToolInterface):
             
         return widths
         
-    def fetch_cn_widths(self):
+    def fetchCnWidths(self, node_layer, cn_layer):
+        self.node_layer = node_layer
+        self.cn_layer = cn_layer
         
         # Check that we have the right kind of layer
-        headers = [f.name() for f in self.cn_layer.fields()]
+        headers = [f.name() for f in cn_layer.fields()]
         for i, field in enumerate(self.cn_fields):
             if not field in headers:
                 raise AttributeError ("Selected CN layer is not a recognised 2b_bc_hx layer")
 
         total_found = {'nodes': 0, 'snapped_cn': 0}
         details = {}
-        for f in self.node_layer.getFeatures():
+        for f in node_layer.getFeatures():
              
             node_id = f["ID"]
             node_geom = f.geometry()
             total_found['nodes'] += 1
              
-            for cnf in self.cn_layer.getFeatures():
+            for cnf in cn_layer.getFeatures():
                 # Ignore any other types
                 if cnf["Type"] != "CN":
                     continue
@@ -145,7 +148,7 @@ class FmpTuflowSectionWidthCheck(ti.ToolInterface):
             line2 = feats[1].geometry().asMultiPolyline()
  
             distance = QgsDistanceArea()
-            distance.setSourceCrs(self.cn_layer.crs(), self.project.transformContext())
+            distance.setSourceCrs(cn_layer.crs(), self.project.transformContext())
             d = []
             d.append(distance.measureLine(line1[0][0], line2[0][0]))
             d.append(distance.measureLine(line1[0][0], line2[0][-1]))
@@ -156,30 +159,40 @@ class FmpTuflowSectionWidthCheck(ti.ToolInterface):
 
         return cn_widths, total_found
     
-    def check_widths(self, fmp_widths, cn_widths):
+    def checkWidths(self, fmp_widths, cn_widths, dw_tol=5):
         """
         """
-        missing_2d_nodes = []
-        failed = []
+#         missing_2d_nodes = []
+        self.results = []
+        self.failed = {'fail': [], 'missing': []}
         cn_keys = cn_widths.keys()
         for id, details in fmp_widths.items():
+            temp = {
+                'id': id, 'type': details[1], '1d_width': details[0], 
+                '2d_width': -99999, 'diff': -99999
+            }
             if not id in cn_keys:
-                missing_2d_nodes.append(id)
+                self.failed['missing'].append(temp)
+                self.results.append(temp)
             else:
                 width_diff = abs(details[0] - cn_widths[id])
-                if width_diff > self.dw_tol:
-                    failed.append('Node {}:  difference = {:.2f}m'.format(id, width_diff))
-                self.results.append({
-                    'id': id, 'type': details[1], '1d_width': details[0], 
-                    '2d_width': cn_widths[id], 'width_diff': width_diff
-                })
-        return missing_2d_nodes, failed
+                output_diff = details[0] - cn_widths[id]
+                temp['2d_width'] = cn_widths[id]
+                temp['diff'] = output_diff
+                if width_diff > dw_tol:
+                    self.failed['fail'].append(temp)
+                self.results.append(temp)
+        return self.results, self.failed
     
-    def write_results(self):
+    def writeResults(self, save_path):
         """
         """
-        outpath = os.path.join(self.working_dir, 'fmptuflow_widthcompare.csv')
-        with open(outpath, 'w', newline='') as outfile:
+        def formatWidth(value):
+            return '{:.3f}'.format(value)
+
+        if not self.results:
+            raise OSError('Cannot find results. Please re-run the check first.')
+        with open(save_path, 'w', newline='') as outfile:
             fieldnames = [
                 'node', 'node type', 'fmp width', 'tuflow width', 'difference'
             ]
@@ -187,8 +200,32 @@ class FmpTuflowSectionWidthCheck(ti.ToolInterface):
             writer.writeheader()
             for r in self.results:
                 writer.writerow({
-                    'node': '\'' + r['id'], 'node type': r['type'],
-                    'fmp width': r['1d_width'], 'tuflow width': r['2d_width'],
-                    'difference': '{:.2f}'.format(r['width_diff'])
+                    'node': '"' + r['id'] + '"', 'node type': r['type'],
+                    'fmp width': formatWidth(r['1d_width']), 
+                    'tuflow width': formatWidth(r['2d_width']), 'difference': formatWidth(r['diff'])
                 })
-        return outpath
+
+    def writeFailed(self, save_path):
+        """
+        """
+        def formatWidth(value):
+            return '{:.3f}'.format(value)
+
+        if not self.failed:
+            raise OSError('Cannot find failed results. Please re-run the check first.')
+        # No point writing out empty results
+        if not self.failed['fail'] and not self.failed['missing']:
+            return
+        with open(save_path, 'w', newline='') as outfile:
+            fieldnames = [
+                'status', 'node', 'node type', 'fmp width', 'tuflow width', 'difference'
+            ]
+            writer = csv.DictWriter(outfile, fieldnames=fieldnames)
+            writer.writeheader()
+            for k, v in self.failed.items():
+                for r in v:
+                    writer.writerow({
+                        'status': k, 'node': '"' + r['id'] + '"', 'node type': r['type'],
+                        'fmp width': formatWidth(r['1d_width']), 
+                        'tuflow width': formatWidth(r['2d_width']), 'difference': formatWidth(r['diff'])
+                    })

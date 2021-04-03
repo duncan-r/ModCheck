@@ -28,7 +28,7 @@ from .forms import ui_nrfa_viewer_dialog as nrfa_ui
 # from .forms import ui_pyqtgraph_dialog as pyqtgraph_ui
 
 from .tools import chainagecalculator as chain_calc
-from .tools import fmptuflowwidthcheck as fmptuflow_widthcheck
+from .tools import widthcheck
 from .tools import runvariablescheck as runvariables_check
 from .tools import fmpsectioncheck as fmpsection_check
 from .tools import refhcheck
@@ -63,11 +63,11 @@ class ChainageCalculatorDialog(QDialog, chaincalc_ui.Ui_ChainageCalculator):
         dx_tol = mrt_settings.loadProjectSetting('chainage_dx_tol', 10)
         self.datFileWidget.setFilePath(dat_path)
         self.datFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'dat_file'))
+        self.dxToleranceSpinbox.valueChanged.connect(self.dxTolValueChanged)
+        self.dxToleranceSpinbox.setValue(dx_tol)
         
         # Populate estry nwk layer combo (line layers only)
         self.estryNwkLayerCBox.setFilters(QgsMapLayerProxyModel.LineLayer)
-        self.dxToleranceSpinbox.valueChanged.connect(self.dxTolValueChanged)
-        self.dxToleranceSpinbox.setValue(dx_tol)
         
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)
@@ -249,86 +249,137 @@ class FmpTuflowWidthCheckDialog(QDialog, fmptuflowwidthcheck_ui.Ui_FmpTuflowWidt
         self.iface = iface
         self.project = project
         self.setupUi(self)
-
-        self.workingDirFileWidget.setStorageMode(QgsFileWidget.GetDirectory)
+        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
         
-        # Load existing settings
-        working_dir = mrt_settings.loadProjectSetting(
-            'working_directory', self.project.readPath('./')
-        )
+        self.width_check = widthcheck.SectionWidthCheck(self.project)
+
         dat_path = mrt_settings.loadProjectSetting(
             'dat_file', self.project.readPath('./')
         )
         
         # Connect the slots
         self.checkWidthsBtn.clicked.connect(self.checkWidths)
-        self.workingDirFileWidget.setFilePath(working_dir)
         self.datFileWidget.setFilePath(dat_path)
-        self.workingDirFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'working_directory'))
         self.datFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'dat_file'))
+        self.exportResultsBtn.clicked.connect(self.exportResults)
         
-        # Populate estry nwk layer combo (line layers only)
+        # Populate estry nwk layer combo (point and line layers only)
         self.fmpNodesLayerCbox.setFilters(QgsMapLayerProxyModel.PointLayer)
         self.cnLinesLayerCbox.setFilters(QgsMapLayerProxyModel.LineLayer)
 
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)
+        
+    def exportResults(self):
+        include_failed = self.includeFailedCheckbox.isChecked()
+
+        csv_file = mrt_settings.loadProjectSetting(
+            'width_results', mrt_settings.loadProjectSetting(
+                    'results_dir', mrt_settings.loadProjectSetting('working_dir', './temp')
+            )
+        )
+        if os.path.isdir(csv_file):
+            csv_file = os.path.join(csv_file, 'width_results.csv')
+        filepath = QFileDialog(self).getSaveFileName(
+            self, 'Export Results', csv_file, "CSV File (*.csv)"
+        )[0]
+        if filepath:
+            mrt_settings.saveProjectSetting('width_results', csv_file)
+            try:
+                self.width_check.writeResults(filepath)
+            except OSError as err:
+                QMessageBox.warning(
+                    self, "Results export failed", err.args[0] 
+                )
+                return
+
+            if include_failed:
+                root, filename = os.path.split(filepath)
+                filename, ext = os.path.splitext(filename)
+                filepath = os.path.join(root, filename + '_failed.csv')
+                try:
+                    self.width_check.writeFailed(filepath)
+                except OSError as err:
+                    QMessageBox.warning(
+                        self, "Results export failed", err.args[0] 
+                    )
             
     def checkWidths(self):
-        working_dir = mrt_settings.loadProjectSetting(
-            'working_directory', self.project.readPath('./temp')
-        )
         dat_path = mrt_settings.loadProjectSetting(
             'dat_file', self.project.readPath('./')
         )
-        if working_dir is None or dat_path is None:
-            self.loggingTextedit.appendPlainText("Please set working directory and FMP dat path first")
-        elif not os.path.isdir(working_dir) or not os.path.exists(dat_path):
-            self.loggingTextedit.appendPlainText("Please make sure working directory and FMP dat paths exist")
+        if dat_path is None:
+            QMessageBox.warning(
+                self, "No FMP dat file selected", "Please select an FMP dat file first"
+            )
+        elif not os.path.exists(dat_path):
+            QMessageBox.warning(
+                self, "FMP dat file not found", "Please check that FMP dat file exists"
+            )
         else:
             nodes_layer = self.fmpNodesLayerCbox.currentLayer()
             cn_layer = self.cnLinesLayerCbox.currentLayer()
             dw_tol = self.dwToleranceSpinbox.value()
 
-            self.loggingTextedit.clear()
-            self.loggingTextedit.appendPlainText("Using .dat file:\n" + dat_path)
-            self.loggingTextedit.appendPlainText("\nUsing nodes layer:\n" + nodes_layer.name())
-            self.loggingTextedit.appendPlainText("\nUsing CN layer:\n" + cn_layer.name())
-            self.loggingTextedit.appendPlainText("\nWidth diffference (DW) Tolerance = {}m".format(dw_tol))
-            self.loggingTextedit.appendPlainText("\nComparing 1D-2D widths...")
-            self.loggingTextedit.repaint()
+            self.statusLabel.setText('Comparing 1D-2D widths ...')
+            QApplication.processEvents()
             
-            width_check = fmptuflow_widthcheck.FmpTuflowSectionWidthCheck(
-                self.project, working_dir, dat_path, nodes_layer, 
-                cn_layer, dw_tol
-            )
             try:
-                missing_nodes, failed = width_check.run_tool()
-            except AttributeError as e:
-                self.iface.messageBar().pushWarning("Width Check", e.args[0])
-            except Exception as e:
-                self.iface.messageBar().pushWarning("Width Check", e.args[0])
-            else:
-                self.loggingTextedit.appendPlainText("")
-                self.loggingTextedit.appendPlainText("FMP nodes missing from 2D:")
-                if len(missing_nodes) > 0:
-                    self.loggingTextedit.appendPlainText('\n'.join(missing_nodes))
-                else:
-                    self.loggingTextedit.appendPlainText('No missing nodes found\n')
-
-                self.loggingTextedit.appendPlainText(
-                    "Nodes with width difference greater than tolerance (+-{}m):".format(dw_tol)
+                self.statusLabel.setText('Loading FMP 1D widths ...')
+                QApplication.processEvents()
+                fmp_widths = self.width_check.fetchFmpWidths(dat_path)
+                self.statusLabel.setText('Loading TUFLOW 2D widths ...')
+                QApplication.processEvents()
+                cn_widths, total_found = self.width_check.fetchCnWidths(nodes_layer, cn_layer)
+                self.statusLabel.setText('Comparing 1D-2D widths ...')
+                QApplication.processEvents()
+                results, failed = self.width_check.checkWidths(fmp_widths, cn_widths)
+            except (AttributeError, Exception) as e:
+                QMessageBox.warning(
+                    self, "Width check failed", e.args[0]
                 )
-                if len(failed) > 0:
-                    self.loggingTextedit.appendPlainText("\n".join(failed))
+            else:
+                if len(failed['missing']) > 0 or len(failed['fail']) > 0:
+                    self.statusLabel.setText('Check complete - Failed or missing nodes found')
+                    self.updateFailedTable(failed)
                 else:
-                    self.loggingTextedit.appendPlainText("No failed nodes found\n")
+                    self.statusLabel.setText('Check complete - All nodes passed')
+                self.updateAllTable(results)
+
+    def _buildRow(self, data, table_widget, row_position, status=None):
+        width_1d = '{:.2f}'.format(data['1d_width'])
+        width_2d = '{:.2f}'.format(data['2d_width'])
+        diff = '{:.2f}'.format(data['diff'])
+        table_widget.insertRow(row_position)
+        col = 0 
+        if status is not None:
+            table_widget.setItem(row_position, col, QTableWidgetItem(status))
+            col += 1
+
+        table_widget.setItem(row_position, col, QTableWidgetItem(data['id']))
+        table_widget.setItem(row_position, col+1, QTableWidgetItem(data['type']))
+        table_widget.setItem(row_position, col+2, QTableWidgetItem(diff))
+        table_widget.setItem(row_position, col+3, QTableWidgetItem(width_1d))
+        table_widget.setItem(row_position, col+4, QTableWidgetItem(width_2d))
+
+    def updateFailedTable(self, results):
+        row_position = 0
+        self.failedTableWidget.setRowCount(row_position)
+        for f in results['fail']:
+            self._buildRow(f, self.failedTableWidget, row_position, 'FAIL')
+            row_position += 1
+        for m in results['missing']:
+            self._buildRow(m, self.failedTableWidget, row_position, 'NOT FOUND')
+            row_position += 1
+            
+    def updateAllTable(self, results):
+        row_position = 0
+        self.allTableWidget.setRowCount(row_position)
+        for r in results:
+            self._buildRow(r, self.allTableWidget, row_position)
+            row_position += 1
                 
-                self.loggingTextedit.appendPlainText("\nWriting results to working dir...")
-                save_location = width_check.write_results()
-                self.loggingTextedit.appendPlainText("Results output to:")
-                self.loggingTextedit.appendPlainText(save_location)
-        
         
 class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTuflowVariablesCheckDialog):
     
