@@ -117,11 +117,23 @@ class ChainageCalculatorDialog(QDialog, chaincalc_ui.Ui_ChainageCalculator):
                 if name != 'all' and widget.isChecked():
                     export_types.append(name) 
         
+        export_fail = []
         for t in export_types:
             self.statusLabel.setText('Exporting results for {0} ...'.format(t))
-            self.chainage_calculator.exportResults(folder, t)
+            try:
+                self.chainage_calculator.exportResults(folder, t)
+            except Exception as err:
+                export_fail.append(t)
         label_path = folder if len(folder) < 100 else folder[-100:]
         self.statusLabel.setText('Results saved to {0}'.format(label_path))
+        if export_fail:
+            QMessageBox.warning(
+                self, "Unable to export some results", 
+                '\n'.join(
+                    "Unable to export some results for {0}".format(', '.join(export_fail)), 
+                    err.args[0]
+                )
+            )
             
     def calculateFmpOnlyChainage(self):
         """
@@ -448,7 +460,12 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
             'ief_file', self.project.readPath('./temp')
         )
         variables_check = runvariables_check.IefVariablesCheck(self.project, ief_path)
-        file_paths, variables = variables_check.run_tool()
+        try:
+            file_paths, variables = variables_check.run_tool()
+        except Exception as err:
+            QMessageBox.warning(
+                self, "FMP ief file load failed", err.args[0]
+            )
         
         row_position = 0
         self.fmpVariablesTable.setRowCount(row_position)
@@ -478,7 +495,12 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
             'zzd_file', self.project.readPath('./temp')
         )
         zzd_check = runvariables_check.ZzdFileCheck(self.project, zzd_path)
-        diagnostics, warnings = zzd_check.run_tool()
+        try:
+            diagnostics, warnings = zzd_check.run_tool()
+        except Exception as err:
+            QMessageBox.warning(
+                self, "FMP zzd file load failed", err.args[0]
+            )
         
         row_position = 0
         self.fmpRunSummaryTable.setRowCount(row_position)
@@ -531,7 +553,12 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
             'tlf_file', self.project.readPath('./temp')
         )
         variables_check = runvariables_check.TlfDetailsCheck(self.project, tlf_path)
-        variables_check.run_tool()
+        try:
+            variables_check.run_tool()
+        except Exception as err:
+            QMessageBox.warning(
+                self, "TUFLOW zzd file load failed", err.args[0]
+            )
         variables = variables_check.variables
         files = variables_check.files
         checks = variables_check.checks
@@ -563,7 +590,6 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
             self.tuflowDiagnosticsTable.setItem(row_position, 2, QTableWidgetItem(str(details['count'])))
             self.tuflowDiagnosticsTable.setItem(row_position, 3, QTableWidgetItem(details['message']))
             self.tuflowDiagnosticsTable.setItem(row_position, 4, QTableWidgetItem(details['wiki_link']))
-    
         
         row_position = 0
         self.tuflowRunSummaryTable.setRowCount(row_position)
@@ -598,14 +624,8 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
         self.datFileReloadBtn.clicked.connect(self.loadSectionData)
         
         # Load existing settings
-        temp_dir = mrt_settings.loadProjectSetting(
-            'temp_dir', self.project.readPath('./temp')
-        )
         dat_path = mrt_settings.loadProjectSetting(
             'dat_file', self.project.readPath('./temp')
-        )
-        chainage_results = mrt_settings.loadProjectSetting(
-            'fmp_conveyance_data', self.project.readPath('./temp')
         )
         # Connect file widgets and update slots
         self.datFileWidget.setFilePath(dat_path)
@@ -699,7 +719,12 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
             'dat_file', self.project.readPath('./temp')
         )
         section_check = fmpsection_check.CheckFmpSections(working_dir, dat_path, k_tol)
-        self.properties = section_check.run_tool()
+        try:
+            self.properties = section_check.run_tool()
+        except Exception as err:
+            QMessageBox.warning(
+                self, "FMP dat file load error", err.args[0]
+            )
         
         conveyance = self.properties['negative_k']
         row_position = 0
@@ -756,7 +781,12 @@ class FmpRefhCheckDialog(QDialog, refh_ui.Ui_FmpRefhCheckDialog):
             'refh_file', self.project.readPath('./temp')
         )
         refh_compare = refhcheck.CompareFmpRefhUnits([model_path])
-        self.csv_results, text_output, failed_paths, missing_refh = refh_compare.run_tool()
+        try:
+            self.csv_results, text_output, failed_paths, missing_refh = refh_compare.run_tool()
+        except Exception as err:
+            QMessageBox.warning(
+                self, "FMP dat/ied file load failed", err.args[0]
+            )
         self.formatTexbox(text_output, failed_paths, missing_refh)
         
     def formatTexbox(self, output, failed_paths, missing_refh):   
@@ -819,7 +849,7 @@ class FmpRefhCheckDialog(QDialog, refh_ui.Ui_FmpRefhCheckDialog):
         filepath = QFileDialog(self).getSaveFileName(
             self, 'Export Results', csv_file, "CSV File (*.csv)"
         )
-        if filepath:
+        if filepath[0]:
             mrt_settings.saveProjectSetting('csv_file', filepath[0])
             r = self.csv_results[0]
             with open(filepath[0], 'w', newline='') as csvfile:
