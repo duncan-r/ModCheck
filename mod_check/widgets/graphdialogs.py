@@ -155,8 +155,8 @@ class AmaxGraphDialog(QDialog, graph_ui.Ui_GraphDialog):
         flow = []
         years = []
         for s in series:
-            flow.append(s[0])
-            years.append(int(s[1][:4]))
+            flow.append(s['flow'])
+            years.append(int(s['datetime'][:4]))
             
         scene = QGraphicsScene()
         view = self.graphGraphicsView.setScene(scene)
