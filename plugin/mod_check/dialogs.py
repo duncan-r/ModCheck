@@ -7,67 +7,139 @@ from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from qgis.core import *
 from qgis.gui import QgsMessageBar, QgsFileWidget
-# from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
-# import matplotlib
-# matplotlib.use('Qt5Agg')
-# import matplotlib.pyplot as plt
-
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-import numpy as np
 
 from .forms import ui_chainage_calculator_dialog as chaincalc_ui
 from .forms import ui_fmptuflow_widthcheck_dialog as fmptuflowwidthcheck_ui
 from .forms import ui_runvariables_check_dialog as fmptuflowvariablescheck_ui
 from .forms import ui_fmpsectionproperty_check_dialog as fmpsectioncheck_ui
-from .forms import ui_graph_dialog as graph_ui
 from .forms import ui_fmprefh_check_dialog as refh_ui
+from .forms import ui_tuflowstability_check_dialog as tuflowstability_ui
+from .forms import ui_nrfa_viewer_dialog as nrfa_ui
 
 from .tools import chainagecalculator as chain_calc
-from .tools import fmptuflowwidthcheck as fmptuflow_widthcheck
+from .tools import widthcheck
 from .tools import runvariablescheck as runvariables_check
 from .tools import fmpsectioncheck as fmpsection_check
 from .tools import refhcheck
+from .tools import tuflowstabilitycheck as tmb_check
+from .tools import nrfaviewer as nrfa_viewer
 from .tools import settings as mrt_settings
 
+from .widgets import graphdialogs as graphs
+
+DATA_DIR = './data'
+TEMP_DIR = './temp'
+
 class ChainageCalculatorDialog(QDialog, chaincalc_ui.Ui_ChainageCalculator):
+    """Retrieve and compare chainage values from FMP and TUFLOW models.
+    
+    Extracts the chainage (distance to next node) values for all sections in an
+    FMP model .dat file. Also summarises chainage totals by reach.
+    
+    If a nwk_line shape file is available for the TUFLOW model it will compare
+    the length values of the nwk_line to check that there is consistency 
+    between the FMP and TUFLOW model chainages.
+    """
+    closing = pyqtSignal(name='closing')
     
     def __init__(self, iface, project):
         QDialog.__init__(self)
         self.iface = iface
         self.project = project
         self.setupUi(self)
+        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
         
-        self.workingDirFileWidget.setStorageMode(QgsFileWidget.GetDirectory)
+        self.chainage_calculator = chain_calc.CompareFmpTuflowChainage()
         
-        # Connect the slots
+        self.buttonBox.clicked.connect(self.signalClose)
         self.calcFmpChainageOnlyBtn.clicked.connect(self.calculateFmpOnlyChainage)
-        self.compareChainageBtn.clicked.connect(self.compareEstryFmpChainage)
+        self.compareChainageBtn.clicked.connect(self.compareTuflowFmpChainage)
         self.fmpOnlyCheckbox.stateChanged.connect(self.compareFmpOnlyChange)
+        self.exportResultsBtn.clicked.connect(self.exportChainageResults)
+        self.exportAllCheckbox.stateChanged.connect(self.setExportAll)
+        self.exportFmpCheckbox.stateChanged.connect(self.setExportIndividual)
+        self.exportReachCheckbox.stateChanged.connect(self.setExportIndividual)
+        self.exportComparisonCheckbox.stateChanged.connect(self.setExportIndividual)
+        self.tuflowFmpComparisonTable.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tuflowFmpComparisonTable.customContextMenuRequested.connect(self._comparisonTableContext)
         
-        # Load existing settings
-        working_dir = mrt_settings.loadProjectSetting(
-            'working_directory', str, self.project.readPath('./temp')
-        )
         dat_path = mrt_settings.loadProjectSetting(
-            'dat_file', str, self.project.readPath('./temp')
+            'dat_file', self.project.readPath('./temp')
         )
-        chainage_results = mrt_settings.loadProjectSetting(
-            'chainage_results', str, self.project.readPath('./temp')
-        )
-        # Connect file widgets and update slots
-        self.workingDirFileWidget.setFilePath(working_dir)
+        dx_tol = mrt_settings.loadProjectSetting('chainage_dx_tol', 10)
         self.datFileWidget.setFilePath(dat_path)
-        self.workingDirFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'working_directory'))
         self.datFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'dat_file'))
+        self.dxToleranceSpinbox.valueChanged.connect(self.dxTolValueChanged)
+        self.dxToleranceSpinbox.setValue(dx_tol)
         
         # Populate estry nwk layer combo (line layers only)
         self.estryNwkLayerCBox.setFilters(QgsMapLayerProxyModel.LineLayer)
         
+    def _comparisonTableContext(self, pos):
+        """Add context menu to comparison table.
+        
+        Allow user to select and zoom to the chosen nwk line section in the map window.
+        """
+        index = self.tuflowFmpComparisonTable.itemAt(pos)
+        if index is None: return
+        menu = QMenu()
+        locate_section_action = menu.addAction("Locate Section")
+
+        # Get the action and do whatever it says
+        action = menu.exec_(self.tuflowFmpComparisonTable.viewport().mapToGlobal(pos))
+
+        if action == locate_section_action:
+            row = self.tuflowFmpComparisonTable.currentRow()
+            id = self.tuflowFmpComparisonTable.item(row, 2).text()
+
+            # Find the nwk line feature with the given id, select and zoom to it
+            nwk_layer = self.estryNwkLayerCBox.currentLayer()
+            self.iface.mainWindow().findChild(QAction, 'mActionDeselectAll').trigger()
+            nwk_layer.removeSelection()
+            for f in nwk_layer.getFeatures():
+                if f['ID'] == id:
+                    nwk_layer.select(f.id())
+                    self.iface.mapCanvas().zoomToSelected(nwk_layer)
+                    break
+
+    def signalClose(self):
+        """Notify listeners that the dialog is being closed."""
+        self.closing.emit()
+        
+    def closeEvent(self, *args, **kwargs):
+        """Override the close event to emit a signal.
+        
+        Overrides: QDialog.closeEvent.
+        """
+        self.signalClose()
+        return QDialog.closeEvent(self, *args, **kwargs)
+
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)
         
+    def dxTolValueChanged(self, value):
+        mrt_settings.saveProjectSetting('chainage_dx_tol', value)
+        
+    def setExportAll(self, checkState):
+        if checkState == 2:
+            self.exportFmpCheckbox.setChecked(False)
+            self.exportReachCheckbox.setChecked(False)
+            self.exportComparisonCheckbox.setChecked(False)
+            self.exportAllCheckbox.setChecked(True)
+        
+    def setExportIndividual(self):
+        if self.exportAllCheckbox.isChecked():
+            self.exportAllCheckbox.setChecked(False)
+        
     def compareFmpOnlyChange(self, *args):
+        """Setup the dialog for FMP only or FMP-TUFLOW calculation.
+        
+        Disables different parts of the dialog depending on whether the user
+        wants to just extract FMP chainage values or compare them to TUFLOW.
+        """
         if self.fmpOnlyCheckbox.isChecked():
             self.calcFmpChainageOnlyBtn.setEnabled(True)
             self.tuflowInputsGroupbox.setEnabled(False)
@@ -76,147 +148,400 @@ class ChainageCalculatorDialog(QDialog, chaincalc_ui.Ui_ChainageCalculator):
             self.tuflowInputsGroupbox.setEnabled(True)
             
     def calculateFmpOnlyChainage(self):
+        """Calculate only the FMP model chainage values.
+        
+        If no TUFLOW nwk line shape file is available for comparison (common in
+        models that do not include WLL's) the user can calculate only the FMP
+        chainage values.
+        
+        Loads values by both section and 'reach' and puts them into tables on the
+        dialog. The reach chainage summary is the total chainage across 
+        consecutive river, interpolate or replicate sections.
         """
-        """
-        working_dir = mrt_settings.loadProjectSetting(
-            'working_directory', str, self.project.readPath('./temp')
-        )
         dat_path = mrt_settings.loadProjectSetting(
-            'dat_file', str, self.project.readPath('./temp')
+            'dat_file', self.project.readPath('./temp')
         )
-        if working_dir is None or dat_path is None:
-            self.loggingTextedit.appendPlainText("Please set working directory and FMP dat path first")
-        elif not os.path.isdir(working_dir) or not os.path.exists(dat_path):
-            self.loggingTextedit.appendPlainText("Please make sure working directory and FMP dat paths exist")
+        if dat_path is None:
+            QMessageBox.warning(
+                self, "Select an FMP dat file", "Please select an FMP dat file first"
+            )
+        elif not os.path.exists(dat_path):
+            QMessageBox.warning(
+                self, "FMP dat file not found", "FMP dat file could not be found"
+            )
         else:
-            self.loggingTextedit.clear()
-            self.loggingTextedit.appendPlainText("Calculating FMP Chainage...")
-            fmp_chainage = chain_calc.FmpChainageCalculator(working_dir, dat_path)
-            fmp_chainage.run_tool()
-            self.loggingTextedit.appendPlainText("FMP Chainage calculation complete\n")
-            self.loggingTextedit.appendPlainText("Results saved to:")
-            self.loggingTextedit.appendPlainText(working_dir)
+            self.statusLabel.setText('Calculating FMP Chainage...')
+            QApplication.processEvents()
+            fmp_chainage, reach_chainage = self.chainage_calculator.fmpChainage(dat_path)
+            self._showFmpChainageResults(fmp_chainage, reach_chainage)
+            self.statusLabel.setText('FMP Chainage calculation complete')
+        self.tuflowFmpComparisonTable.setRowCount(0)
+        self.outputsTabWidget.setCurrentIndex(0)
             
-    def compareEstryFmpChainage(self):
+    def compareTuflowFmpChainage(self):
+        """Compare FMP section chainage to TUFLOW node distances.
+        
+        Load the FMP section chainage values and compare them against the values
+        calculated from the user selected TUFLOW nwk line layer. Identifies
+        all sections where the difference is chainage is greater than the user
+        supplied tolerance.
         """
-        """
-        working_dir = mrt_settings.loadProjectSetting(
-            'working_directory', str, self.project.readPath('./temp')
-        )
         dat_path = mrt_settings.loadProjectSetting(
-            'dat_file', str, self.project.readPath('./temp')
+            'dat_file', self.project.readPath('./temp')
         )
         
         nwk_layer = self.estryNwkLayerCBox.currentLayer()
         dx_tol = self.dxToleranceSpinbox.value()
-        
-        chain_compare = chain_calc.CompareFmpTuflowChainage(
-            working_dir, dat_path, nwk_layer, dx_tol
+        self.statusLabel.setText('Calculating FMP chainage (1/3) ...')
+        QApplication.processEvents()
+        fmp_chainage, reach_chainage = self.chainage_calculator.fmpChainage(dat_path)
+        self.statusLabel.setText('Calculating TUFLOW nwk line chainage (2/3) ...')
+        QApplication.processEvents()
+        tuflow_chainage = self.chainage_calculator.tuflowChainage(nwk_layer)
+        self.statusLabel.setText('Comparing FMP-TUFLOW chainage (3/3) ...')
+        QApplication.processEvents()
+        chainage_compare = self.chainage_calculator.compareChainage(
+            fmp_chainage, tuflow_chainage, dx_tol
         )
-        problem_nodes, save_path = chain_compare.run_tool()
-                
-        self.loggingTextedit.clear()
-        self.loggingTextedit.appendPlainText("\nUsing .dat file:\n" + dat_path)
-        self.loggingTextedit.appendPlainText("\nUsing nwk layer:\n" + nwk_layer.name())
-        self.loggingTextedit.appendPlainText("")
+        self.statusLabel.setText('Chainage compare complete')
 
-        self.loggingTextedit.appendPlainText("\nNwk compare complete...")
-        self.loggingTextedit.appendPlainText("\nFMP/nwk chainage greater than tolerance ({}m):".format(dx_tol))
-        self.loggingTextedit.appendPlainText('\n'.join(problem_nodes['mismatch']))
-        self.loggingTextedit.appendPlainText("\nFMP nodes not found in nwk layer:")
-        self.loggingTextedit.appendPlainText('\n'.join(problem_nodes['no_nwk']))
+        self._showFmpChainageResults(fmp_chainage, reach_chainage)
+        self._showCompareChainageResults(chainage_compare)
+        self.outputsTabWidget.setCurrentIndex(1)
+            
+    def _showFmpChainageResults(self, unit_chainage, reach_chainage):
+        """Populate the FMP chainage tables with the results."""
+        row_position = 0
+        self.fmpChainageTable.setRowCount(row_position)
+        for unit in unit_chainage:
+            chainage = '{:.2f}'.format(unit['chainage'])
+            cum_reach_chainage = '{:.2f}'.format(unit['cum_reach_chainage'])
+            cum_total_chainage = '{:.2f}'.format(unit['cum_total_chainage'])
+            self.fmpChainageTable.insertRow(row_position)
+            self.fmpChainageTable.setItem(row_position, 0, QTableWidgetItem(unit['category']))
+            self.fmpChainageTable.setItem(row_position, 1, QTableWidgetItem(unit['name']))
+            self.fmpChainageTable.setItem(row_position, 2, QTableWidgetItem(chainage))
+            self.fmpChainageTable.setItem(row_position, 3, QTableWidgetItem(cum_reach_chainage))
+            self.fmpChainageTable.setItem(row_position, 4, QTableWidgetItem(cum_total_chainage))
+            self.fmpChainageTable.setItem(row_position, 5, QTableWidgetItem(str(unit['reach_number'])))
+            row_position += 1
+
+        row_position = 0
+        self.fmpReachChainageTable.setRowCount(row_position)
+        for unit in reach_chainage:
+            total_chainage = '{:.2f}'.format(unit['total_chainage'])
+            self.fmpReachChainageTable.insertRow(row_position)
+            self.fmpReachChainageTable.setItem(row_position, 0, QTableWidgetItem(str(unit['reach_number'])))
+            self.fmpReachChainageTable.setItem(row_position, 1, QTableWidgetItem(unit['start']))
+            self.fmpReachChainageTable.setItem(row_position, 2, QTableWidgetItem(unit['end']))
+            self.fmpReachChainageTable.setItem(row_position, 3, QTableWidgetItem(str(unit['section_count'])))
+            self.fmpReachChainageTable.setItem(row_position, 4, QTableWidgetItem(total_chainage))
+            row_position += 1
+
+    def _showCompareChainageResults(self, chainage_compare):
+        """Populate the FMP-TUFLOW comparison table with the results."""
+
+        def addRow(details, status, row_position):
+            """Add a row to comparison table.
+            
+            Args:
+                details(dict): containing the row data.
+                status(str): the pass/fail status of the section.
+                row_position(int): the row number to insert into the table.
+            """
+            status_item = QTableWidgetItem()
+            status_item.setTextAlignment(Qt.AlignCenter|Qt.AlignVCenter)
+            status_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            status_item.setText(status)
+            if status == 'FAILED' or status == 'NOT FOUND':
+                status_item.setBackground(QColor(239, 175, 175)) # Light Red
+
+            diff = '{:.2f}'.format(details['diff'])
+            fmp_chainage = '{:.2f}'.format(details['chainage'])
+            nwk_length = '{:.2f}'.format(details['nwk_line_length'])
+            nwk_len_or_ana = '{:.2f}'.format(details['nwk_len_or_ana'])
+            self.tuflowFmpComparisonTable.insertRow(row_position)
+            self.tuflowFmpComparisonTable.setItem(row_position, 0, status_item)
+            self.tuflowFmpComparisonTable.setItem(row_position, 1, QTableWidgetItem(details['type']))
+            self.tuflowFmpComparisonTable.setItem(row_position, 2, QTableWidgetItem(details['name']))
+            self.tuflowFmpComparisonTable.setItem(row_position, 3, QTableWidgetItem(diff))
+            self.tuflowFmpComparisonTable.setItem(row_position, 4, QTableWidgetItem(fmp_chainage))
+            self.tuflowFmpComparisonTable.setItem(row_position, 5, QTableWidgetItem(nwk_length))
+            self.tuflowFmpComparisonTable.setItem(row_position, 6, QTableWidgetItem(nwk_len_or_ana))
         
-        self.loggingTextedit.appendPlainText("\nResults output to:")
-        self.loggingTextedit.appendPlainText(save_path)
+        row_position = 0
+        self.tuflowFmpComparisonTable.setRowCount(row_position)
+        for item in chainage_compare['fail']:
+            addRow(item, 'FAILED', row_position)
+            row_position += 1
+
+        self.tuflowFmpComparisonTable.setRowCount(row_position)
+        for item in chainage_compare['missing']:
+            addRow(item, 'NOT FOUND', row_position)
+            row_position += 1
+
+        self.tuflowFmpComparisonTable.setRowCount(row_position)
+        for item in chainage_compare['ok']:
+            addRow(item, 'PASS', row_position)
+            row_position += 1
+        
+    def exportChainageResults(self):
+        """Export the chainage results to csv.
+        
+        Export the results types selected by the user to csv files.
+        """
+        default_folder = mrt_settings.loadProjectSetting('results_dir', './temp')
+        if default_folder == './temp':
+            default_folder = mrt_settings.loadProjectSetting('working_dir', './temp')
+        folder = QFileDialog(self).getExistingDirectory(
+            self, 'Results Ouput Folder', default_folder
+        )
+        mrt_settings.saveProjectSetting('results_dir', folder)
+        export_widgets = {
+            'all': self.exportAllCheckbox,
+            'fmp': self.exportFmpCheckbox,
+            'reach': self.exportReachCheckbox,
+            'comparison': self.exportComparisonCheckbox,
+        }
+        export_types = []
+        if export_widgets['all'].isChecked():
+            export_types = export_widgets.keys()
+        else:
+            for name, widget in export_widgets.items():
+                if name != 'all' and widget.isChecked():
+                    export_types.append(name) 
+        
+        export_fail = []
+        for t in export_types:
+            self.statusLabel.setText('Exporting results for {0} ...'.format(t))
+            try:
+                self.chainage_calculator.exportResults(folder, t)
+            except Exception as err:
+                export_fail.append(t)
+        label_path = folder if len(folder) < 100 else folder[-100:]
+        self.statusLabel.setText('Results saved to {0}'.format(label_path))
+        if export_fail:
+            QMessageBox.warning(
+                self, "Unable to export some results", 
+                '\n'.join(
+                    "Unable to export some results for {0}".format(', '.join(export_fail)), 
+                    err.args[0]
+                )
+            )
 
 
 class FmpTuflowWidthCheckDialog(QDialog, fmptuflowwidthcheck_ui.Ui_FmpTuflowWidthCheckDialog):
+    """Compare FMP and TUFLOW model sections widths.
+    
+    Find the active section widths from the FMP model and compare them to the TUFLOW
+    model.
+    """
+    closing = pyqtSignal(name='closing')
     
     def __init__(self, iface, project):
         QDialog.__init__(self)
         self.iface = iface
         self.project = project
         self.setupUi(self)
-
-        self.workingDirFileWidget.setStorageMode(QgsFileWidget.GetDirectory)
+        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
         
-        # Load existing settings
-        working_dir = mrt_settings.loadProjectSetting(
-            'working_directory', str, self.project.readPath('./')
-        )
+        self.width_check = widthcheck.SectionWidthCheck(self.project)
+
         dat_path = mrt_settings.loadProjectSetting(
-            'dat_file', str, self.project.readPath('./')
+            'dat_file', self.project.readPath('./')
         )
         
         # Connect the slots
+        self.buttonBox.clicked.connect(self.signalClose)
         self.checkWidthsBtn.clicked.connect(self.checkWidths)
-        self.workingDirFileWidget.setFilePath(working_dir)
         self.datFileWidget.setFilePath(dat_path)
-        self.workingDirFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'working_directory'))
         self.datFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'dat_file'))
+        self.exportResultsBtn.clicked.connect(self.exportResults)
+        self.failedTableWidget.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.failedTableWidget.customContextMenuRequested.connect(self._failedTableContext)
         
-        # Populate estry nwk layer combo (line layers only)
+        # Populate estry nwk layer combo (point and line layers only)
         self.fmpNodesLayerCbox.setFilters(QgsMapLayerProxyModel.PointLayer)
         self.cnLinesLayerCbox.setFilters(QgsMapLayerProxyModel.LineLayer)
 
+    def _failedTableContext(self, pos):
+        """Add context menu to failed sections table.
+        
+        Allow user to select and zoom to the chosen section in the map window.
+        """
+        index = self.failedTableWidget.itemAt(pos)
+        if index is None: return
+        menu = QMenu()
+        locate_section_action = menu.addAction("Locate Section")
+
+        # Get the action and do whatever it says
+        action = menu.exec_(self.failedTableWidget.viewport().mapToGlobal(pos))
+
+        if action == locate_section_action:
+            row = self.failedTableWidget.currentRow()
+            id = self.failedTableWidget.item(row, 1).text()
+
+            # Find the nodes point feature with the given id, select and zoom to it
+            nodes_layer = self.fmpNodesLayerCbox.currentLayer()
+            self.iface.mainWindow().findChild(QAction, 'mActionDeselectAll').trigger()
+            nodes_layer.removeSelection()
+            for f in nodes_layer.getFeatures():
+                if f['ID'] == id:
+                    nodes_layer.select(f.id())
+                    self.iface.mapCanvas().zoomToSelected(nodes_layer)
+                    break
+
+    def signalClose(self):
+        """Notify listeners that the dialog is being closed."""
+        self.closing.emit()
+        
+    def closeEvent(self, *args, **kwargs):
+        """Override the close event to emit a signal.
+        
+        Overrides: QDialog.closeEvent.
+        """
+        self.signalClose()
+        return QDialog.closeEvent(self, *args, **kwargs)
+
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)
-            
+        
     def checkWidths(self):
-        working_dir = mrt_settings.loadProjectSetting(
-            'working_directory', str, self.project.readPath('./temp')
-        )
+        """Compare FMP and TUFLOW section widths for parity.
+        
+        Calculate the active 1D section widths from the FMP .dat file and compare 
+        them to the widths in the TUFLOW model, based on the distance between 
+        the end points of the CN lines attached to the point in the 1d_nodes 
+        layer with the same name as the FMP section.
+        
+        Success of failure of the check is based on the user supplier dw_tol
+        tolerance value.
+        """
         dat_path = mrt_settings.loadProjectSetting(
-            'dat_file', str, self.project.readPath('./')
+            'dat_file', self.project.readPath('./')
         )
-        if working_dir is None or dat_path is None:
-            self.loggingTextedit.appendPlainText("Please set working directory and FMP dat path first")
-        elif not os.path.isdir(working_dir) or not os.path.exists(dat_path):
-            self.loggingTextedit.appendPlainText("Please make sure working directory and FMP dat paths exist")
+        if dat_path is None:
+            QMessageBox.warning(
+                self, "No FMP dat file selected", "Please select an FMP dat file first"
+            )
+        elif not os.path.exists(dat_path):
+            QMessageBox.warning(
+                self, "FMP dat file not found", "Please check that FMP dat file exists"
+            )
         else:
             nodes_layer = self.fmpNodesLayerCbox.currentLayer()
             cn_layer = self.cnLinesLayerCbox.currentLayer()
             dw_tol = self.dwToleranceSpinbox.value()
 
-            self.loggingTextedit.clear()
-            self.loggingTextedit.appendPlainText("Using .dat file:\n" + dat_path)
-            self.loggingTextedit.appendPlainText("\nUsing nodes layer:\n" + nodes_layer.name())
-            self.loggingTextedit.appendPlainText("\nUsing CN layer:\n" + cn_layer.name())
-            self.loggingTextedit.appendPlainText("\nWidth diffference (DW) Tolerance = {}m".format(dw_tol))
-            self.loggingTextedit.appendPlainText("\nComparing 1D-2D widths...")
-            self.loggingTextedit.repaint()
+            self.statusLabel.setText('Comparing 1D-2D widths ...')
+            QApplication.processEvents()
             
-            width_check = fmptuflow_widthcheck.FmpTuflowSectionWidthCheck(
-                self.project, working_dir, dat_path, nodes_layer, 
-                cn_layer, dw_tol
-            )
             try:
-                missing_nodes, failed = width_check.run_tool()
-            except AttributeError as e:
-                self.iface.messageBar().pushWarning("Width Check", e.args[0])
-            except Exception as e:
-                self.iface.messageBar().pushWarning("Width Check", e.args[0])
-            else:
-                self.loggingTextedit.appendPlainText("")
-                self.loggingTextedit.appendPlainText("FMP nodes missing from 2D:")
-                if len(missing_nodes) > 0:
-                    self.loggingTextedit.appendPlainText('\n'.join(missing_nodes))
-                else:
-                    self.loggingTextedit.appendPlainText('No missing nodes found\n')
-
-                self.loggingTextedit.appendPlainText(
-                    "Nodes with width difference greater than tolerance (+-{}m):".format(dw_tol)
+                self.statusLabel.setText('Loading FMP 1D widths ...')
+                QApplication.processEvents()
+                fmp_widths = self.width_check.fetchFmpWidths(dat_path)
+                self.statusLabel.setText('Loading TUFLOW 2D widths ...')
+                QApplication.processEvents()
+                cn_widths, total_found = self.width_check.fetchCnWidths(nodes_layer, cn_layer)
+                self.statusLabel.setText('Comparing 1D-2D widths ...')
+                QApplication.processEvents()
+                results, failed = self.width_check.checkWidths(fmp_widths, cn_widths, dw_tol)
+            except (AttributeError, Exception) as e:
+                QMessageBox.warning(
+                    self, "Width check failed", e.args[0]
                 )
-                if len(failed) > 0:
-                    self.loggingTextedit.appendPlainText("\n".join(failed))
+            else:
+                if len(failed['missing']) > 0 or len(failed['fail']) > 0:
+                    self.statusLabel.setText('Check complete - Failed or missing nodes found')
+                    self.updateFailedTable(failed)
                 else:
-                    self.loggingTextedit.appendPlainText("No failed nodes found\n")
-                
-                self.loggingTextedit.appendPlainText("\nWriting results to working dir...")
-                save_location = width_check.write_results()
-                self.loggingTextedit.appendPlainText("Results output to:")
-                self.loggingTextedit.appendPlainText(save_location)
+                    self.statusLabel.setText('Check complete - All nodes passed')
+                self.updateAllTable(results)
+
+    def _buildRow(self, data, table_widget, row_position, status=None):
+        """Create a table row and add it to the table.
         
+        Args:
+            data(dict): containing the value to place in the table row.
+            table_widget(QTableWidget): the table to add the row to.
+            row_position(int): the row count or position to add the row.
+            status=None(str): if given an additional item will be added to
+                the start of the row with the value given.
+        """
+        width_1d = '{:.2f}'.format(data['1d_width'])
+        width_2d = '{:.2f}'.format(data['2d_width'])
+        diff = '{:.2f}'.format(data['diff'])
+        table_widget.insertRow(row_position)
+        col = 0 
+        if status is not None:
+            table_widget.setItem(row_position, col, QTableWidgetItem(status))
+            col += 1
+
+        table_widget.setItem(row_position, col, QTableWidgetItem(data['id']))
+        table_widget.setItem(row_position, col+1, QTableWidgetItem(data['type']))
+        table_widget.setItem(row_position, col+2, QTableWidgetItem(diff))
+        table_widget.setItem(row_position, col+3, QTableWidgetItem(width_1d))
+        table_widget.setItem(row_position, col+4, QTableWidgetItem(width_2d))
+
+    def updateFailedTable(self, results):
+        """Update failed table with fail and missing values."""
+        row_position = 0
+        self.failedTableWidget.setRowCount(row_position)
+        for f in results['fail']:
+            self._buildRow(f, self.failedTableWidget, row_position, 'FAIL')
+            row_position += 1
+        for m in results['missing']:
+            self._buildRow(m, self.failedTableWidget, row_position, 'NOT FOUND')
+            row_position += 1
+            
+    def updateAllTable(self, results):
+        """Update the 'all' table with all of the results."""
+        row_position = 0
+        self.allTableWidget.setRowCount(row_position)
+        for r in results:
+            self._buildRow(r, self.allTableWidget, row_position)
+            row_position += 1
+                
+    def exportResults(self):
+        """Export the results to csv.
+        
+        If the includeFailedCheckbox is checked an additional file will be
+        created containing only the details of the failing sections.
+        """
+        include_failed = self.includeFailedCheckbox.isChecked()
+
+        csv_file = mrt_settings.loadProjectSetting(
+            'width_results', mrt_settings.loadProjectSetting(
+                    'results_dir', mrt_settings.loadProjectSetting('working_dir', './temp')
+            )
+        )
+        if os.path.isdir(csv_file):
+            csv_file = os.path.join(csv_file, 'width_results.csv')
+        filepath = QFileDialog(self).getSaveFileName(
+            self, 'Export Results', csv_file, "CSV File (*.csv)"
+        )[0]
+        if filepath:
+            mrt_settings.saveProjectSetting('width_results', csv_file)
+            try:
+                self.width_check.writeResults(filepath)
+            except OSError as err:
+                QMessageBox.warning(
+                    self, "Results export failed", err.args[0] 
+                )
+                return
+
+            if include_failed:
+                root, filename = os.path.split(filepath)
+                filename, ext = os.path.splitext(filename)
+                filepath = os.path.join(root, filename + '_failed.csv')
+                try:
+                    self.width_check.writeFailed(filepath)
+                except OSError as err:
+                    QMessageBox.warning(
+                        self, "Results export failed", err.args[0] 
+                    )
+            
         
 class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTuflowVariablesCheckDialog):
     
@@ -229,15 +554,20 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
         self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
         
         tlf_path = mrt_settings.loadProjectSetting(
-            'tlf_file', str, self.project.readPath('./temp')
+            'tlf_file', self.project.readPath('./temp')
         )
         ief_path = mrt_settings.loadProjectSetting(
-            'ief_file', str, self.project.readPath('./temp')
+            'ief_file', self.project.readPath('./temp')
         )
         zzd_path = mrt_settings.loadProjectSetting(
-            'zzd_file', str, self.project.readPath('./temp')
+            'zzd_file', self.project.readPath('./temp')
+        )
+        ief_folder = mrt_settings.loadProjectSetting(
+            'ief_folder', self.project.readPath('./temp')
         )
         
+        self.fmpIefFolderFileWidget.setStorageMode(QgsFileWidget.GetDirectory)
+
         # Connect the slots
         self.iefTableRefreshBtn.clicked.connect(self.loadIefVariables)
         self.zzdTableRefreshBtn.clicked.connect(self.loadZzdResults)
@@ -248,17 +578,66 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
         self.iefFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'ief_file'))
         self.zzdFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'zzd_file'))
         self.tlfFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'tlf_file'))
+        self.fmpIefFolderFileWidget.fileChanged.connect(self.loadMultipleIefSummary)
+        self.fmpMultipleSummaryTable.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.fmpMultipleSummaryTable.customContextMenuRequested.connect(self._multipleIefTableContext)
 
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)
         
         if caller == 'ief_file':
             self.loadIefVariables()
-        if caller == 'zzd_file':
+        elif caller == 'zzd_file':
             self.loadZzdResults()
         elif caller == 'tlf_file':
             self.loadTlfDetails()
+            
+    def _multipleIefTableContext(self, pos):
+        """Add context menu to failed sections table.
+        
+        Allow user to select and zoom to the chosen section in the map window.
+        """
+        index = self.fmpMultipleSummaryTable.itemAt(pos)
+        if index is None: return
+        menu = QMenu()
+        locate_section_action = menu.addAction("Show detailed view")
 
+        # Get the action and do whatever it says
+        action = menu.exec_(self.fmpMultipleSummaryTable.viewport().mapToGlobal(pos))
+        if action == locate_section_action:
+            row = self.fmpMultipleSummaryTable.currentRow()
+            col_count = self.fmpMultipleSummaryTable.columnCount()
+            full_path = self.fmpMultipleSummaryTable.item(row, col_count-1).text()
+            mrt_settings.saveProjectSetting('ief_path', full_path)
+            self.loadIefVariables()
+            self.fmpTabWidget.setCurrentIndex(1)
+            self.iefFileWidget.blockSignals(True)
+            self.iefFileWidget.setFilePath(full_path)
+            self.iefFileWidget.blockSignals(False)
+            
+    def loadMultipleIefSummary(self, path):
+        mrt_settings.saveProjectSetting('ief_folder', path)
+
+        ief_files = []
+        for root, dirs, files in os.walk(path):
+            for file in files:
+                fext = os.path.splitext(file)
+                if len(fext) > 1 and fext[1] == '.ief':
+                    ief_files.append(os.path.join(root, file))
+        
+        check = runvariables_check.IefVariablesCheck(self.project, 'fakepath')
+        outputs = []
+        for ief in ief_files:
+            outputs.append(check.loadSummaryInfo(ief))
+            
+        row_position = 0
+        self.fmpMultipleSummaryTable.setRowCount(row_position)
+        for output in outputs:
+            self.fmpMultipleSummaryTable.insertRow(row_position)
+            for i, item in enumerate(output):
+                self.fmpMultipleSummaryTable.setItem(row_position, i, QTableWidgetItem(item))
+            row_position += 1
+            
     def loadIefVariables(self):
         
         def outputTableRow(details, is_default):
@@ -281,10 +660,15 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
         
 
         ief_path = mrt_settings.loadProjectSetting(
-            'ief_file', str, self.project.readPath('./temp')
+            'ief_file', self.project.readPath('./temp')
         )
         variables_check = runvariables_check.IefVariablesCheck(self.project, ief_path)
-        file_paths, variables = variables_check.run_tool()
+        try:
+            file_paths, variables = variables_check.run_tool()
+        except Exception as err:
+            QMessageBox.warning(
+                self, "FMP ief file load failed", err.args[0]
+            )
         
         row_position = 0
         self.fmpVariablesTable.setRowCount(row_position)
@@ -311,10 +695,15 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
 
     def loadZzdResults(self):
         zzd_path = mrt_settings.loadProjectSetting(
-            'zzd_file', str, self.project.readPath('./temp')
+            'zzd_file', self.project.readPath('./temp')
         )
         zzd_check = runvariables_check.ZzdFileCheck(self.project, zzd_path)
-        diagnostics, warnings = zzd_check.run_tool()
+        try:
+            diagnostics, warnings = zzd_check.run_tool()
+        except Exception as err:
+            QMessageBox.warning(
+                self, "FMP zzd file load failed", err.args[0]
+            )
         
         row_position = 0
         self.fmpRunSummaryTable.setRowCount(row_position)
@@ -364,10 +753,15 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
             self.tuflowVariablesTable.setItem(row_position, 5, QTableWidgetItem(details['description']))
 
         tlf_path = mrt_settings.loadProjectSetting(
-            'tlf_file', str, self.project.readPath('./temp')
+            'tlf_file', self.project.readPath('./temp')
         )
         variables_check = runvariables_check.TlfDetailsCheck(self.project, tlf_path)
-        variables_check.run_tool()
+        try:
+            variables_check.run_tool()
+        except Exception as err:
+            QMessageBox.warning(
+                self, "TUFLOW zzd file load failed", err.args[0]
+            )
         variables = variables_check.variables
         files = variables_check.files
         checks = variables_check.checks
@@ -399,7 +793,6 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
             self.tuflowDiagnosticsTable.setItem(row_position, 2, QTableWidgetItem(str(details['count'])))
             self.tuflowDiagnosticsTable.setItem(row_position, 3, QTableWidgetItem(details['message']))
             self.tuflowDiagnosticsTable.setItem(row_position, 4, QTableWidgetItem(details['wiki_link']))
-    
         
         row_position = 0
         self.tuflowRunSummaryTable.setRowCount(row_position)
@@ -409,122 +802,6 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
             self.tuflowRunSummaryTable.setItem(row_position, 1, QTableWidgetItem(details['value']))
             self.tuflowRunSummaryTable.setItem(row_position, 2, QTableWidgetItem(details['description']))
             row_position += 1
-        
-
-class ConveyanceGraphDialog(QDialog, graph_ui.Ui_GraphDialog):
-    
-    def __init__(self, title="Section Conveyance"):
-        QDialog.__init__(self)
-        self.setupUi(self)
-        self.title = title
-        self.setWindowTitle(title)
-
-    def setupGraph(self, section_data, section_id):
-        try:
-            self.setWindowTitle('{} - {}'.format(self.title, section_id))
-        except: pass
-        
-        scene = QGraphicsScene()
-        view = self.graphGraphicsView.setScene(scene)
-        fig = Figure()
-        axes = fig.gca()
-        
-        minx = section_data['xvals'][0]
-        maxx = section_data['xvals'][-1]
-        miny = min(section_data['yvals'])
-        maxy = max(section_data['yvals'])
-        
-        x = section_data['xvals']
-        y = section_data['yvals']
-        
-#         axes.set_title(self.title)
-        axes.set_ylabel('Elevation (mAOD)')
-        axes.set_xlabel('Chainage (m)')
-
-        xs_plot = axes.plot(x, y, "-k", label="Cross Section")
-        p_plot = None
-
-        panel_count = 0
-        for i, panel in enumerate(section_data['panels']):
-            if panel:
-                panel_count += 1
-                panel_label = 'Panel {}'.format(panel_count)
-                panelx = [section_data['xvals'][i], section_data['xvals'][i]]
-                panely = [miny, maxy]
-                p_plot = axes.plot(panelx, panely, "-b", label=panel_label)
-        
-        cx = []
-        cy = []
-        for c in section_data['conveyance']:
-            cx.append(c[0])
-            cy.append(c[1])
-        axes2 = axes.twiny()
-        k_plot = axes2.plot(cx, cy, "-r", label="Conveyance")
-        axes2.set_xlabel('Conveyance (m3/s)', color='r')
-
-        plot_lines = xs_plot + k_plot
-        labels = [l.get_label() for l in plot_lines]
-        if p_plot is not None: 
-            plot_lines += p_plot
-            labels.append('Panels')
-        axes.legend(plot_lines, labels, loc='lower right')
-#         axes.legend()
-#         axes2.legend()
-
-        axes.grid(True)
-        canvas = FigureCanvas(fig)
-        proxy_widget = scene.addWidget(canvas)
-        
-        
-class BadBanksGraphDialog(QDialog, graph_ui.Ui_GraphDialog):
-    
-    def __init__(self, title="Banktop Check"):
-        QDialog.__init__(self)
-        self.setupUi(self)
-        self.title = title
-        self.setWindowTitle(title)
-
-    def setupGraph(self, section_data, section_id):
-        try:
-            self.setWindowTitle('{} - {}'.format(self.title, section_id))
-        except: pass
-        
-        scene = QGraphicsScene()
-        view = self.graphGraphicsView.setScene(scene)
-        fig = Figure()
-        axes = fig.gca()
-        
-        x = section_data['xvals']
-        y = section_data['yvals']
-        
-#         axes.set_title(self.title)
-        axes.set_ylabel('Elevation (mAOD)')
-        axes.set_xlabel('Chainage (m)')
-
-        xs_plot = axes.plot(x, y, "-k", label="Cross Section")
-        fill_plot = axes.fill(np.NaN, np.NaN, 'r', alpha=0.5)
-        
-        if section_data['left_drop'] > 0:
-            line_x = x[:(section_data['max_left_idx']+1)]
-            line_y = y[:(section_data['max_left_idx']+1)]
-            line_elev = [section_data['max_left'] for i in line_x]
-            axes.plot(
-                line_x, line_elev, '-r'
-            )
-            axes.fill_between(line_x, line_y, line_elev, interpolate=True, alpha=0.5, color='r')
-        if section_data['right_drop'] > 0:
-            line_x = x[section_data['max_right_idx']:]
-            line_y = y[section_data['max_right_idx']:]
-            line_elev = [section_data['max_right'] for i in line_x]
-            axes.plot(
-                line_x, line_elev, '-r'
-            )
-            axes.fill_between(line_x, line_y, line_elev, interpolate=True, alpha=0.5, color='r')
-
-        axes.legend(xs_plot + fill_plot, ['Cross Section', 'Poor Banks'], loc='lower right')
-        axes.grid(True)
-        canvas = FigureCanvas(fig)
-        proxy_widget = scene.addWidget(canvas)
 
         
 class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyCheckDialog):
@@ -550,14 +827,8 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
         self.datFileReloadBtn.clicked.connect(self.loadSectionData)
         
         # Load existing settings
-        temp_dir = mrt_settings.loadProjectSetting(
-            'temp_dir', str, self.project.readPath('./temp')
-        )
         dat_path = mrt_settings.loadProjectSetting(
-            'dat_file', str, self.project.readPath('./temp')
-        )
-        chainage_results = mrt_settings.loadProjectSetting(
-            'fmp_conveyance_data', str, self.project.readPath('./temp')
+            'dat_file', self.project.readPath('./temp')
         )
         # Connect file widgets and update slots
         self.datFileWidget.setFilePath(dat_path)
@@ -603,22 +874,23 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
                 self.graphSection(id, caller)
                 
     def _banktopCheckTableContext(self, pos):
-         self._setupTableContext(pos, self.banktopCheckTable, 'bad_banks')
+        self._setupTableContext(pos, self.banktopCheckTable, 'bad_banks')
 
     def graphSection(self, node_id, caller):
         """
         """
         if caller == 'conveyance':
-            dlg = ConveyanceGraphDialog()
+            dlg = graphs.ConveyanceGraphDialog()
             dlg.setupGraph(self.properties['negative_k'][node_id], node_id)
             dlg.exec_()
         elif caller == 'bad_banks':
-            dlg = BadBanksGraphDialog()
+            dlg = graphs.BadBanksGraphDialog()
             dlg.setupGraph(self.properties['bad_banks'][node_id], node_id)
             dlg.exec_()
         
     def showSelectedNode(self, node_id):
         node_layer = self.fmpNodesLayerCbox.currentLayer()
+        self.iface.mainWindow().findChild(QAction, 'mActionDeselectAll').trigger()
         node_layer.removeSelection()
         found_node = False
         for f in node_layer.getFeatures():
@@ -626,8 +898,9 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
             if id == node_id:
                 found_node = True
                 node_layer.select(f.id())
-                self.iface.actionZoomToSelected().trigger()
+                self.iface.mapCanvas().zoomToSelected(node_layer)
                 break
+
         if not found_node:
             QMessageBox.warning(
                 self, "FMP Node Not Found", 
@@ -643,13 +916,18 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
 #         k_tol = 10
         k_tol = self.kTolSpinbox.value()
         working_dir = mrt_settings.loadProjectSetting(
-            'working_directory', str, self.project.readPath('./temp')
+            'working_directory', self.project.readPath('./temp')
         )
         dat_path = mrt_settings.loadProjectSetting(
-            'dat_file', str, self.project.readPath('./temp')
+            'dat_file', self.project.readPath('./temp')
         )
         section_check = fmpsection_check.CheckFmpSections(working_dir, dat_path, k_tol)
-        self.properties = section_check.run_tool()
+        try:
+            self.properties = section_check.run_tool()
+        except Exception as err:
+            QMessageBox.warning(
+                self, "FMP dat file load error", err.args[0]
+            )
         
         conveyance = self.properties['negative_k']
         row_position = 0
@@ -689,7 +967,7 @@ class FmpRefhCheckDialog(QDialog, refh_ui.Ui_FmpRefhCheckDialog):
         self.csv_results = None
         
         model_path = mrt_settings.loadProjectSetting(
-            'refh_file', str, self.project.readPath('./temp')
+            'refh_file', self.project.readPath('./temp')
         )
         self.fmpFileWidget.setFilePath(model_path)
 
@@ -703,10 +981,15 @@ class FmpRefhCheckDialog(QDialog, refh_ui.Ui_FmpRefhCheckDialog):
         
     def loadModelFile(self):
         model_path = mrt_settings.loadProjectSetting(
-            'refh_file', str, self.project.readPath('./temp')
+            'refh_file', self.project.readPath('./temp')
         )
         refh_compare = refhcheck.CompareFmpRefhUnits([model_path])
-        self.csv_results, text_output, failed_paths, missing_refh = refh_compare.run_tool()
+        try:
+            self.csv_results, text_output, failed_paths, missing_refh = refh_compare.run_tool()
+        except Exception as err:
+            QMessageBox.warning(
+                self, "FMP dat/ied file load failed", err.args[0]
+            )
         self.formatTexbox(text_output, failed_paths, missing_refh)
         
     def formatTexbox(self, output, failed_paths, missing_refh):   
@@ -754,13 +1037,8 @@ class FmpRefhCheckDialog(QDialog, refh_ui.Ui_FmpRefhCheckDialog):
             msg += '\n\n'
             cursor.setPosition(0)
             self.refhOutputTextbox.insertPlainText(msg)
-#         cursor.setPosition(0)
-#         self.refhOutputTextbox.centerCursor()
         self.refhOutputTextbox.moveCursor(cursor.Start)
         self.refhOutputTextbox.ensureCursorVisible()
-#         self.refhOutputTextbox.verticalScrollbar.setValue(
-#             self.refhOutputTextbox.verticalScrollbar.maximum()
-#         )
             
     def exportCsv(self):
         if not self.csv_results:
@@ -768,13 +1046,13 @@ class FmpRefhCheckDialog(QDialog, refh_ui.Ui_FmpRefhCheckDialog):
             return
             
         csv_file = mrt_settings.loadProjectSetting(
-            'csv_file', str, self.project.readPath('./temp')
+            'csv_file', self.project.readPath('./temp')
         )
 
         filepath = QFileDialog(self).getSaveFileName(
             self, 'Export Results', csv_file, "CSV File (*.csv)"
         )
-        if filepath:
+        if filepath[0]:
             mrt_settings.saveProjectSetting('csv_file', filepath[0])
             r = self.csv_results[0]
             with open(filepath[0], 'w', newline='') as csvfile:
@@ -782,3 +1060,398 @@ class FmpRefhCheckDialog(QDialog, refh_ui.Ui_FmpRefhCheckDialog):
                 for row in r:
                     out = row.strip('\n').split('\s')
                     writer.writerow(out)
+
+
+class TuflowStabilityCheckDialog(QDialog, tuflowstability_ui.Ui_TuflowStabilityCheckDialog):
+    
+    def __init__(self, iface, project):
+        QDialog.__init__(self)
+        self.iface = iface
+        self.project = project
+        self.setupUi(self)
+        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+        
+        mb_file = mrt_settings.loadProjectSetting(
+            'mb_file', self.project.readPath('./temp')
+        )
+        self.mbFileWidget.setFilePath(mb_file)
+        self.mbFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'mb_file'))
+        self.mbReloadBtn.clicked.connect(self.loadMbFile)
+        
+    def fileChanged(self, path, caller):
+        mrt_settings.saveProjectSetting(caller, path)
+        self.loadMbFile()
+    
+    def loadMbFile(self):
+        mb_path = mrt_settings.loadProjectSetting(
+            'mb_file', self.project.readPath('./temp')
+        )
+        mb_check = tmb_check.TuflowStabilityCheck(mb_path)
+        results = mb_check.run_tool()
+        self.graphResults(results)
+        
+    def graphResults(self, results):
+    
+        scene = QGraphicsScene()
+        view = self.mbGraphicsView.setScene(scene)
+        fig = Figure()
+        axes = fig.gca()
+        
+        x = results['time']
+        cme = results['cme']
+        dvol = results['dvol']
+        
+#         axes.set_title(self.title)
+        axes.set_ylabel('CME (%)', color='r')
+        axes.set_xlabel('Time (h)')
+        
+        cme_min = [1 for i in x]
+        cme_max = [-1 for i in x]
+
+        mb_plot = axes.plot(x, cme, "-r", label="CME")
+        mb_max_plot = axes.plot(x, cme_min, "-g", alpha=0.5, label="CME max recommended", dashes=[6,2])
+        mb_min_plot = axes.plot(x, cme_max, "-g", alpha=0.5, label="CME min recommended", dashes=[6,2])
+
+        axes2 = axes.twinx()
+        dvol_plot = axes2.plot(x, dvol, "-b", label="dVol")
+        axes2.set_ylabel('dVol (m3/s/s)', color='b')
+        
+        plot_lines = mb_max_plot
+        labels = [l.get_label() for l in plot_lines]
+        axes.legend(plot_lines, labels, loc='lower right')
+
+        axes.grid(True)
+        canvas = FigureCanvas(fig)
+        proxy_widget = scene.addWidget(canvas)
+
+
+class NrfaStationViewerDialog(QDialog, nrfa_ui.Ui_NrfaViewerDialog):
+    """Dialog for selecting and viewing NRFA station information.
+    
+    Identify nearby NRFA stations and view the station information,
+    AMAX, POT and daily flows data for the selected station.
+    """
+    
+    TOOL_NAME = 'nrfa_viewer'
+    TOOL_DATA = os.path.join(DATA_DIR, TOOL_NAME)
+    NRFA_STATIONS = os.path.join(TOOL_DATA, 'NRFA_Station_Info.shp')
+    closing = pyqtSignal(name='closing')
+
+    def __init__(self, iface, project):
+        QDialog.__init__(self)
+        self.iface = iface
+        self.project = project
+        self.setupUi(self)
+        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+        
+        self.do_dailyflow_update = False
+        
+        self.workingDirFileWidget.setStorageMode(QgsFileWidget.GetDirectory)
+        self.nrfa_stations = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)),
+            NrfaStationViewerDialog.NRFA_STATIONS
+        )
+
+        working_dir = mrt_settings.loadProjectSetting(
+            'working_directory', self.project.readPath('./temp')
+        )
+        distance = mrt_settings.loadProjectSetting('nrfa_max_distance', 15)
+
+        self.workingDirFileWidget.setFilePath(working_dir)
+        self.maxDistanceSpinbox.setValue(distance)
+        self.workingDirFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'working_directory'))
+        self.maxDistanceSpinbox.valueChanged.connect(self.maxDistanceChanged)
+        self.fetchStationsBtn.clicked.connect(self.fetchStations)
+        self.stationNamesCbox.currentIndexChanged.connect(self.showStationInfo)
+        self.buttonBox.clicked.connect(self.signalClose)
+        self.stationTabWidget.currentChanged.connect(self.stationTabChanged)
+        self.showAmaxGraphBtn.clicked.connect(self.graphAmax)
+        self.exportAmaxCsvBtn.clicked.connect(self.exportAmaxCsv)
+        self.showPotGraphBtn.clicked.connect(self.graphPot)
+        self.exportPotCsvBtn.clicked.connect(self.exportPotCsv)
+        self.showDailyFlowsGraphBtn.clicked.connect(self.graphDailyFlows)
+        self.exportDailyFlowsCsvBtn.clicked.connect(self.exportDailyFlowsCsv)
+        self.dailyFlowsYearCbox.currentTextChanged.connect(self.updateDailyFlowsTable)
+        
+        self.nrfa_viewer = nrfa_viewer.NrfaViewer(self.project, self.iface)
+        
+    def signalClose(self):
+        self.closing.emit()
+        
+    def closeEvent(self, *args, **kwargs):
+        self.signalClose()
+        return QDialog.closeEvent(self, *args, **kwargs)
+
+    def fileChanged(self, path, caller):
+        mrt_settings.saveProjectSetting(caller, path)
+        
+    def maxDistanceChanged(self, value):
+        mrt_settings.saveProjectSetting('nrfa_max_distance', value)
+        
+    def stationTabChanged(self, index):
+        if index == 0:
+            pass
+        elif index == 1:
+            self.loadAdditionalInfo()
+        elif index == 2:
+            self.loadAmaxData()
+        elif index == 3:
+            self.loadPotData()
+        elif index == 4:
+            self.loadDailyFlowsData()
+        
+    def fetchStations(self):
+        """Locate all NRFA stations within a radius of the map canvas center.
+        
+        Calls the self.nrfa_viewer.fetchStations() function to create a memory
+        layer containing the point location and IDs of NRFA stations that are
+        within the user supplied radius of the map canvas center.
+        Supplies the function with a pre-compiled point layer (in the data
+        folder) containing summary information about NRFA stations in the UK.
+        
+        Displays the ID and station name for all selected stations in the 
+        station selection combobox and updates the station info tab with the
+        details of the default selected station.
+        """
+        nrfa_layer = QgsVectorLayer(self.nrfa_stations, "nrfa_stations", "ogr")
+#         nrfa_layer = QgsVectorLayer(NRFA_STATIONS, "nrfa_stations", "ogr")
+        if not nrfa_layer.isValid():
+            QMessageBox.warning(
+                self, "Unable to load NRFA layer", 
+                "NRFA Station info layer could not be loaded, please reimport the data."
+            )
+            return
+        
+        self.statusLabel.setText("Loading NRFA stations ...")
+        search_radius = self.maxDistanceSpinbox.value() * 1000
+        stations = self.nrfa_viewer.fetchStations(nrfa_layer, search_radius)
+        
+        self.stationNamesCbox.clear()
+        if not stations:
+            QMessageBox.information(
+                self, "No NRFA station found in given radius", 
+                "There are no NRFA stations in the given radius. Try increasing the distance."
+            )
+        else:
+            self.stationNamesCbox.blockSignals(True)
+            for s in stations:
+                self.stationNamesCbox.addItem(s)
+            self.stationNamesCbox.blockSignals(False)
+            self.showStationInfo()
+            self.stationInfoGroupbox.setEnabled(True)
+
+    def showStationInfo(self, *args): 
+        """Show the summary infomation about the selected NRFA station.
+
+        Calls the self.nrfa_viewer function to retrieve the summary information
+        for the currently selected NRFA station and displays it on the "Station Info"
+        tab. These are just some key details about the station.
+        """
+        self.statusLabel.setText("Updating NRFA station info ...")
+        self.stationTabWidget.setCurrentIndex(0)
+        self.stationInfoTextbox.clear()
+        text = self.stationNamesCbox.currentText()
+        if text == '': 
+            return
+        station_id, station_name = text.split(')')
+        station_id = int(station_id[1:])
+        station_name = station_name.strip()
+        
+        output = self.nrfa_viewer.fetchStationSummary(station_id)
+        self.stationInfoTextbox.append('\n'.join(output)) 
+        self.statusLabel.setText("Station info updated")
+        
+    def loadAdditionalInfo(self):
+        """Displays all the NRFA information availble for this station.
+        
+        Calls the API request function in self.nrfa_viewer to fetch all of the 
+        metadata available for this NRFA station. The details are then displayed
+        in a textedit on the "Full Details" tab.
+        """
+        try:
+            output = self.nrfa_viewer.fetchStationData()
+        except ConnectionError as err:
+            QMessageBox.warning(
+                self, "NRFA API connection failed", err.args[0]
+            )
+        self.fullDetailsTextbox.clear()
+        self.fullDetailsTextbox.append(output)
+        self.fullDetailsTextbox.moveCursor(self.fullDetailsTextbox.textCursor().Start)
+        self.fullDetailsTextbox.ensureCursorVisible()
+
+    def loadAmaxData(self):
+        """Load the AMAX (Annual Maximum) data.
+
+        Call the API request function in self.nrfa_viewer to fetch the data. Updates
+        the summary metadata and table with the loaded data for the currently selected
+        NRFA station.
+        """
+        try:
+            metadata, series = self.nrfa_viewer.fetchAmaxData()
+        except ConnectionError as err:
+            QMessageBox.warning(
+                self, "NRFA API connection failed", err.args[0]
+            )
+        self.amaxSummaryTextbox.clear()
+        self.amaxSummaryTextbox.append('\n'.join(metadata))
+        self.amaxSummaryTextbox.moveCursor(self.amaxSummaryTextbox.textCursor().Start)
+        self.amaxSummaryTextbox.ensureCursorVisible()
+        
+        row_position = 0
+        self.amaxResultsTable.setRowCount(row_position)
+        for s in series:
+            flow = '{:.2f}'.format(s['flow'])
+            self.amaxResultsTable.insertRow(row_position)
+            self.amaxResultsTable.setItem(row_position, 0, QTableWidgetItem(flow))
+            self.amaxResultsTable.setItem(row_position, 1, QTableWidgetItem(s['datetime']))
+            row_position += 1
+
+    def loadPotData(self):
+        """Load the POT (Peaks over threshold) data.
+
+        Call the API request function in self.nrfa_viewer to fetch the data. Updates
+        the summary metadata and table with the loaded data for the currently selected
+        NRFA station.
+        """
+        try:
+            metadata, series = self.nrfa_viewer.fetchPotData()
+        except ConnectionError as err:
+            QMessageBox.warning(
+                self, "NRFA API connection failed", err.args[0]
+            )
+        self.potSummaryTextbox.clear()
+        self.potSummaryTextbox.append('\n'.join(metadata))
+        self.potSummaryTextbox.moveCursor(self.potSummaryTextbox.textCursor().Start)
+        self.potSummaryTextbox.ensureCursorVisible()
+        
+        row_position = 0
+        self.potResultsTable.setRowCount(row_position)
+        for s in series:
+            flow = '{:.2f}'.format(s['flow'])
+            self.potResultsTable.insertRow(row_position)
+            self.potResultsTable.setItem(row_position, 0, QTableWidgetItem(flow))
+            self.potResultsTable.setItem(row_position, 1, QTableWidgetItem(s['datetime']))
+            row_position += 1
+            
+    def loadDailyFlowsData(self):
+        """Load Daily Flow Data.
+        
+        Call the API request function in self.nrfa_viewer to fetch the data. The
+        data is separated into years with the most recent year being the default.
+        Populates the years combobox, sets the current item to the most recent 
+        year and calls the updateDailyFlowsTable() function to add year data to 
+        the table.
+        """
+        try:
+            metadata, series, latest_year = self.nrfa_viewer.fetchDailyFlowsData()
+        except ConnectionError as err:
+            QMessageBox.warning(
+                self, "NRFA API connection failed", err.args[0]
+            )
+
+        self.dailyFlowsYearCbox.blockSignals(True)
+        self.cur_dailyflow_year = latest_year
+        self.dailyFlowsYearCbox.clear()
+        for year in series.keys():
+            self.dailyFlowsYearCbox.addItem(str(year))
+        self.dailyFlowsYearCbox.blockSignals(False)
+        self.dailyFlowsYearCbox.setCurrentText(str(latest_year))
+        self.updateDailyFlowsTable(str(latest_year))
+            
+    def updateDailyFlowsTable(self, year):
+        """Update the contents of the daily flows table to the given year.
+        
+        Args:
+            year(str/int): the year to update the table to.
+        
+        Except:
+            AttributeError: if year does not exist in the daily flows dataset.
+        """
+        year = int(year)
+        self.cur_dailyflow_year = year
+        row_position = 0
+        self.dailyFlowsTable.setRowCount(row_position)
+        for s in self.nrfa_viewer.daily_flows_series[year]:
+            flow = '{:.2f}'.format(s['flow'])
+            self.dailyFlowsTable.insertRow(row_position)
+            self.dailyFlowsTable.setItem(row_position, 0, QTableWidgetItem(str(year)))
+            self.dailyFlowsTable.setItem(row_position, 1, QTableWidgetItem(s['date']))
+            self.dailyFlowsTable.setItem(row_position, 2, QTableWidgetItem(flow))
+            self.dailyFlowsTable.setItem(row_position, 3, QTableWidgetItem(s['flag']))
+            row_position += 1
+            
+    def graphAmax(self):
+        """Graph AMAX data."""
+        dlg = graphs.AmaxGraphDialog()
+        dlg.setupGraph(self.nrfa_viewer.amax_series, self.nrfa_viewer.cur_station)
+        dlg.exec_()
+    
+    def graphPot(self):
+        """Graph POT data."""
+        dlg = graphs.PotGraphDialog()
+        dlg.setupGraph(self.nrfa_viewer.pot_series, self.nrfa_viewer.cur_station)
+        dlg.exec_()
+    
+    def graphDailyFlows(self):
+        """Graph Daily Flows data."""
+        series_year = self.cur_dailyflow_year
+        series = self.nrfa_viewer.daily_flows_series[series_year]
+        dlg = graphs.DailyFlowsGraphDialog()
+        dlg.setupGraph(series, self.nrfa_viewer.cur_station, series_year)
+        dlg.exec_()
+        
+    def exportData(self, data_name, export_func, **kwargs):
+        """Export NRFA data to csv format.
+        
+        Args:
+            data_name(str): the name to use for dialogs and default filename.
+            export_func(func): csv writing function to call.
+        
+        **kwargs:
+            default_filename(str): str to use as a default filename if the 
+                standard '{station id}_{data_name} format isn't wanted.
+                (This will be removed prior to passing kwargs to export_func).
+        """
+        working_dir = mrt_settings.loadProjectSetting(
+            'working_directory', self.project.readPath('./temp')
+        )
+        default_filename = kwargs.pop(
+            'default_filename',
+            '{0}_{1}.csv'.format(self.nrfa_viewer.cur_station['id'], data_name)
+        )
+        default_name = os.path.join(working_dir, default_filename)
+        filename = QFileDialog(self).getSaveFileName(
+            self, 'Export {0}'.format(data_name), default_name, "CSV File (*.csv)"
+        )[0]
+        if filename:
+            try:
+                export_func(filename, **kwargs)
+            except ValueError as err:
+                QMessageBox.warning(
+                    self, "No {0} loaded".format(data_name), err.args[0]
+                )
+            except Exception as err:
+                QMessageBox.warning(
+                    self, "Failed to write {0} ".format(data_name), err.args[0]
+                )
+    
+    def exportAmaxCsv(self):
+        self.exportData('AMAX_Data', self.nrfa_viewer.exportAmaxData)
+
+    def exportPotCsv(self):
+        self.exportData('POT_Data', self.nrfa_viewer.exportPotData)
+
+    def exportDailyFlowsCsv(self):
+        export_type = self.dailyFlowExportTypeCbox.currentIndex()
+        export_year = self.cur_dailyflow_year if export_type == 0 else None
+        func_kwargs = {'export_year': export_year}
+        if export_year is not None:
+            func_kwargs['default_filename'] = '{0}_DailyFlows_Data_{1}'.format(
+                self.nrfa_viewer.cur_station['id'], export_year
+            )
+        self.exportData(
+            'Daily_Flows_Data', self.nrfa_viewer.exportDailyFlowsData, **func_kwargs
+        )
+

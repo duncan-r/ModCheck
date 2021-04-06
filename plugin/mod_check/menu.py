@@ -69,6 +69,9 @@ class Menu:
         self.dir = os.path.dirname(__file__)
         self.icon_dir = self.dir
         icon = QIcon(os.path.join(self.icon_dir, "icon.png"))
+        self.nrfa_dialog = None
+        self.chainage_dialog = None
+        self.fmpwidth_dialog = None
 
         # submenu example: Chainage submenu
 #         self.chainage_menu = QMenu(QCoreApplication.translate("ModCheck", "&Chainage"))
@@ -104,6 +107,15 @@ class Menu:
         self.check_fmprefh_action.triggered.connect(self.check_fmp_refh)
         self.iface.addPluginToMenu("&ModCheck", self.check_fmprefh_action)
         
+        # TUFLOW stability outputs viewer (MB, Dvol, etc)
+        self.check_tuflowstability_action = QAction(icon, "Check TUFLOW MB", self.iface.mainWindow())
+        self.check_tuflowstability_action.triggered.connect(self.check_tuflow_stability)
+        self.iface.addPluginToMenu("&ModCheck", self.check_tuflowstability_action)
+
+        # NRFA Station viewer
+        self.nrfa_stationviewer_action = QAction(icon, "View NRFA Station Info", self.iface.mainWindow())
+        self.nrfa_stationviewer_action.triggered.connect(self.view_nrfa_station)
+        self.iface.addPluginToMenu("&ModCheck", self.nrfa_stationviewer_action)
         
     def unload(self):
         self.iface.removePluginMenu("&ModCheck", self.check_fmptuflow_chainage_action)
@@ -111,34 +123,59 @@ class Menu:
         self.iface.removePluginMenu("&ModCheck", self.get_runsummary_action)
         self.iface.removePluginMenu("&ModCheck", self.check_fmpsections_action)
         self.iface.removePluginMenu("&ModCheck", self.check_fmprefh_action)
+        self.iface.removePluginMenu("&ModCheck", self.check_tuflowstability_action)
+        self.iface.removePluginMenu("&ModCheck", self.nrfa_stationviewer_action)
         
     def check_fmptuflow_chainage(self):
-        project = QgsProject.instance()
-        dialog = ChainageCalculatorDialog(self.iface, project)
-        dialog.exec_()
+        if self.chainage_dialog is None:
+            self.chainage_dialog = ChainageCalculatorDialog(self.iface, QgsProject.instance())
+            self.chainage_dialog.closing.connect(self._chainage_dialog_close)
+            self.chainage_dialog.show()
+        else:
+            self.chainage_dialog.setWindowState(self.chainage_dialog.windowState() & ~Qt.WindowMinimized | Qt.WindowActive)
+
+    def _chainage_dialog_close(self):
+        self.chainage_dialog = None
         
     def check_1d2d_width(self):
-        project = QgsProject.instance()
-        dialog = FmpTuflowWidthCheckDialog(self.iface, project)
-        dialog.exec_()
+#         dialog = FmpTuflowWidthCheckDialog(self.iface, QgsProject.instance())
+#         dialog.exec_()
+        if self.fmpwidth_dialog is None:
+            self.fmpwidth_dialog = FmpTuflowWidthCheckDialog(self.iface, QgsProject.instance())
+            self.fmpwidth_dialog.closing.connect(self._fmpwidth_dialog_close)
+            self.fmpwidth_dialog.show()
+        else:
+            self.fmpwidth_dialog.setWindowState(self.fmpwidth_dialog.windowState() & ~Qt.WindowMinimized | Qt.WindowActive)
+
+    def _fmpwidth_dialog_close(self):
+        self.fmpwidth_dialog = None
         
     def get_runsummary(self):
-        project = QgsProject.instance()
-        dialog = FmpTuflowVariablesCheckDialog(self.iface, project)
+        dialog = FmpTuflowVariablesCheckDialog(self.iface, QgsProject.instance())
         dialog.exec_()
         
     def check_fmp_sections(self):
-        project = QgsProject.instance()
-        dialog = FmpSectionCheckDialog(self.iface, project)
+        dialog = FmpSectionCheckDialog(self.iface, QgsProject.instance())
         dialog.exec_()
 
     def check_fmp_refh(self):
-        project = QgsProject.instance()
-        dialog = FmpRefhCheckDialog(self.iface, project)
+        dialog = FmpRefhCheckDialog(self.iface, QgsProject.instance())
         dialog.exec_()
         
+    def check_tuflow_stability(self): 
+        dialog = TuflowStabilityCheckDialog(self.iface, QgsProject.instance())
+        dialog.exec_()
+
+    def view_nrfa_station(self): 
+        if self.nrfa_dialog is None:
+            self.nrfa_dialog = NrfaStationViewerDialog(self.iface, QgsProject.instance())
+            self.nrfa_dialog.closing.connect(self._nrfa_dialog_close)
+            self.nrfa_dialog.show()
+        else:
+            self.nrfa_dialog.setWindowState(self.nrfa_dialog.windowState() & ~Qt.WindowMinimized | Qt.WindowActive)
         
-        
+    def _nrfa_dialog_close(self):
+        self.nrfa_dialog = None
         
         
         

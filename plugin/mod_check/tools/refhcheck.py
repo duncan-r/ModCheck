@@ -36,30 +36,10 @@ class CompareFmpRefhUnits(ti.ToolInterface):
         super()
         refh_data = self.fetchRefhData(self.model_paths)
         return refh_data
-        
-#     def loadFmpModel(self, dat_or_ied_file):
-#         file_loader = fl.FileLoader()
-#         try:
-#             model = file_loader.loadFile(dat_or_ied_file)
-#         except Exception as err:
-#             pass
-#         return model
     
     def fetchRefhData(self, model_paths):
         """
         """
-#         self.resultsTextbox.clear()
-#         if not True in self.item_status.values():
-#             logger.warning('No input variables selected')
-#             self.launchQMsgBox('Audit Fail', 'No input variables selected - Please choose values to audit.')
-#             return
-#         
-#         dat_paths = self._getInputList(self.inputFilesList)
-#         if not dat_paths:
-#             logger.warning('No model files found in inputs')
-#             self.launchQMsgBox('Audit Fail', 'No model files found - Please add model files to audit.')
-#             return
-        
         consistency_vals = self._getConsistencyVals()
         self._resetListStatus()
         self._setupInputLists()
@@ -75,13 +55,11 @@ class CompareFmpRefhUnits(ti.ToolInterface):
             p = str(p)
 
             if not os.path.exists(p):
-#                 logger.error('File Error', 'File does not exist\n:' + p)
                 failed_paths.append(p)
             else: 
                 try:
                     unit_data = self.loadHydrologicalData(p, self.item_status)
                     if unit_data == False:
-#                          logger.warning('No ReFH units found in model at: ' + p)
                         missing_refh.append(p)
                     else:
                         dat_results, output = self.formatData(
@@ -94,7 +72,6 @@ class CompareFmpRefhUnits(ti.ToolInterface):
                         total_output.append('\n\n')
                     
                 except IOError:
-#                     logger.error('Failed to load model file:\n' + p)
                     failed_paths.append(p)
                     
         return self.csv_results, total_output, failed_paths, missing_refh
@@ -110,11 +87,7 @@ class CompareFmpRefhUnits(ti.ToolInterface):
             if units == False: 
                 raise IOError # Because of stupid tmac_tools error handling
         except IOError:
-#             logger.error('IOError - cannot write file from:\n' + file_path)
             raise IOError ("Cannot read file from:\n " + file_path)
-        except Exception as err:
-            i=0
-            
             
         refh = units.unitsByType('refh')
         if not refh: return False
@@ -128,7 +101,6 @@ class CompareFmpRefhUnits(ti.ToolInterface):
                 # False if not selected by user
 #                 if val is False: continue
                 if key == '#STORMDEPTH#':
-#                     storm = r.storm
                     storm = r.row_data['main'].dataObjectAsList(rdt.RAIN)
                     storm_sum = 0.0
                     for s in storm:
@@ -138,7 +110,6 @@ class CompareFmpRefhUnits(ti.ToolInterface):
                     temp[key] = r.head_data[key].value
             
             data.append(temp)
-        
         return data
         
     def formatData(self, data, items, item_status, item_order, dat_path, consistency_vals):
@@ -249,15 +220,12 @@ class CompareFmpRefhUnits(ti.ToolInterface):
         # Loop through the outputs to format them
         output_text = []
         output_csv = []
-    #     print '\n\n'
         for i in range(len(summary)):
             if i != 0 and i % 2 != 0:
                 continue
             txt_line = '%-45s' % (summary[i]) 
             txt_add = [output_format % (val) for val in summary[i+1]]
             txt_line += ''.join(txt_add)
-    #         print summary[i]
-    #         print summary[i+1]
             csv_line = summary[i] + ',' + ','.join(summary[i+1])
             output_text.append(txt_line)
             csv_line = csv_line.replace('!!!', '')
@@ -282,6 +250,9 @@ class CompareFmpRefhUnits(ti.ToolInterface):
         output_text = '\n'.join(output_text)
         
         return output_csv, output_text
+    
+    def exportResults(self):
+        pass
     
     def _getConsistencyVals(self):
         """

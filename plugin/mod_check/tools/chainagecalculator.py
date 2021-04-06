@@ -24,95 +24,72 @@ from ship.fmp.datunits import ROW_DATA_TYPES as rdt
 
 
 
-class CompareFmpTuflowChainage(ti.ToolInterface):
+class CompareFmpTuflowChainage():
     
-    def __init__(self, working_dir, dat_file, nwk_layer, dx_tol):
+    def __init__(self):
         super().__init__()
-        self.working_dir = working_dir
-        self.dat_file = dat_file
-        self.nwk_layer = nwk_layer
-        self.dx_tol = dx_tol
-    
-    def run_tool(self):
-        super()
-        fmp_chainage = self.fetchFmpChainage()
-        tuflow_chainage = self.fetchTuflowChainage()
-        return self.compareChainage(fmp_chainage, tuflow_chainage)
+        self.fmp_chainage = None
+        self.reach_chainage = None
+        self.tuflow_chainage = None
+        self.comparison = None
         
-    def fetchFmpChainage(self):
-        fmp_calc = FmpChainageCalculator(self.working_dir, self.dat_file)
-        return fmp_calc.run_tool()
-    
-    def fetchTuflowChainage(self):
-        estry_chainage = {}
-        for feature in self.nwk_layer.getFeatures():
-            fmp_id = feature['ID']
-            estry_table_length = feature['Len_or_ANA']
-            estry_geom_length = feature.geometry().length()
-            estry_chainage[fmp_id] = [estry_table_length, estry_geom_length]
-        return estry_chainage 
-    
-    def compareChainage(self, fmp_chainage, tuflow_chainage):    
-        problem_nodes = {'no_nwk': [], 'mismatch': []}
-        tuflow_keys = tuflow_chainage.keys()
-        outpath = os.path.join(self.working_dir, 'chainage_compare.csv')
-        with open(outpath, 'w', newline='') as outfile:
-            fieldnames = [
-                'node', 'node type', 'fmp chainage', 'nwk line length', 
-                'nwk Len_or_ANA', 'chainage dx'
-            ]
-            writer = csv.DictWriter(outfile, fieldnames=fieldnames)
-            writer.writeheader()
-            for node in fmp_chainage:
-                node_id = node['name']
-                if not node_id in tuflow_keys:
-                    # Check that the FMP node has chainage > 0. Otherwise it won't have
-                    # a nwk line anyway
-                    if node['chainage'] > 0.0001:
-                        problem_nodes['no_nwk'].append('{} ({})'.format(node_id, node['category']))
-                else:
-                    if tuflow_chainage[node_id][0] > 0.0000:
-                        nwk_chain = tuflow_chainage[node_id][0]
-                    else:
-                        nwk_chain = tuflow_chainage[node_id][1]
-                    chain_diff = abs(node['chainage'] - nwk_chain)
-                    if chain_diff > self.dx_tol:
-                        problem_nodes['mismatch'].append(
-                            'Node: {} ({})\t DX = {:.2f}'.format(
-                                node_id, node['category'], chain_diff
-                            )
-                        )
-                    writer.writerow({
-                        'node': '\'' + node_id, 'node type': node['category'],
-                        'fmp chainage': node['chainage'],
-                        'nwk line length': tuflow_chainage[node_id][1], 
-                        'nwk Len_or_ANA': tuflow_chainage[node_id][0],
-                        'chainage dx': '{:.2f}'.format(chain_diff)
-                    })
-        return problem_nodes, outpath
-        
+    def fmpChainage(self, dat_path):
+        model = self.loadFmpModel(dat_path)
+        self.fmp_chainage, self.reach_chainage = self.calculateFmpChainage(model)
+        return self.fmp_chainage, self.reach_chainage
 
-class FmpChainageCalculator(ti.ToolInterface):
+    def tuflowChainage(self, nwk_layer):
+        self.tuflow_chainage = {}
+        for feature in nwk_layer.getFeatures():
+            fmp_id = feature['ID']
+            tuflow_table_length = feature['Len_or_ANA']
+            tuflow_geom_length = feature.geometry().length()
+            self.tuflow_chainage[fmp_id] = [tuflow_table_length, tuflow_geom_length]
+        return self.tuflow_chainage 
     
-    def __init__(self, working_dir, model_path):
-        super().__init__()
-        self.working_dir = working_dir
-        self.model_path = model_path
+    def compareChainage(self, fmp_chainage, tuflow_chainage, dx_tol):    
+        problem_nodes = {'no_nwk': [], 'mismatch': []}
+        self.comparison = {'missing': [], 'fail': [], 'ok': []}
+        tuflow_keys = tuflow_chainage.keys()
         
-    def run_tool(self):
-        super()
-        model = self.load_fmp_model(self.model_path)
-        return self.calculate_chainage(model)
-        
-    def load_fmp_model(self, fmp_path):
+        for node in fmp_chainage:
+            node_id = node['name']
+            if not node_id in tuflow_keys:
+                # Check that the FMP node has chainage > 0. Otherwise it won't have
+                # a nwk line anyway
+                if node['chainage'] > 0.0001 and node['category'] == 'river':
+                    problem_nodes['no_nwk'].append('{} ({})'.format(node_id, node['category']))
+                    self.comparison['missing'].append({
+                        'type': node['category'], 'name': node_id, 'chainage': node['chainage'],
+                        'nwk_line_length': -1, 'nwk_len_or_ana': -1, 'diff': -1, 'status': 'NOT FOUND'
+                    })
+            else:
+                if tuflow_chainage[node_id][0] > 0.0000:
+                    nwk_chain = tuflow_chainage[node_id][0]
+                else:
+                    nwk_chain = tuflow_chainage[node_id][1]
+                chain_diff = abs(node['chainage'] - nwk_chain)
+                output_diff = node['chainage'] - nwk_chain
+                temp = {
+                    'type': node['category'], 'name': node_id, 'chainage': node['chainage'],
+                    'nwk_line_length': tuflow_chainage[node_id][1], 
+                    'nwk_len_or_ana': tuflow_chainage[node_id][1], 'diff': output_diff,
+                    'status': 'NA',
+                }
+                if chain_diff > dx_tol:
+                    temp['status'] = 'FAIL'
+                    self.comparison['fail'].append(temp)
+                else:
+                    temp['status'] = 'PASS'
+                    self.comparison['ok'].append(temp)
+        return self.comparison
+
+    def loadFmpModel(self, dat_path):
         file_loader = fl.FileLoader()
-        try:
-            model = file_loader.loadFile(fmp_path)
-        except Exception as err:
-            pass
+        model = file_loader.loadFile(dat_path)
         return model
         
-    def calculate_chainage(self, model):
+    def calculateFmpChainage(self, model):
         
         unit_categories = ['river', 'interpolate', 'conduit']
         unit_chainage = []
@@ -134,7 +111,7 @@ class FmpChainageCalculator(ti.ToolInterface):
 
                 if not in_reach:
                     reach_totals.append({
-                        'start': ''.join(['"', unit.name, '"']), 'end': '', 'total_chainage': chainage,
+                        'start': unit.name, 'end': '', 'total_chainage': chainage,
                         'reach_number': reach_number
                     })
                 
@@ -150,7 +127,7 @@ class FmpChainageCalculator(ti.ToolInterface):
                 prev_unit_category = unit.unit_category
             else:
                 if in_reach:
-                    reach_totals[-1]['end'] = ''.join(['"', prev_unit_name, '"'])
+                    reach_totals[-1]['end'] = prev_unit_name
                     reach_totals[-1]['total_chainage'] = cum_reach_chainage
                     reach_totals[-1]['section_count'] = reach_section_count
                     reach_number += 1
@@ -158,35 +135,46 @@ class FmpChainageCalculator(ti.ToolInterface):
                 reach_section_count = 0
                 in_reach = False
                 
-        outpath = os.path.join(self.working_dir, 'chainage_results.csv')
-        with open(outpath, 'w', newline='') as outfile:
-            fieldnames = [
-                'category', 'name', 'chainage', 'reach_number', 'cumulative_reach_chainage',
-                'cumulative_total_chainage'
-            ]
-            writer = csv.DictWriter(outfile, fieldnames=fieldnames)
-            writer.writeheader()
-            
-            for unit in unit_chainage:
-                writer.writerow({
-                    'category': unit['category'], 'name': "\'" + unit['name'], 'chainage': unit['chainage'], 
-                    'reach_number': unit['reach_number'], 'cumulative_reach_chainage': unit['cum_reach_chainage'], 
-                    'cumulative_total_chainage': unit['cum_total_chainage']
-                })
-
-        outpath = os.path.join(self.working_dir, 'reach_chainage_results.csv')
-        with open(outpath, 'w', newline='') as outfile:
-            fieldnames = [
-                'reach_number', 'start_section', 'end_section', 'section_count', 'reach_chainage',
-            ]
-            writer = csv.DictWriter(outfile, fieldnames=fieldnames)
-            writer.writeheader()
-            for reach in reach_totals:
-                writer.writerow({
-                    'reach_number': reach['reach_number'], 'start_section': reach['start'], 
-                    'end_section': reach['end'], 'section_count': reach['section_count'], 
-                    'reach_chainage': reach['total_chainage'],
-                })
+        return unit_chainage, reach_totals
+    
+    def exportResults(self, folder, result_type):
         
-        return unit_chainage
-            
+        def writeOutput(filename, header, data):
+            with open(filename, 'w', newline='\n') as  outfile:
+                writer = csv.writer(outfile, delimiter=',')
+                writer.writerow(header)
+                for row in data:
+                    out_row = [row[k] for k in header]
+                    writer.writerow(out_row)
+
+        def saveFmpChainage(folder):
+            header = [
+                'category', 'name', 'chainage', 'reach_number', 'cum_reach_chainage',
+                'cum_total_chainage'
+            ]
+            save_path = os.path.join(folder, 'fmp_chainage.csv')
+            writeOutput(save_path, header, self.fmp_chainage)
+
+        def saveReachChainage(folder):
+            header = [
+                'reach_number', 'start', 'end', 'total_chainage',
+            ]
+            save_path = os.path.join(folder, 'fmp_reach_chainage.csv')
+            writeOutput(save_path, header, self.reach_chainage)
+
+        def saveComparison(folder):
+            header = [
+                'status', 'type', 'name', 'diff', 'chainage', 'nwk_line_length', 
+                'nwk_len_or_ana',
+            ]
+            data = self.comparison['fail'] + self.comparison['missing'] + self.comparison['ok']
+            save_path = os.path.join(folder, 'fmptuflow_chainage_compare.csv')
+            writeOutput(save_path, header, data)
+        
+        if result_type == 'fmp' and self.fmp_chainage is not None: 
+            saveFmpChainage(folder)
+        if result_type == 'reach' and self.reach_chainage is not None: 
+            saveReachChainage(folder)
+        if result_type == 'comparison' and self.comparison is not None: 
+            saveComparison(folder)
+        

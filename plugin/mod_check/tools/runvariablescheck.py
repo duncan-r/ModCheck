@@ -211,6 +211,34 @@ class IefVariablesCheck(ti.ToolInterface):
             }
         params = self.checkFmpVariables(ief, params)
         return filepaths, params
+    
+    def loadSummaryInfo(self, ief_path):
+        lookup = [
+            ['2DTimestep', ''], ['Slot', 'No'], ['theta', '0.7'], ['alpha', '0.7'], 
+            ['qtol', '0.01'], ['htol', '0.01'], ['dflood', '3'], 
+            ['maxitr', '6'], ['minitr', '2'], ['MatrixDummy', '0'], ['NewMatrixDummy', '0'], 
+            ['LaunchDoublePrecisionVersion', 'No'], ['2DScheme', 'None'], ['2DDoublePrecision', 'No'], 
+            ['2DOptions', ''],
+        ]
+        loader = fl.FileLoader()
+        ief = loader.loadFile(ief_path)
+        filename = os.path.split(ief_path)[1]
+        outputs = [filename]
+        if not ief.getValue('Timestep') is None:
+            outputs.append(ief.getValue('Timestep'))
+        else:
+            outputs.append('Not set')
+        for l in lookup:
+            val = ief.getValue(l[0])
+            if val is None or val == 'None':
+                val = l[1]
+            elif val == '1' and (
+                l[0] == '2DDoublePrecision' or l[0] == 'Slot' or l[0] == 'LaunchDoublePrecisionVersion'
+            ):
+                val = 'Yes'
+            outputs.append(val)
+        outputs.append(ief_path)
+        return outputs
 
 
 class ZzdFileCheck(ti.ToolInterface): 
