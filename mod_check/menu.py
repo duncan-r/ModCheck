@@ -71,6 +71,7 @@ class Menu:
         icon = QIcon(os.path.join(self.icon_dir, "icon.png"))
         self.nrfa_dialog = None
         self.chainage_dialog = None
+        self.fmpwidth_dialog = None
 
         # submenu example: Chainage submenu
 #         self.chainage_menu = QMenu(QCoreApplication.translate("ModCheck", "&Chainage"))
@@ -137,8 +138,17 @@ class Menu:
         self.chainage_dialog = None
         
     def check_1d2d_width(self):
-        dialog = FmpTuflowWidthCheckDialog(self.iface, QgsProject.instance())
-        dialog.exec_()
+#         dialog = FmpTuflowWidthCheckDialog(self.iface, QgsProject.instance())
+#         dialog.exec_()
+        if self.fmpwidth_dialog is None:
+            self.fmpwidth_dialog = FmpTuflowWidthCheckDialog(self.iface, QgsProject.instance())
+            self.fmpwidth_dialog.closing.connect(self._fmpwidth_dialog_close)
+            self.fmpwidth_dialog.show()
+        else:
+            self.fmpwidth_dialog.setWindowState(self.fmpwidth_dialog.windowState() & ~Qt.WindowMinimized | Qt.WindowActive)
+
+    def _fmpwidth_dialog_close(self):
+        self.fmpwidth_dialog = None
         
     def get_runsummary(self):
         dialog = FmpTuflowVariablesCheckDialog(self.iface, QgsProject.instance())

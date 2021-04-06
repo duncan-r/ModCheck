@@ -29,8 +29,16 @@ from ship.fmp.datunits import ROW_DATA_TYPES as rdt
 
 
 class SectionWidthCheck(ti.ToolInterface):
+    """Compare FMP and TUFLOW section widths for parity, based on a tolerance.
     
-    def __init__(self, project): #, dat_path, node_layer, cn_layer, dw_tol):
+    Calculates the active section widths for all river sections in an FMP model,
+    as well as calculating the widths of interpolated sections, and compares
+    them against the width within the 2D TUFLOW model representation. If the
+    difference in width is greater than a given tolerance they will be 
+    marked as failed.
+    """
+    
+    def __init__(self, project):
         super().__init__()
         self.project = project
         self.dat_path = None
@@ -52,6 +60,24 @@ class SectionWidthCheck(ti.ToolInterface):
         return results, failed#, total_found
         
     def fetchFmpWidths(self, dat_path):
+        """Calculate the active widths of all FMP river and interpolate sections.
+
+        Find the width of all of the river type sections in the FMP model. The 
+        widths of the interpolated sections are calculated by interpolating the
+        difference between the two nearest river sections and the distance 
+        between them.
+        
+        Args:
+            dat_path(str): path to an FMP .dat file.
+        
+        Return:
+            dict - {width, section type} where the width is a float and the
+                section type is a str - either 'river' or 'interpolate' - and
+                the key is the FMP section name.
+                
+        Note: Does not currently find FMP Replicate sections.
+            This will be added soon.
+        """
         self.dat_path = dat_path
         file_loader = fl.FileLoader()
         try:
@@ -112,6 +138,30 @@ class SectionWidthCheck(ti.ToolInterface):
         return widths
         
     def fetchCnWidths(self, node_layer, cn_layer):
+        """Calculate the 2D TUFLOW widths for each node.
+        
+        Loops through all of the features in the node_layer and finds the CN
+        lines that are snapped to the layer. Calculates the distance between
+        the two furthest points on the two snapped CN lines to find the width.
+        
+        This algorithm is horribly inefficient at the moment and does way too
+        much looping through layers multiple times. It's probably better to 
+        try and loop the CN layer looking for snapped nodes, record the id
+        alongside the cn feature and then create a final list. This would, 
+        I think, mean only having to look the CN layer once. It will need to
+        support multiple CN and nodes layers at some point, so the current
+        setup is not really viable.
+        
+        Args:
+            node_layer(VectorLayer): the TUFLOW 1d_nodes layer.
+            cn_layer(VectorLayer): the TUFLOW 2d_bc_hx type layer containing the
+                cn lines.
+                
+        Return:
+            tuple - (dict, total found) where the dict contains the widths and
+                the key is the 1D node name and total found is the total number
+                of sections found in the CN layer.
+        """
         self.node_layer = node_layer
         self.cn_layer = cn_layer
         
@@ -142,6 +192,7 @@ class SectionWidthCheck(ti.ToolInterface):
                     details[node_id].append(cnf)
                     continue
              
+        # Calculate the max distance between CN line pair end points.
         cn_widths = {}
         for nodename, feats in details.items():
             line1 = feats[0].geometry().asMultiPolyline()
@@ -160,7 +211,28 @@ class SectionWidthCheck(ti.ToolInterface):
         return cn_widths, total_found
     
     def checkWidths(self, fmp_widths, cn_widths, dw_tol=5):
-        """
+        """Compare the FMP and TUFLOW (1D-2D) width values for each node.
+        
+        Compare the 1D (FMP) width to the 2D (TUFLOW) width. If the difference
+        in widths is greater than the given width tolerance (dw_tol) the
+        section will be added to the failed dict. The failed dict contains
+        lists of 'fail' and 'missing' sections. Missing sections are those
+        that were found in the FMP model, but are not in the TUFLOW model.
+        
+        Args:
+            fmp_widths(dict): containing the section type and width for each
+                FMP section with the section name as the key.
+            cn_widths(dict): containing the TUFLOW (2D) widths with the node
+                as the key.
+            dw_tol(int): the tolerance, in metres, to determine whether the
+                difference in width is classed as failing or not.
+                
+        Return:
+            tuple - (all results, failed results) where 'all results' contains
+                the 1D and 2D widths and difference for every FMP node. The
+                'failed results' contains only those nodes that either had
+                widths greater than the tolerance or could not be found in
+                the TUFLOW layer.
         """
 #         missing_2d_nodes = []
         self.results = []
@@ -185,7 +257,16 @@ class SectionWidthCheck(ti.ToolInterface):
         return self.results, self.failed
     
     def writeResults(self, save_path):
-        """
+        """Export the results of the width compare to csv.
+        
+        Exports all FMP sections and widths, as well as the comparison to the
+        TUFLOW representations where found.
+
+        Args:
+            save_path(str): the file path to save the csv file to.
+            
+        Except:
+            OSError - if the file write fails.
         """
         def formatWidth(value):
             return '{:.3f}'.format(value)
@@ -206,7 +287,16 @@ class SectionWidthCheck(ti.ToolInterface):
                 })
 
     def writeFailed(self, save_path):
-        """
+        """Export the failed sections.
+        
+        Only export the sections that were either greater than tolerance or
+        could not be found in the TUFLOW model files.
+        
+        Args:
+            save_path(str): the file path to save the csv file to.
+
+        Except:
+            OSError - if the file write fails.
         """
         def formatWidth(value):
             return '{:.3f}'.format(value)

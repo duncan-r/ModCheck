@@ -11,7 +11,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_ChainageCalculator(object):
     def setupUi(self, ChainageCalculator):
         ChainageCalculator.setObjectName("ChainageCalculator")
-        ChainageCalculator.resize(819, 699)
+        ChainageCalculator.resize(665, 699)
         self.gridLayout = QtWidgets.QGridLayout(ChainageCalculator)
         self.gridLayout.setObjectName("gridLayout")
         self.groupBox = QtWidgets.QGroupBox(ChainageCalculator)
