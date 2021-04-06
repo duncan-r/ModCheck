@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>819</width>
+    <width>665</width>
     <height>699</height>
    </rect>
   </property>
@@ -208,6 +208,9 @@
          <layout class="QHBoxLayout" name="horizontalLayout_2">
           <item>
            <widget class="QTableWidget" name="fmpChainageTable">
+            <attribute name="horizontalHeaderStretchLastSection">
+             <bool>true</bool>
+            </attribute>
             <column>
              <property name="text">
               <string>Type</string>
@@ -242,6 +245,9 @@
           </item>
           <item>
            <widget class="QTableWidget" name="fmpReachChainageTable">
+            <attribute name="horizontalHeaderStretchLastSection">
+             <bool>true</bool>
+            </attribute>
             <column>
              <property name="text">
               <string>Reach No.</string>

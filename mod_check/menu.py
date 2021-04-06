@@ -70,6 +70,7 @@ class Menu:
         self.icon_dir = self.dir
         icon = QIcon(os.path.join(self.icon_dir, "icon.png"))
         self.nrfa_dialog = None
+        self.chainage_dialog = None
 
         # submenu example: Chainage submenu
 #         self.chainage_menu = QMenu(QCoreApplication.translate("ModCheck", "&Chainage"))
@@ -125,40 +126,39 @@ class Menu:
         self.iface.removePluginMenu("&ModCheck", self.nrfa_stationviewer_action)
         
     def check_fmptuflow_chainage(self):
-        project = QgsProject.instance()
-        dialog = ChainageCalculatorDialog(self.iface, project)
-        dialog.exec_()
+        if self.chainage_dialog is None:
+            self.chainage_dialog = ChainageCalculatorDialog(self.iface, QgsProject.instance())
+            self.chainage_dialog.closing.connect(self._chainage_dialog_close)
+            self.chainage_dialog.show()
+        else:
+            self.chainage_dialog.setWindowState(self.chainage_dialog.windowState() & ~Qt.WindowMinimized | Qt.WindowActive)
+
+    def _chainage_dialog_close(self):
+        self.chainage_dialog = None
         
     def check_1d2d_width(self):
-        project = QgsProject.instance()
-        dialog = FmpTuflowWidthCheckDialog(self.iface, project)
+        dialog = FmpTuflowWidthCheckDialog(self.iface, QgsProject.instance())
         dialog.exec_()
         
     def get_runsummary(self):
-        project = QgsProject.instance()
-        dialog = FmpTuflowVariablesCheckDialog(self.iface, project)
+        dialog = FmpTuflowVariablesCheckDialog(self.iface, QgsProject.instance())
         dialog.exec_()
         
     def check_fmp_sections(self):
-        project = QgsProject.instance()
-        dialog = FmpSectionCheckDialog(self.iface, project)
+        dialog = FmpSectionCheckDialog(self.iface, QgsProject.instance())
         dialog.exec_()
 
     def check_fmp_refh(self):
-        project = QgsProject.instance()
-        dialog = FmpRefhCheckDialog(self.iface, project)
+        dialog = FmpRefhCheckDialog(self.iface, QgsProject.instance())
         dialog.exec_()
         
     def check_tuflow_stability(self): 
-        project = QgsProject.instance()
-        dialog = TuflowStabilityCheckDialog(self.iface, project)
+        dialog = TuflowStabilityCheckDialog(self.iface, QgsProject.instance())
         dialog.exec_()
 
     def view_nrfa_station(self): 
         if self.nrfa_dialog is None:
-            project = QgsProject.instance()
-            self.nrfa_dialog = NrfaStationViewerDialog(self.iface, project)
-    #         dialog.exec_()
+            self.nrfa_dialog = NrfaStationViewerDialog(self.iface, QgsProject.instance())
             self.nrfa_dialog.closing.connect(self._nrfa_dialog_close)
             self.nrfa_dialog.show()
         else:
