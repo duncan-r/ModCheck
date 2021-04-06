@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>604</width>
-    <height>572</height>
+    <width>783</width>
+    <height>584</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -35,6 +35,123 @@
          <property name="currentIndex">
           <number>0</number>
          </property>
+         <widget class="QWidget" name="multipleCheck">
+          <attribute name="title">
+           <string>Multiple Summary</string>
+          </attribute>
+          <layout class="QVBoxLayout" name="verticalLayout_8">
+           <item>
+            <widget class="QLabel" name="label_12">
+             <property name="text">
+              <string>FMP IEF Folder</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QgsFileWidget" name="fmpIefFolderFileWidget"/>
+           </item>
+           <item>
+            <widget class="QTableWidget" name="fmpMultipleSummaryTable">
+             <attribute name="horizontalHeaderDefaultSectionSize">
+              <number>150</number>
+             </attribute>
+             <attribute name="horizontalHeaderStretchLastSection">
+              <bool>true</bool>
+             </attribute>
+             <column>
+              <property name="text">
+               <string>IEF</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Timestep 1D</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Timestep 2D</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Priessman Slot</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Theta</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Alpha</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Qtol</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Htol</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>DFlood</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Max Iter</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Min Iter</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Matrix Dummy</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Global Matrix Dummy</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Double Precision 1D</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>2D Scheme</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Double Precision 2D</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>2D Run Options</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Full Path</string>
+              </property>
+             </column>
+            </widget>
+           </item>
+          </layout>
+         </widget>
          <widget class="QWidget" name="fmpVariablesTab">
           <attribute name="title">
            <string>Variables</string>

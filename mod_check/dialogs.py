@@ -562,7 +562,12 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
         zzd_path = mrt_settings.loadProjectSetting(
             'zzd_file', self.project.readPath('./temp')
         )
+        ief_folder = mrt_settings.loadProjectSetting(
+            'ief_folder', self.project.readPath('./temp')
+        )
         
+        self.fmpIefFolderFileWidget.setStorageMode(QgsFileWidget.GetDirectory)
+
         # Connect the slots
         self.iefTableRefreshBtn.clicked.connect(self.loadIefVariables)
         self.zzdTableRefreshBtn.clicked.connect(self.loadZzdResults)
@@ -573,17 +578,66 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
         self.iefFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'ief_file'))
         self.zzdFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'zzd_file'))
         self.tlfFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'tlf_file'))
+        self.fmpIefFolderFileWidget.fileChanged.connect(self.loadMultipleIefSummary)
+        self.fmpMultipleSummaryTable.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.fmpMultipleSummaryTable.customContextMenuRequested.connect(self._multipleIefTableContext)
 
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)
         
         if caller == 'ief_file':
             self.loadIefVariables()
-        if caller == 'zzd_file':
+        elif caller == 'zzd_file':
             self.loadZzdResults()
         elif caller == 'tlf_file':
             self.loadTlfDetails()
+            
+    def _multipleIefTableContext(self, pos):
+        """Add context menu to failed sections table.
+        
+        Allow user to select and zoom to the chosen section in the map window.
+        """
+        index = self.fmpMultipleSummaryTable.itemAt(pos)
+        if index is None: return
+        menu = QMenu()
+        locate_section_action = menu.addAction("Show detailed view")
 
+        # Get the action and do whatever it says
+        action = menu.exec_(self.fmpMultipleSummaryTable.viewport().mapToGlobal(pos))
+        if action == locate_section_action:
+            row = self.fmpMultipleSummaryTable.currentRow()
+            col_count = self.fmpMultipleSummaryTable.columnCount()
+            full_path = self.fmpMultipleSummaryTable.item(row, col_count-1).text()
+            mrt_settings.saveProjectSetting('ief_path', full_path)
+            self.loadIefVariables()
+            self.fmpTabWidget.setCurrentIndex(1)
+            self.iefFileWidget.blockSignals(True)
+            self.iefFileWidget.setFilePath(full_path)
+            self.iefFileWidget.blockSignals(False)
+            
+    def loadMultipleIefSummary(self, path):
+        mrt_settings.saveProjectSetting('ief_folder', path)
+
+        ief_files = []
+        for root, dirs, files in os.walk(path):
+            for file in files:
+                fext = os.path.splitext(file)
+                if len(fext) > 1 and fext[1] == '.ief':
+                    ief_files.append(os.path.join(root, file))
+        
+        check = runvariables_check.IefVariablesCheck(self.project, 'fakepath')
+        outputs = []
+        for ief in ief_files:
+            outputs.append(check.loadSummaryInfo(ief))
+            
+        row_position = 0
+        self.fmpMultipleSummaryTable.setRowCount(row_position)
+        for output in outputs:
+            self.fmpMultipleSummaryTable.insertRow(row_position)
+            for i, item in enumerate(output):
+                self.fmpMultipleSummaryTable.setItem(row_position, i, QTableWidgetItem(item))
+            row_position += 1
+            
     def loadIefVariables(self):
         
         def outputTableRow(details, is_default):
