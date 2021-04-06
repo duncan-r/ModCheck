@@ -609,11 +609,12 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
             col_count = self.fmpMultipleSummaryTable.columnCount()
             full_path = self.fmpMultipleSummaryTable.item(row, col_count-1).text()
             mrt_settings.saveProjectSetting('ief_path', full_path)
-            self.loadIefVariables()
+#             self.loadIefVariables()
             self.fmpTabWidget.setCurrentIndex(1)
-            self.iefFileWidget.blockSignals(True)
+#             self.iefFileWidget.blockSignals(True)
             self.iefFileWidget.setFilePath(full_path)
-            self.iefFileWidget.blockSignals(False)
+#             self.iefFileWidget.blockSignals(False)
+#             self.loadIefVariables()
             
     def loadMultipleIefSummary(self, path):
         mrt_settings.saveProjectSetting('ief_folder', path)
@@ -634,8 +635,16 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
         self.fmpMultipleSummaryTable.setRowCount(row_position)
         for output in outputs:
             self.fmpMultipleSummaryTable.insertRow(row_position)
-            for i, item in enumerate(output):
-                self.fmpMultipleSummaryTable.setItem(row_position, i, QTableWidgetItem(item))
+            for i, value in enumerate(output):
+                if value[1] == True:
+                    item = QTableWidgetItem()
+                    item.setTextAlignment(Qt.AlignCenter|Qt.AlignVCenter)
+                    item.setBackground(QColor(239, 175, 175)) # Light Red
+                    item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+                    item.setText(value[0])
+                    self.fmpMultipleSummaryTable.setItem(row_position, i, item)
+                else:
+                    self.fmpMultipleSummaryTable.setItem(row_position, i, QTableWidgetItem(value[0]))
             row_position += 1
             
     def loadIefVariables(self):
@@ -669,6 +678,7 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
             QMessageBox.warning(
                 self, "FMP ief file load failed", err.args[0]
             )
+            return
         
         row_position = 0
         self.fmpVariablesTable.setRowCount(row_position)
@@ -1350,6 +1360,8 @@ class NrfaStationViewerDialog(QDialog, nrfa_ui.Ui_NrfaViewerDialog):
             QMessageBox.warning(
                 self, "NRFA API connection failed", err.args[0]
             )
+        if latest_year == -1:
+            return
 
         self.dailyFlowsYearCbox.blockSignals(True)
         self.cur_dailyflow_year = latest_year
@@ -1370,6 +1382,8 @@ class NrfaStationViewerDialog(QDialog, nrfa_ui.Ui_NrfaViewerDialog):
             AttributeError: if year does not exist in the daily flows dataset.
         """
         year = int(year)
+        if not year in self.nrfa_viewer.daily_flows_series.keys():
+            return
         self.cur_dailyflow_year = year
         row_position = 0
         self.dailyFlowsTable.setRowCount(row_position)

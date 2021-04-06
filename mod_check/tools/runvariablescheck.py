@@ -135,6 +135,7 @@ class IefVariablesCheck(ti.ToolInterface):
             '2DTimestep': {'var_name': '2D Timestep', 'value_default': ['value', 'Between 1/4 - 1/2 of cell size'], 'description': '2D Timestep - may also be set and/or overriden in the 2D model'},
             'LaunchDoublePrecisionVersion': {'var_name': 'Double Precision FMP', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Whether double precision FMP is being used'},
             '2DDoublePrecision': {'var_name': 'Double Precision TUFLOW', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Whether double precision 2D model (like TUFLOW) is being used'},
+            '2DOptions': {'var_name': '2D Run Options', 'value_default': ['value', ''], 'description': 'Run options (scenarios/events) for 2D scheme'},
         }
 
         
@@ -213,32 +214,61 @@ class IefVariablesCheck(ti.ToolInterface):
         return filepaths, params
     
     def loadSummaryInfo(self, ief_path):
+#         lookup = [
+#             ['2DTimestep', ''], ['Slot', 'No'], ['theta', '0.7'], ['alpha', '0.7'], 
+#             ['qtol', '0.01'], ['htol', '0.01'], ['dflood', '3'], 
+#             ['maxitr', '6'], ['minitr', '2'], ['MatrixDummy', '0'], ['NewMatrixDummy', '0'], 
+#             ['LaunchDoublePrecisionVersion', 'No'], ['2DScheme', 'None'], ['2DDoublePrecision', 'No'], 
+#             ['2DOptions', ''],
+#         ]
         lookup = [
-            ['2DTimestep', ''], ['Slot', 'No'], ['theta', '0.7'], ['alpha', '0.7'], 
-            ['qtol', '0.01'], ['htol', '0.01'], ['dflood', '3'], 
-            ['maxitr', '6'], ['minitr', '2'], ['MatrixDummy', '0'], ['NewMatrixDummy', '0'], 
-            ['LaunchDoublePrecisionVersion', 'No'], ['2DScheme', 'None'], ['2DDoublePrecision', 'No'], 
-            ['2DOptions', ''],
+            'Timestep', '2D Timestep', 'Priessmann Slot', 'theta', 'alpha', 
+            'qtol', 'htol', 'dflood', 
+            'maxitr', 'minitr', 'Matrix Dummy', 'Global Matrix Dummy', 
+            'Double Precision FMP', '2D Scheme', 'Double Precision TUFLOW', 
+            '2D Run Options', '2D Scheme'
         ]
-        loader = fl.FileLoader()
-        ief = loader.loadFile(ief_path)
+        no_flag = [
+            'Timestep', '2D Timestep', 'Double Precision TUFLOW', 'Double Precision FMP',
+            '2D Run Options', '2D Scheme'
+        ]
+        self.ief_path = ief_path
+        _, variables = self.loadIefVariables()
+        params = variables['changed']
+        outputs = []
         filename = os.path.split(ief_path)[1]
-        outputs = [filename]
-        if not ief.getValue('Timestep') is None:
-            outputs.append(ief.getValue('Timestep'))
-        else:
-            outputs.append('Not set')
+        outputs.append([filename, False])
+        changed_keys = variables['changed'].keys()
+        default_keys = variables['default'].keys()
         for l in lookup:
-            val = ief.getValue(l[0])
-            if val is None or val == 'None':
-                val = l[1]
-            elif val == '1' and (
-                l[0] == '2DDoublePrecision' or l[0] == 'Slot' or l[0] == 'LaunchDoublePrecisionVersion'
-            ):
-                val = 'Yes'
-            outputs.append(val)
-        outputs.append(ief_path)
+            if l in changed_keys:
+                changeval = False if l in no_flag else True
+                outputs.append([variables['changed'][l]['value'], changeval])
+            else:
+                outputs.append([variables['default'][l]['default'], False])
+        outputs.append([ief_path, False])
         return outputs
+        
+        
+#         loader = fl.FileLoader()
+#         ief = loader.loadFile(ief_path)
+#         filename = os.path.split(ief_path)[1]
+#         outputs = [filename]
+#         if not ief.getValue('Timestep') is None:
+#             outputs.append(ief.getValue('Timestep'))
+#         else:
+#             outputs.append('Not set')
+#         for l in lookup:
+#             val = ief.getValue(l[0])
+#             if val is None or val == 'None':
+#                 val = l[1]
+#             elif val == '1' and (
+#                 l[0] == '2DDoublePrecision' or l[0] == 'Slot' or l[0] == 'LaunchDoublePrecisionVersion'
+#             ):
+#                 val = 'Yes'
+#             outputs.append(val)
+#         outputs.append(ief_path)
+#         return outputs
 
 
 class ZzdFileCheck(ti.ToolInterface): 

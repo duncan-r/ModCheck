@@ -59,7 +59,11 @@ class NrfaViewer():
         return self.cache['daily_flows'][1]
     
     def _checkCacheSeriesData(self, cache_key):
-        if self.cache[cache_key][0] != self.cur_station['id'] or self.cache[cache_key][1] is None:
+        if (
+            self.cache[cache_key][0] == -1 or 
+            self.cache[cache_key][0] != self.cur_station['id'] or 
+            self.cache[cache_key][1] is None
+        ):
             raise ValueError('Please load station data first')
         
     def fetchStations(self, nrfa_layer, search_radius):
@@ -385,7 +389,8 @@ class NrfaViewer():
         if (
             self.cache['daily_flows'][0] == station_id and 
             self.cache['daily_flows'][1] is not None and
-            self.cache['daily_flows'][2] is not None
+            self.cache['daily_flows'][2] is not None and
+            len(self.cache['daily_flows'][2]) > 0
             ):
             return (
                 self.cache['daily_flows'][2], self.cache['daily_flows'][1], 
