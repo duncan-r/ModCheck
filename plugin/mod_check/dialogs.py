@@ -387,7 +387,7 @@ class FmpTuflowWidthCheckDialog(QDialog, fmptuflowwidthcheck_ui.Ui_FmpTuflowWidt
             self.iface.mainWindow().findChild(QAction, 'mActionDeselectAll').trigger()
             nodes_layer.removeSelection()
             for f in nodes_layer.getFeatures():
-                if f['ID'] == id:
+                if f[0] == id:
                     nodes_layer.select(f.id())
                     self.iface.mapCanvas().zoomToSelected(nodes_layer)
                     break
@@ -443,16 +443,20 @@ class FmpTuflowWidthCheckDialog(QDialog, fmptuflowwidthcheck_ui.Ui_FmpTuflowWidt
                 fmp_widths = self.width_check.fetchFmpWidths(dat_path)
                 self.statusLabel.setText('Loading TUFLOW 2D widths ...')
                 QApplication.processEvents()
-                cn_widths, total_found = self.width_check.fetchCnWidths(nodes_layer, cn_layer)
+                cn_widths, single_cn, total_found = self.width_check.fetchCnWidths(
+                    nodes_layer, cn_layer
+                )
                 self.statusLabel.setText('Comparing 1D-2D widths ...')
                 QApplication.processEvents()
-                results, failed = self.width_check.checkWidths(fmp_widths, cn_widths, dw_tol)
+                results, failed = self.width_check.checkWidths(
+                    fmp_widths, cn_widths, single_cn, dw_tol
+                )
             except (AttributeError, Exception) as e:
                 QMessageBox.warning(
                     self, "Width check failed", e.args[0]
                 )
             else:
-                if len(failed['missing']) > 0 or len(failed['fail']) > 0:
+                if len(failed['missing']) > 0 or len(failed['fail']) > 0 or len(failed['single_cn']) > 0:
                     self.statusLabel.setText('Check complete - Failed or missing nodes found')
                     self.updateFailedTable(failed)
                 else:
@@ -490,6 +494,9 @@ class FmpTuflowWidthCheckDialog(QDialog, fmptuflowwidthcheck_ui.Ui_FmpTuflowWidt
         self.failedTableWidget.setRowCount(row_position)
         for f in results['fail']:
             self._buildRow(f, self.failedTableWidget, row_position, 'FAIL')
+            row_position += 1
+        for f in results['single_cn']:
+            self._buildRow(f, self.failedTableWidget, row_position, 'SINGLE CN')
             row_position += 1
         for m in results['missing']:
             self._buildRow(m, self.failedTableWidget, row_position, 'NOT FOUND')
@@ -840,10 +847,23 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
         dat_path = mrt_settings.loadProjectSetting(
             'dat_file', self.project.readPath('./temp')
         )
+        k_tol = mrt_settings.loadProjectSetting('section_ktol', 10.0)
+        dy_tol = mrt_settings.loadProjectSetting('section_dytol', 0.1)
+
         # Connect file widgets and update slots
         self.datFileWidget.setFilePath(dat_path)
         self.datFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'dat_file'))
         self.fmpNodesLayerCbox.setFilters(QgsMapLayerProxyModel.PointLayer)
+        self.kTolSpinbox.setValue(k_tol)
+        self.bankDyToleranceSpinbox.setValue(dy_tol)
+        self.kTolSpinbox.valueChanged.connect(self._kTolChange)
+        self.bankDyToleranceSpinbox.valueChanged.connect(self._dyTolChange)
+        
+    def _kTolChange(self, value):
+        mrt_settings.saveProjectSetting('section_ktol', value)
+
+    def _dyTolChange(self, value):
+        mrt_settings.saveProjectSetting('section_dytol', value)
         
     def _conveyanceTableContext(self, pos):
         index = self.negativeConveyanceTable.itemAt(pos)
@@ -904,7 +924,7 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
         node_layer.removeSelection()
         found_node = False
         for f in node_layer.getFeatures():
-            id = f['ID']
+            id = f[0]
             if id == node_id:
                 found_node = True
                 node_layer.select(f.id())
@@ -923,22 +943,46 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
             self.loadSectionData()
         
     def loadSectionData(self):
-#         k_tol = 10
+        self.properties = {}
         k_tol = self.kTolSpinbox.value()
+        dy_tol = self.bankDyToleranceSpinbox.value()
         working_dir = mrt_settings.loadProjectSetting(
             'working_directory', self.project.readPath('./temp')
         )
         dat_path = mrt_settings.loadProjectSetting(
             'dat_file', self.project.readPath('./temp')
         )
-        section_check = fmpsection_check.CheckFmpSections(working_dir, dat_path, k_tol)
+#         section_check = fmpsection_check.CheckFmpSections(working_dir, dat_path, k_tol, dy_tol)
+        section_check = fmpsection_check.CheckFmpSections()
         try:
-            self.properties = section_check.run_tool()
+            self.statusLabel.setText("Loading FMP model river sections ...")
+            QApplication.processEvents()
+            river_sections = section_check.loadRiverSections(dat_path)
+            self.statusLabel.setText("Calculating section conveyance ...")
+            QApplication.processEvents()
+            self.properties['negative_k'], self.properties['n_zero'] = section_check.calculateConveyance(
+                river_sections, k_tol
+            )
+            self.statusLabel.setText("Checking bank elevations ...")
+            QApplication.processEvents()
+            self.properties['bad_banks'] = section_check.checkBankLocations(river_sections, dy_tol)
         except Exception as err:
+            self.statusLabel.setText("FMP model load failed!")
             QMessageBox.warning(
                 self, "FMP dat file load error", err.args[0]
             )
+            
+        if len(self.properties['n_zero']) > 0:
+            msg = ["This error is probably caused by sections with '0' Manning's values."]
+            msg.append("The following sections were affected\n")
+            msg += self.properties['n_zero'] 
+            QMessageBox.warning(
+                self, "Zero Division Error",
+                '\n'.join(msg)
+            )
         
+        self.statusLabel.setText("Populating tables ...")
+        QApplication.processEvents()
         conveyance = self.properties['negative_k']
         row_position = 0
         self.negativeConveyanceTable.setRowCount(row_position)
@@ -962,6 +1006,7 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
             self.banktopCheckTable.setItem(row_position, 1, QTableWidgetItem(left_drop))
             self.banktopCheckTable.setItem(row_position, 2, QTableWidgetItem(right_drop))
             row_position += 1
+        self.statusLabel.setText("Section check complete")
 
 
 class FmpRefhCheckDialog(QDialog, refh_ui.Ui_FmpRefhCheckDialog):

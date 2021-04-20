@@ -20,7 +20,7 @@ import csv
 import math
 from pprint import pprint
 
-from qgis.core import QgsDistanceArea
+from qgis.core import QgsDistanceArea, QgsWkbTypes
 from . import toolinterface as ti
 
 from ship.utils.fileloaders import fileloader as fl
@@ -55,8 +55,8 @@ class SectionWidthCheck(ti.ToolInterface):
         super()
         self.results = []
         fmp_widths = self.fetchFmpWidths(self.dat_path)
-        cn_widths, total_found = self.fetchCnWidths()
-        results, failed = self.check_widths(fmp_widths, cn_widths)
+        cn_widths, missing_cn, total_found = self.fetchCnWidths()
+        results, failed = self.check_widths(fmp_widths, cn_widths, missing_cn)
         return results, failed#, total_found
         
     def fetchFmpWidths(self, dat_path):
@@ -175,7 +175,7 @@ class SectionWidthCheck(ti.ToolInterface):
         details = {}
         for f in node_layer.getFeatures():
              
-            node_id = f["ID"]
+            node_id = f[0]
             node_geom = f.geometry()
             total_found['nodes'] += 1
              
@@ -194,13 +194,27 @@ class SectionWidthCheck(ti.ToolInterface):
              
         # Calculate the max distance between CN line pair end points.
         cn_widths = {}
+        single_cn = []
         for nodename, feats in details.items():
-            line1 = feats[0].geometry().asMultiPolyline()
-            line2 = feats[1].geometry().asMultiPolyline()
- 
+            if len(feats) < 2:
+                single_cn.append(nodename)
+                continue
+
             distance = QgsDistanceArea()
             distance.setSourceCrs(cn_layer.crs(), self.project.transformContext())
             d = []
+            try:
+                if not QgsWkbTypes.isSingleType(feats[0].geometry().wkbType()):
+                    line1 = feats[0].geometry().asMultiPolyline()
+                else:
+                    line1 = feats[0].geometry().asPolyline()
+                if not QgsWkbTypes.isSingleType(feats[1].geometry().wkbType()):
+                    line2 = feats[1].geometry().asMultiPolyline()
+                else:
+                    line2 = feats[1].geometry().asPolyline()
+            except Exception as err:
+                pass
+ 
             d.append(distance.measureLine(line1[0][0], line2[0][0]))
             d.append(distance.measureLine(line1[0][0], line2[0][-1]))
             d.append(distance.measureLine(line1[0][-1], line2[0][0]))
@@ -208,9 +222,9 @@ class SectionWidthCheck(ti.ToolInterface):
             maxval = max(d)
             cn_widths[nodename] = maxval
 
-        return cn_widths, total_found
+        return cn_widths, single_cn, total_found
     
-    def checkWidths(self, fmp_widths, cn_widths, dw_tol=5):
+    def checkWidths(self, fmp_widths, cn_widths, single_cn, dw_tol=5):
         """Compare the FMP and TUFLOW (1D-2D) width values for each node.
         
         Compare the 1D (FMP) width to the 2D (TUFLOW) width. If the difference
@@ -224,6 +238,8 @@ class SectionWidthCheck(ti.ToolInterface):
                 FMP section with the section name as the key.
             cn_widths(dict): containing the TUFLOW (2D) widths with the node
                 as the key.
+            single_cn(list): containing the FMP nodes that only had a single
+                CN line snapped to them (no width calculation possible).
             dw_tol(int): the tolerance, in metres, to determine whether the
                 difference in width is classed as failing or not.
                 
@@ -236,7 +252,7 @@ class SectionWidthCheck(ti.ToolInterface):
         """
 #         missing_2d_nodes = []
         self.results = []
-        self.failed = {'fail': [], 'missing': []}
+        self.failed = {'fail': [], 'missing': [], 'single_cn': []}
         cn_keys = cn_widths.keys()
         for id, details in fmp_widths.items():
             temp = {
@@ -244,7 +260,10 @@ class SectionWidthCheck(ti.ToolInterface):
                 '2d_width': -99999, 'diff': -99999
             }
             if not id in cn_keys:
-                self.failed['missing'].append(temp)
+                if id in single_cn:
+                    self.failed['single_cn'].append(temp)
+                else:
+                    self.failed['missing'].append(temp)
                 self.results.append(temp)
             else:
                 width_diff = abs(details[0] - cn_widths[id])

@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Check FMP Model Conveyance</string>
+   <string>Check FMP Model Sections</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_4">
    <item>
@@ -61,7 +61,7 @@
      <item>
       <widget class="QLabel" name="label_3">
        <property name="text">
-        <string>TUFLOW nodes layer</string>
+        <string>TUFLOW nodes layer (only used for locating the section in the nodes layer - right-click table options)</string>
        </property>
       </widget>
      </item>
@@ -89,6 +89,12 @@
          <widget class="QgsDoubleSpinBox" name="kTolSpinbox">
           <property name="suffix">
            <string> m3/s</string>
+          </property>
+          <property name="maximum">
+           <double>500.000000000000000</double>
+          </property>
+          <property name="singleStep">
+           <double>10.000000000000000</double>
           </property>
           <property name="value">
            <double>10.000000000000000</double>
@@ -216,14 +222,25 @@
     </widget>
    </item>
    <item>
-    <widget class="QDialogButtonBox" name="buttonBox">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-     <property name="standardButtons">
-      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
-     </property>
-    </widget>
+    <layout class="QHBoxLayout" name="horizontalLayout_5">
+     <item>
+      <widget class="QLabel" name="statusLabel">
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QDialogButtonBox" name="buttonBox">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="standardButtons">
+        <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
   </layout>
  </widget>
