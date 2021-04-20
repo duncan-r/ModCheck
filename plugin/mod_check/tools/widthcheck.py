@@ -203,22 +203,27 @@ class SectionWidthCheck(ti.ToolInterface):
             distance = QgsDistanceArea()
             distance.setSourceCrs(cn_layer.crs(), self.project.transformContext())
             d = []
-            try:
-                if not QgsWkbTypes.isSingleType(feats[0].geometry().wkbType()):
-                    line1 = feats[0].geometry().asMultiPolyline()
-                else:
-                    line1 = feats[0].geometry().asPolyline()
-                if not QgsWkbTypes.isSingleType(feats[1].geometry().wkbType()):
-                    line2 = feats[1].geometry().asMultiPolyline()
-                else:
-                    line2 = feats[1].geometry().asPolyline()
-            except Exception as err:
-                pass
+            if not QgsWkbTypes.isSingleType(feats[0].geometry().wkbType()):
+                line1 = feats[0].geometry().asMultiPolyline()
+                line1_a = line1[0][0]
+                line1_b = line1[0][-1]
+            else:
+                line1 = feats[0].geometry().asPolyline()
+                line1_a = line1[0]
+                line1_b = line1[-1]
+            if not QgsWkbTypes.isSingleType(feats[1].geometry().wkbType()):
+                line2 = feats[1].geometry().asMultiPolyline()
+                line2_a = line2[0][0]
+                line2_b = line2[0][-1]
+            else:
+                line2 = feats[1].geometry().asPolyline()
+                line2_a = line2[0]
+                line2_b = line2[-1]
  
-            d.append(distance.measureLine(line1[0][0], line2[0][0]))
-            d.append(distance.measureLine(line1[0][0], line2[0][-1]))
-            d.append(distance.measureLine(line1[0][-1], line2[0][0]))
-            d.append(distance.measureLine(line1[0][-1], line2[0][-1]))
+            d.append(distance.measureLine(line1_a, line2_a))
+            d.append(distance.measureLine(line1_a, line2_b))
+            d.append(distance.measureLine(line1_b, line2_a))
+            d.append(distance.measureLine(line1_b, line2_b))
             maxval = max(d)
             cn_widths[nodename] = maxval
 
