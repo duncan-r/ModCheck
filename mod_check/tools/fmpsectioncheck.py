@@ -27,18 +27,23 @@ from ship.utils.tools import openchannel
 
 class CheckFmpSections(ti.ToolInterface):
     
-    def __init__(self, working_dir, dat_file, k_tol):
+#     def __init__(self, working_dir, dat_file, k_tol, dy_tol):
+    def __init__(self):
         super().__init__()
-        self.working_dir = working_dir
-        self.dat_file = dat_file
-        self.k_tol = k_tol
+#         self.working_dir = working_dir
+#         self.dat_file = dat_file
+#         self.k_tol = k_tol
+#         self.dy_tol = dy_tol
     
-    def run_tool(self):
-        model = self.load_fmp_model(self.dat_file)
-        river_sections = model.unitsByType('river')
-        negative_k = self.calculate_conveyance(river_sections)
-        bad_banks = self.checkBankLocations(river_sections)
-        return {'negative_k': negative_k, 'bad_banks': bad_banks}
+#     def run_tool(self):
+#         model = self.load_fmp_model(self.dat_file)
+#         river_sections = model.unitsByType('river')
+#         negative_k, n_zero = self.calculate_conveyance(river_sections)
+#         bad_banks = self.checkBankLocations(river_sections)
+#         return {
+#             'negative_k': negative_k, 'n_zero': n_zero, 
+#             'bad_banks': bad_banks
+#         }
     
     def _getActiveSectionData(self, section):
         xvals = section.row_data['main'].dataObjectAsList(rdt.CHAINAGE)
@@ -50,7 +55,7 @@ class CheckFmpSections(ti.ToolInterface):
         # Fetch only the active parts of the section
         # NOTE: Update SHIP to retrive only active part of section
         active_start = 0
-        active_end = len(xvals) - 1
+        active_end = len(xvals)
         if 'LEFT' in deactivation:
             active_start = deactivation.index('LEFT')
         if 'RIGHT' in deactivation:
@@ -64,34 +69,27 @@ class CheckFmpSections(ti.ToolInterface):
             'panel_marker': active_p
         }
 
-    def calculate_conveyance(self, river_sections):
+    def calculateConveyance(self, river_sections, k_tol):
         """
         """
         negative_k = {}
+        n_zero = []
         for r in river_sections:
-            xvals = r.row_data['main'].dataObjectAsList(rdt.CHAINAGE)
-            yvals = r.row_data['main'].dataObjectAsList(rdt.ELEVATION)
-            nvals = r.row_data['main'].dataObjectAsList(rdt.ROUGHNESS)
-            pvals = r.row_data['main'].dataObjectAsList(rdt.PANEL_MARKER)
-            deactivation = r.row_data['main'].dataObjectAsList(rdt.DEACTIVATION)
+            active = self._getActiveSectionData(r)
+            active_x = active['chainage']
+            active_y = active['elevation']
+            active_n = active['roughness']
+            active_p = active['panel_marker']
             
-            # Fetch only the active parts of the section
-            # NOTE: Update SHIP to retrive only active part of section
-            active_start = 0
-            active_end = len(xvals) - 1
-            if 'LEFT' in deactivation:
-                active_start = deactivation.index('LEFT')
-            if 'RIGHT' in deactivation:
-                active_end = deactivation.index('RIGHT')
-            active_x = xvals[active_start:active_end]
-            active_y = yvals[active_start:active_end]
-            active_n = nvals[active_start:active_end]
-            active_p = pvals[active_start:active_end]
-            
-            conveyance, has_negative = openchannel.calcConveyance(
-                active_x, active_y, active_p, active_n, active_y,
-                interpolate_space=0, tolerance=self.k_tol
-            )
+            try:
+                conveyance, has_negative = openchannel.calcConveyance(
+                    active_x, active_y, active_p, active_n, active_y,
+                    interpolate_space=0, tolerance=k_tol
+                )
+            except ZeroDivisionError as err:
+                n_zero.append(r.name)
+                continue
+
             if has_negative:
                 max_kx = 0
                 max_kx_depth = 0
@@ -106,12 +104,12 @@ class CheckFmpSections(ti.ToolInterface):
                     'max_kx': max_kx, 'max_kx_depth': max_kx_depth, 'panels': active_p
                 }
                 
-        return negative_k
+        return negative_k, n_zero
 
-    def checkBankLocations(self, river_sections):
+    def checkBankLocations(self, river_sections, dy_tol):
         """
         """
-        bank_tol = 0.1
+#         bank_tol = 0.1
 
         bad_banks = {}
         for r in river_sections:
@@ -125,9 +123,13 @@ class CheckFmpSections(ti.ToolInterface):
             maxy_left = max(active['elevation'][0:miny_idx])
             maxy_left_idx = active['elevation'][0:miny_idx].index(maxy_left)
 
-            maxy_right = max(active['elevation'][miny_idx:-1])
-            maxy_right_idx = active['elevation'][miny_idx:-1].index(maxy_right)
-            maxy_right_idx = miny_idx + maxy_right_idx
+            if miny_idx == len(active['elevation']) - 1:
+                maxy_right = active['elevation'][-1]
+                maxy_right_idx = len(active['elevation']) - 1
+            else:
+                maxy_right = max(active['elevation'][miny_idx:])
+                maxy_right_idx = active['elevation'][miny_idx:].index(maxy_right)
+                maxy_right_idx = miny_idx + maxy_right_idx
 
             # Check to see if there are any drops in elevation greater than the
             # given tolerance for the left and right banks
@@ -135,14 +137,14 @@ class CheckFmpSections(ti.ToolInterface):
             for i in range(maxy_left_idx, -1, -1):
                 drop = maxy_left - active['elevation'][i]
 #                 if (active['elevation'][i] - bank_tol) > maxy_left:
-                if (drop > bank_tol) and (drop > left_drop):
+                if (drop > dy_tol) and (drop > left_drop):
                     left_drop = drop
                 
             right_drop = 0
             for i in range(maxy_right_idx, len(active['elevation']), 1):
                 drop = maxy_right - active['elevation'][i]
 #                 if (active['elevation'][i] - bank_tol) > maxy_right:
-                if (drop > bank_tol) and (drop > right_drop):
+                if (drop > dy_tol) and (drop > right_drop):
                     right_drop = drop
                 
             if left_drop > 0 or right_drop > 0:
@@ -154,10 +156,11 @@ class CheckFmpSections(ti.ToolInterface):
                 }
         return bad_banks
 
-    def load_fmp_model(self, fmp_path):
+    def loadRiverSections(self, fmp_path):
         file_loader = fl.FileLoader()
         try:
             model = file_loader.loadFile(fmp_path)
         except Exception as err:
             pass
-        return model
+        rivers = model.unitsByType('river')
+        return rivers
