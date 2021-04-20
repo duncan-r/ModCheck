@@ -387,7 +387,7 @@ class FmpTuflowWidthCheckDialog(QDialog, fmptuflowwidthcheck_ui.Ui_FmpTuflowWidt
             self.iface.mainWindow().findChild(QAction, 'mActionDeselectAll').trigger()
             nodes_layer.removeSelection()
             for f in nodes_layer.getFeatures():
-                if f['ID'] == id:
+                if f[0] == id:
                     nodes_layer.select(f.id())
                     self.iface.mapCanvas().zoomToSelected(nodes_layer)
                     break
@@ -443,16 +443,20 @@ class FmpTuflowWidthCheckDialog(QDialog, fmptuflowwidthcheck_ui.Ui_FmpTuflowWidt
                 fmp_widths = self.width_check.fetchFmpWidths(dat_path)
                 self.statusLabel.setText('Loading TUFLOW 2D widths ...')
                 QApplication.processEvents()
-                cn_widths, total_found = self.width_check.fetchCnWidths(nodes_layer, cn_layer)
+                cn_widths, single_cn, total_found = self.width_check.fetchCnWidths(
+                    nodes_layer, cn_layer
+                )
                 self.statusLabel.setText('Comparing 1D-2D widths ...')
                 QApplication.processEvents()
-                results, failed = self.width_check.checkWidths(fmp_widths, cn_widths, dw_tol)
+                results, failed = self.width_check.checkWidths(
+                    fmp_widths, cn_widths, single_cn, dw_tol
+                )
             except (AttributeError, Exception) as e:
                 QMessageBox.warning(
                     self, "Width check failed", e.args[0]
                 )
             else:
-                if len(failed['missing']) > 0 or len(failed['fail']) > 0:
+                if len(failed['missing']) > 0 or len(failed['fail']) > 0 or len(failed['single_cn']) > 0:
                     self.statusLabel.setText('Check complete - Failed or missing nodes found')
                     self.updateFailedTable(failed)
                 else:
@@ -490,6 +494,9 @@ class FmpTuflowWidthCheckDialog(QDialog, fmptuflowwidthcheck_ui.Ui_FmpTuflowWidt
         self.failedTableWidget.setRowCount(row_position)
         for f in results['fail']:
             self._buildRow(f, self.failedTableWidget, row_position, 'FAIL')
+            row_position += 1
+        for f in results['single_cn']:
+            self._buildRow(f, self.failedTableWidget, row_position, 'SINGLE CN')
             row_position += 1
         for m in results['missing']:
             self._buildRow(m, self.failedTableWidget, row_position, 'NOT FOUND')
