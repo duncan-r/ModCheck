@@ -10,6 +10,7 @@ from qgis.gui import QgsMessageBar, QgsFileWidget
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
+from .forms import ui_help_dialog as help_ui
 from .forms import ui_chainage_calculator_dialog as chaincalc_ui
 from .forms import ui_fmptuflow_widthcheck_dialog as fmptuflowwidthcheck_ui
 from .forms import ui_runvariables_check_dialog as fmptuflowvariablescheck_ui
@@ -18,6 +19,7 @@ from .forms import ui_fmprefh_check_dialog as refh_ui
 from .forms import ui_tuflowstability_check_dialog as tuflowstability_ui
 from .forms import ui_nrfa_viewer_dialog as nrfa_ui
 
+from .tools import help
 from .tools import chainagecalculator as chain_calc
 from .tools import widthcheck
 from .tools import runvariablescheck as runvariables_check
@@ -626,33 +628,36 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
     def loadMultipleIefSummary(self, path):
         mrt_settings.saveProjectSetting('ief_folder', path)
 
-        ief_files = []
-        for root, dirs, files in os.walk(path):
-            for file in files:
-                fext = os.path.splitext(file)
-                if len(fext) > 1 and fext[1] == '.ief':
-                    ief_files.append(os.path.join(root, file))
-        
-        check = runvariables_check.IefVariablesCheck(self.project, 'fakepath')
-        outputs = []
-        for ief in ief_files:
-            outputs.append(check.loadSummaryInfo(ief))
+        try:
+            ief_files = []
+            for root, dirs, files in os.walk(path):
+                for file in files:
+                    fext = os.path.splitext(file)
+                    if len(fext) > 1 and fext[1] == '.ief':
+                        ief_files.append(os.path.join(root, file))
             
-        row_position = 0
-        self.fmpMultipleSummaryTable.setRowCount(row_position)
-        for output in outputs:
-            self.fmpMultipleSummaryTable.insertRow(row_position)
-            for i, value in enumerate(output):
-                if value[1] == True:
-                    item = QTableWidgetItem()
-                    item.setTextAlignment(Qt.AlignCenter|Qt.AlignVCenter)
-                    item.setBackground(QColor(239, 175, 175)) # Light Red
-                    item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-                    item.setText(value[0])
-                    self.fmpMultipleSummaryTable.setItem(row_position, i, item)
-                else:
-                    self.fmpMultipleSummaryTable.setItem(row_position, i, QTableWidgetItem(value[0]))
-            row_position += 1
+            check = runvariables_check.IefVariablesCheck(self.project, 'fakepath')
+            outputs = []
+            for ief in ief_files:
+                outputs.append(check.loadSummaryInfo(ief))
+                
+            row_position = 0
+            self.fmpMultipleSummaryTable.setRowCount(row_position)
+            for output in outputs:
+                self.fmpMultipleSummaryTable.insertRow(row_position)
+                for i, value in enumerate(output):
+                    if value[1] == True:
+                        item = QTableWidgetItem()
+                        item.setTextAlignment(Qt.AlignCenter|Qt.AlignVCenter)
+                        item.setBackground(QColor(239, 175, 175)) # Light Red
+                        item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+                        item.setText(value[0])
+                        self.fmpMultipleSummaryTable.setItem(row_position, i, item)
+                    else:
+                        self.fmpMultipleSummaryTable.setItem(row_position, i, QTableWidgetItem(value[0]))
+                row_position += 1
+        except Exception as err:
+            pass
             
     def loadIefVariables(self):
         
@@ -822,7 +827,9 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
 
         
 class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyCheckDialog):
-    
+   
+    closing = pyqtSignal(name='closing')
+
     def __init__(self, iface, project):
         QDialog.__init__(self)
         self.iface = iface
@@ -858,7 +865,19 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
         self.bankDyToleranceSpinbox.setValue(dy_tol)
         self.kTolSpinbox.valueChanged.connect(self._kTolChange)
         self.bankDyToleranceSpinbox.valueChanged.connect(self._dyTolChange)
+
+    def signalClose(self):
+        """Notify listeners that the dialog is being closed."""
+        self.closing.emit()
         
+    def closeEvent(self, *args, **kwargs):
+        """Override the close event to emit a signal.
+        
+        Overrides: QDialog.closeEvent.
+        """
+        self.signalClose()
+        return QDialog.closeEvent(self, *args, **kwargs)
+
     def _kTolChange(self, value):
         mrt_settings.saveProjectSetting('section_ktol', value)
 
@@ -1514,3 +1533,31 @@ class NrfaStationViewerDialog(QDialog, nrfa_ui.Ui_NrfaViewerDialog):
             'Daily_Flows_Data', self.nrfa_viewer.exportDailyFlowsData, **func_kwargs
         )
 
+
+class HelpPageDialog(QDialog, help_ui.Ui_HelpDialog):
+    """Display the plugin help page dialog."""
+
+    def __init__(self, iface, project):
+        QDialog.__init__(self)
+        self.iface = iface
+        self.project = project
+        self.setupUi(self)
+        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+        
+        self.help = help.ModCheckHelp()
+        self.setupHelpList()
+        self.helpSelectList.currentTextChanged.connect(self.changeHelpPage)
+        
+    def setupHelpList(self):
+        self.helpSelectList.clear()
+        help_items = self.help.helpList()
+        for item in help_items:
+            self.helpSelectList.addItem(item)
+        
+    def changeHelpPage(self, tool_name):
+        contents = self.help.helpContents(tool_name)
+        self.helpDisplayTextBrowser.setText(contents)
+        
+        
+        

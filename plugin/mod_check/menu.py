@@ -72,6 +72,7 @@ class Menu:
         self.nrfa_dialog = None
         self.chainage_dialog = None
         self.fmpwidth_dialog = None
+        self.fmpsections_dialog = None
 
         # submenu example: Chainage submenu
 #         self.chainage_menu = QMenu(QCoreApplication.translate("ModCheck", "&Chainage"))
@@ -81,6 +82,11 @@ class Menu:
 #         self.chainage_menu.addAction(self.calc_fmp_chainage_action)
         # unloading the menu item (put in unload)
 #         self.iface.removePluginMenu("&ModCheck", self.chainage_menu.menuAction())
+
+        # Help page
+        self.help_page_action = QAction(icon, "Help", self.iface.mainWindow())
+        self.help_page_action.triggered.connect(self.help_page)
+        self.iface.addPluginToMenu("&ModCheck", self.help_page_action)
 
         # Chainage / node distance check
         self.check_fmptuflow_chainage_action = QAction(icon, "Check FMP-TUFLOW Chainage", self.iface.mainWindow())
@@ -118,6 +124,7 @@ class Menu:
         self.iface.addPluginToMenu("&ModCheck", self.nrfa_stationviewer_action)
         
     def unload(self):
+        self.iface.removePluginMenu("&ModCheck", self.help_page_action)
         self.iface.removePluginMenu("&ModCheck", self.check_fmptuflow_chainage_action)
         self.iface.removePluginMenu("&ModCheck", self.check_1d2dWidth_action)
         self.iface.removePluginMenu("&ModCheck", self.get_runsummary_action)
@@ -125,6 +132,10 @@ class Menu:
         self.iface.removePluginMenu("&ModCheck", self.check_fmprefh_action)
         self.iface.removePluginMenu("&ModCheck", self.check_tuflowstability_action)
         self.iface.removePluginMenu("&ModCheck", self.nrfa_stationviewer_action)
+        
+    def help_page(self):
+        dialog = HelpPageDialog(self.iface, QgsProject.instance())
+        dialog.exec_()
         
     def check_fmptuflow_chainage(self):
         if self.chainage_dialog is None:
@@ -138,8 +149,6 @@ class Menu:
         self.chainage_dialog = None
         
     def check_1d2d_width(self):
-#         dialog = FmpTuflowWidthCheckDialog(self.iface, QgsProject.instance())
-#         dialog.exec_()
         if self.fmpwidth_dialog is None:
             self.fmpwidth_dialog = FmpTuflowWidthCheckDialog(self.iface, QgsProject.instance())
             self.fmpwidth_dialog.closing.connect(self._fmpwidth_dialog_close)
@@ -155,8 +164,17 @@ class Menu:
         dialog.exec_()
         
     def check_fmp_sections(self):
-        dialog = FmpSectionCheckDialog(self.iface, QgsProject.instance())
-        dialog.exec_()
+#         dialog = FmpSectionCheckDialog(self.iface, QgsProject.instance())
+#         dialog.exec_()
+        if self.fmpsections_dialog is None:
+            self.fmpsections_dialog = FmpSectionCheckDialog(self.iface, QgsProject.instance())
+            self.fmpsections_dialog.closing.connect(self._fmpsections_dialog_close)
+            self.fmpsections_dialog.show()
+        else:
+            self.fmpsections_dialog.setWindowState(self.fmpsections_dialog.windowState() & ~Qt.WindowMinimized | Qt.WindowActive)
+
+    def _fmpsections_dialog_close(self):
+        self.fmpsections_dialog = None
 
     def check_fmp_refh(self):
         dialog = FmpRefhCheckDialog(self.iface, QgsProject.instance())
