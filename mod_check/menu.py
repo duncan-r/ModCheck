@@ -118,6 +118,11 @@ class Menu:
         self.check_tuflowstability_action.triggered.connect(self.check_tuflow_stability)
         self.iface.addPluginToMenu("&ModCheck", self.check_tuflowstability_action)
 
+        # TUFLOW stability outputs viewer (MB, Dvol, etc)
+        self.filecheck_action = QAction(icon, "Audit Model Files", self.iface.mainWindow())
+        self.filecheck_action.triggered.connect(self.check_files)
+        self.iface.addPluginToMenu("&ModCheck", self.filecheck_action)
+
         # NRFA Station viewer
         self.nrfa_stationviewer_action = QAction(icon, "View NRFA Station Info", self.iface.mainWindow())
         self.nrfa_stationviewer_action.triggered.connect(self.view_nrfa_station)
@@ -132,6 +137,7 @@ class Menu:
         self.iface.removePluginMenu("&ModCheck", self.check_fmprefh_action)
         self.iface.removePluginMenu("&ModCheck", self.check_tuflowstability_action)
         self.iface.removePluginMenu("&ModCheck", self.nrfa_stationviewer_action)
+        self.iface.removePluginMenu("&ModCheck", self.filecheck_action)
         
     def help_page(self):
         dialog = HelpPageDialog(self.iface, QgsProject.instance())
@@ -182,6 +188,10 @@ class Menu:
         
     def check_tuflow_stability(self): 
         dialog = TuflowStabilityCheckDialog(self.iface, QgsProject.instance())
+        dialog.exec_()
+
+    def check_files(self):
+        dialog = FileCheckDialog(self.iface, QgsProject.instance())
         dialog.exec_()
 
     def view_nrfa_station(self): 

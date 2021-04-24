@@ -32,7 +32,8 @@ CHECK_CHAINAGE = """
 Check FMP-TUFLOW Chainage allows you to extract the chainage (node distance) values from
 Flood Modeller and TUFLOW model nodes and compare them to ensure that they have similar 
 values. This is currently only possible when the TUFLOW model includes a 1d_nwk line,
-which is used to derive the distance between nodes in 2D.
+which is used to derive the distance between nodes in 2D (it is possible to extract
+the FMP chainage values without comparing see the "FMP Only" section below).
 
 Select an FMP .dat file in the FMP Model section, select the TUFLOW 1d_nwk line layer
 in the TUFLOW inputs section, set the DX Tolerance value and click the 
@@ -44,11 +45,14 @@ will not be flagged as failed in the status.
 
 Once the model files have been analysed the Outputs tables will be populated with
 the results. These include:
+
 - FMP Chainage: The chainage values for each node that has a distance / chainage
   value, in the FMP model (river, interpolate, replicate, conduit).
+
 - FMP Reach Table: A separate table that summarises the total chainage along an 
   individual reach. A reach is classes as a continues series of river, etc units 
   that are directly connected to each other.
+
 - TUFLOW-FMP Comparison: The comparitive distance between the 1D FMP section
   chainage values and the 2D TUFLOW node chainage values. Only river, interpolate
   and replicate sections will be included in this table. If the difference 
@@ -65,9 +69,10 @@ The 2D TUFLOW chainage will report both the geometric line length along the
 provided it will be used to calculate the chainage difference, if not the
 line geometry will be used.
 
+FMP Only:
 If there is no 1d_nwk line available for the TUFLOW model you can tick the 
 Calculate FMP chainage only checkbox and the Calculate FMP Chainage button and the
-chainage values for the FMP modeller will be added to the FMP Chainage tables.
+chainage values for the model will be added to the FMP Chainage tables.
 
 You can export the results to a csv file with the Export Results button and 
 select whichever tables you would like to export the results for.
@@ -87,13 +92,15 @@ will be acceptable based on the cell size used in the model (a 5m grid may mean 
 a variation in width of up to 5m won't make any difference, for example). Any 
 differences less than the tolerance will not be flagged as "FAIL" in the Failed table.
 
-Once the model files have been analysed the Outputs tables will be populate with the 
+Once the model files have been analysed the Outputs tables will be populated with the 
 results. There are two tables:
+
 - Failed: A summary of all of the FMP sections that have an active width with a
   difference greater than the tolerance when compared to the 2D widths; these will
   be given a "FAIL" status. If an FMP node could not be found in the 2D model it 
   will be given a "MISSING" status. If a node only has a single CN line (so the
-  width doesn't make any sense / can't be calculated) it will be give a "SINGLE_CN" status.
+  width doesn't make any sense / can't be calculated) it will be given a "SINGLE_CN" status.
+
 - All: A summary of all of the FMP nodes and the comparison widths, regardless of 
   whether they passed or failed the check.
   
@@ -106,13 +113,23 @@ You can bring up a menu by right-clicking on a table row in the outputs and then
 select "Locate Section" to view the location of a failed section. This will 
 select the 1D node that failed, re-centre and zoom the map window to that location.
 
-The check works but calculating the active width of the river sections in the FMP
+The check works by calculating the active width of the river sections in the FMP
 model - the non deactivated part of the section - and comparing it to the
 distance between the end points of the CN lines in the TUFLOW model; the cartesian
 distance between the two polyline nodes that are furthest away from each other.
 Interpolate section widths are calculated based on the width of the two nearest
 river sections and the position (chainage) of the interpolate between them. This is
 essentially just a straight line calculation of width over distance.
+
+Multipe Node / CN line layers:
+If the model includes multiple nodes layers or multiple HX/CN line layers you
+may want to combine the layers first, in order to avoid a lot of "MISSING" node
+warnings. The easiest way to do this is with the "Toolbox" under the "Processing"
+menu on the main QGIS menu bar. look under the "Vector general" tools and you
+will find the "Merge vector layers" tool; use this to create two layers containing
+all of the nodes in one and the cn lines in the other. At some point in the 
+future I'll add a way to automatically combine the layers for checking, but
+for the timebeing you'll need to do it manually.
 
 """
 
@@ -130,7 +147,8 @@ The Multiple Summary tab will load key run parameter information from all FMP .i
 files in a folder (it will also search subfolders). These parameters will be loaded
 into the table and any that have been changed from the default values will be
 highlighted in red. By right-clicking on a row you can select to "Show detailed view"
-and the full details and descriptions the .ief file will be loaded into the Variables table.
+and the full details and descriptions of the .ief file will be loaded into the 
+Variables table.
 
 The Variables tab contains a summary of all of the run parameters used in the FMP
 model, whether they have been changed from the default, what the default value is and
@@ -172,15 +190,18 @@ Currently it supports reviewing the river section conveyance and banktop configu
 When you select an FMP .dat file in the file search box it will load Flood Modeller
 model and analyse it for sections that fail the checks.
 
+
 Conveyance:
+
 The conveyance check will populate the Conveyance table with the details of all of the
 sections that have a negative conveyance with a value greater than the K Tolerance value.
-The K Tolerance value should be set to a value that is suitable for the size of the
+The K Tolerance should be set to a value that is suitable for the size of the
 flows that the model has (if max conveyance is ~10 m3/s it should be quite low, if it
 is ~ 1000 m3/s it should be a bit higher). This will help to avoid identifying very
 minor drops in conveyance that are unlikely to have any impact on the model results.
 
 Banktop Check:
+
 The banktop check will populate the Banktop Check table with the details of any section
 that appears to have incorrectly configured banktops. These are sections in which the
 highest elevations in the cross section are not at the extremes of the section geometry.
@@ -208,8 +229,7 @@ for comparison.
 
 Key values that should usually be the same across all ReFH boundaries are checked,
 if there is a difference between some of the values they will be highlighted red
-and should be investigated further to check that a discrepency in the value is
-correct.
+and should be investigated further to check that the value is correct.
 
 The results of the check can be exported to a csv file with the Export to CSV button.
 """
@@ -222,7 +242,7 @@ If you select an MB, MB1, or MB2 csv file in the TUFLOW MB file search box it wi
 load the cumulative mass balance and dVol data and graph it in the dialog.
 
 Cumulative mass error percentage (CME) is graphed on the primary (left) y axis and
-includes additional comparison lines (CME max recommended) to indicate the lcoation
+includes additional comparison lines (CME max recommended) to indicate the location
 of +-1%; the recommended tolerance for CME.
 
 The rate of change in volume (dVol) is graphed on the secondary (right) y axis.
@@ -242,7 +262,7 @@ and zoom to the first station in the list, and show some summary info about the
 selected gauging station. Changing the selected station in the dropdown box will
 select and zoom to the new station and update the Station Info tab.
 
-There are currently four other tabs for reviewing stations information:
+There are currently four other tabs for reviewing station information:
 
 Full Details:
 This will display all of the details currently held by NRFA for the station,
