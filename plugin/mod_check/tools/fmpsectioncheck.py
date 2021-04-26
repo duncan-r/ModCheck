@@ -1,4 +1,3 @@
-
 '''
 @summary: Check FMP section properties
 

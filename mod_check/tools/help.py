@@ -249,6 +249,66 @@ The rate of change in volume (dVol) is graphed on the secondary (right) y axis.
 
 """
 
+FILE_AUDIT = """
+Audit model files allows you to check the contents of the FMP and TUFLOW model files
+for file path references and checks that they exist under a user supplied folder.
+
+Once the Model root folder is chosen all of the folders, including the one containing
+the chosen folder, will be walked to create lookup table of files within the folder
+structure. All model files will then be read (.tcf, .tgc, .ief, etc) to locate any
+reference to another file. The lookup table is checked to see whether the files
+referenced by the model files exist in the folders being checked. If they exist but
+they are not in the path indicated by the model file they will be marked as being
+Found Elsewhere, if the file can't be found it will be marked as Missing.
+
+The results of the check will be output into the different tabs depending on how
+the issues are categorised. When the check is complete the Search Summary tab will
+be shown with:
+
+- Search summary containing the numbers of different files checked.
+
+- List of ignored files showing any files that have been deliberately ignored. This
+  will include non model related files like the TUFLOW simulations log, .pdf files
+  etc.
+  
+- List of model files reviewed giving a list of all of the model files that were
+  parsed to check for references to other files. These are the .ief, .tcf, .tgc etc
+  files.
+
+  
+The other tabs contain list of files that failed the check:
+
+- Missing tab: contains all of the files that were referenced by a model file but
+  could not be found anywhere in the folder structure being searched.
+  
+- Found Elsewhere tab: contains all of the files that were referenced by a model 
+  file and were not in the location specified, but were found somewhere else.
+  
+- Ief Paths Found Elsewhere: this is exactly the same as the  Found Elsewhere tab
+  in terms of functionality except it only applies to files referenced by an .ief
+  file. Ief files are commonly delivered with absolute paths which means that all
+  of the files they reference will fail. These failures are moved to their own
+  table to make it easier to identify the more important issues in the main 
+  Found Elsewhere tab.
+  
+
+All of the tabs contain the same setup of a table listing:
+
+- File Name: the name of the file that could not be found (or was not where it should be).
+
+- Found at: the path the the file was located at (this is not available for missing files).
+
+- Original Path: the path referenced in the model file (the incorrect path).
+
+
+Clicking on one of the rows in the tables will bring up a list of all of the 
+model files that reference this missing/misplaced file, in the list below. If you
+click on one of the model files in the list it will load the contents of the model
+file into a new dialog window for you to view and highlight the section containing
+the reference to the missing/misplaced file in yellow.
+
+"""
+
 NRFA_STATIONS = """
 View NRFA station info allows you to identify gauging stations located near to the
 current map window centre and review key hydrometric information relating to them.
@@ -311,6 +371,7 @@ class ModCheckHelp():
             'Check FMP Sections': FMP_SECTIONS,
             'ReFH Check': REFH_CHECK,
             'Check TUFLOW MB': CHECK_TUFLOW_MB,
+            'Model File Audit': FILE_AUDIT,
             'NRFA Station Viewer': NRFA_STATIONS,
         }
         

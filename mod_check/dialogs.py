@@ -1537,7 +1537,9 @@ class NrfaStationViewerDialog(QDialog, nrfa_ui.Ui_NrfaViewerDialog):
         
 
 class FileCheckDialog(QDialog, filecheck_ui.Ui_CheckFilesDialog):
-    """"""
+    """Search model files and folders to check that files exist.
+    """
+#     update_status = pyqtSignal(name='update_status')
     
     def __init__(self, iface, project):
         QDialog.__init__(self)
@@ -1560,43 +1562,61 @@ class FileCheckDialog(QDialog, filecheck_ui.Ui_CheckFilesDialog):
 #         self.elsewhereFilesTable.clicked.connect(self.showElsewhereParents)
 #         self.elsewhereParentList.currentRowChanged.connect(self.showElsewhereParentFile)
         self.elsewhereFilesTable.clicked.connect(lambda i: self.showParents(i, 'elsewhere'))
+        self.iefElsewhereFilesTable.clicked.connect(lambda i: self.showParents(i, 'ief'))
         self.missingFilesTable.clicked.connect(lambda i: self.showParents(i, 'missing'))
         self.elsewhereParentList.currentRowChanged.connect(lambda i: self.showParentFile(i, 'elsewhere'))
+        self.iefElsewhereParentList.currentRowChanged.connect(lambda i: self.showParentFile(i, 'ief'))
         self.missingParentList.currentRowChanged.connect(lambda i: self.showParentFile(i, 'missing'))
 
         self.found_files = []
         self.missing_files = []
+        self.ief_found_files = []
         self.search_meta = {}
         self.file_check = filecheck.FileChecker()
+        self.file_check.status_signal.connect(self.updateStatus)
         
     def updateModelRoot(self):
         mrt_settings.saveProjectSetting('model_root', self.modelFolderFileWidget.filePath())
         self.checkFiles()
         
+    @pyqtSlot(str)
+    def updateStatus(self, status):
+        self.statusLabel.setText(status)
+        QApplication.processEvents()
+        
     def checkFiles(self):
         model_root = mrt_settings.loadProjectSetting('model_root', './temp')
         results = self.file_check.auditModelFiles(model_root)
         self.processResults(results)
+        self.resultsTabWidget.setCurrentIndex(0)
         self.updateSummaryTab()
-        self.updateElsewhereTable()
+        self.updateElsewhereTable(self.elsewhereFilesTable, self.found_files)
+        self.updateElsewhereTable(self.iefElsewhereFilesTable, self.ief_found_files)
         self.updateMissingTable()
-        i=0
         
     def processResults(self, results):
         self.found_files = []
         self.missing_files = []
+        self.ief_found_files = []
         self.search_meta['summary'] = results.summary
+        self.search_meta['ignored'] = results.ignored_files
         self.search_meta['checked'] = results.seen_parents
         for f, details in results.missing.items():
             info = {'file': [], 'parents': []}
             psplit = os.path.split(f)
             filename = psplit[1] if len(psplit) > 1 else f
+            all_ief = True
             for i, parent in enumerate(details['parent']):
+                if not parent[-3:] == 'ief':
+                    all_ief = False
                 info['parents'].append([parent, details['line'][i]])
 
             if details['found']:
                 info['file'] = [filename, details['found'], f]
-                self.found_files.append(info)
+                if all_ief:
+                    self.ief_found_files.append(info)
+                else:
+                    self.found_files.append(info)
             else:
                 info['file'] = [filename, f]
                 self.missing_files.append(info)
@@ -1606,6 +1626,8 @@ class FileCheckDialog(QDialog, filecheck_ui.Ui_CheckFilesDialog):
         for k, v in self.search_meta['summary'].items():
             name = k.replace('_', ' ').title()
             output.append('{0:20}: {1}'.format(name, v))
+        output.append('\n\nlist of files ignored\n'.upper())
+        output += [f.filepath for f in self.search_meta['ignored']]
         output.append('\n\nlist of model files reviewed\n'.upper())
         output += self.search_meta['checked']
         output = '\n'.join(output)
@@ -1621,14 +1643,14 @@ class FileCheckDialog(QDialog, filecheck_ui.Ui_CheckFilesDialog):
             self.missingFilesTable.setItem(row_position, 1, QTableWidgetItem(missing['file'][1]))
             row_position += 1
 
-    def updateElsewhereTable(self):
+    def updateElsewhereTable(self, table, file_list):
         row_position = 0
-        self.elsewhereFilesTable.setRowCount(row_position)
-        for found in self.found_files:
-            self.elsewhereFilesTable.insertRow(row_position)
-            self.elsewhereFilesTable.setItem(row_position, 0, QTableWidgetItem(found['file'][0]))
-            self.elsewhereFilesTable.setItem(row_position, 1, QTableWidgetItem(found['file'][1]))
-            self.elsewhereFilesTable.setItem(row_position, 2, QTableWidgetItem(found['file'][2]))
+        table.setRowCount(row_position)
+        for found in file_list:
+            table.insertRow(row_position)
+            table.setItem(row_position, 0, QTableWidgetItem(found['file'][0]))
+            table.setItem(row_position, 1, QTableWidgetItem(found['file'][1]))
+            table.setItem(row_position, 2, QTableWidgetItem(found['file'][2]))
             row_position += 1
 
     def showParents(self, row, tab_name):
@@ -1636,6 +1658,10 @@ class FileCheckDialog(QDialog, filecheck_ui.Ui_CheckFilesDialog):
             the_table = self.elsewhereFilesTable
             the_list = self.elsewhereParentList
             parents = self.found_files[the_table.currentRow()]['parents']
+        elif tab_name == 'ief':
+            the_table = self.iefElsewhereFilesTable
+            the_list = self.iefElsewhereParentList
+            parents = self.ief_found_files[the_table.currentRow()]['parents']
         elif tab_name == 'missing':
             the_table = self.missingFilesTable
             the_list = self.missingParentList
@@ -1656,6 +1682,10 @@ class FileCheckDialog(QDialog, filecheck_ui.Ui_CheckFilesDialog):
             the_table = self.elsewhereFilesTable
             table_row = the_table.currentRow()
             parents = self.found_files[table_row]['parents']
+        elif tab_name == 'ief':
+            the_table = self.iefElsewhereFilesTable
+            table_row = the_table.currentRow()
+            parents = self.ief_found_files[table_row]['parents']
         elif tab_name == 'missing':
             the_table = self.missingFilesTable
             table_row = the_table.currentRow()

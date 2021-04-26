@@ -18,6 +18,7 @@ from .forms import ui_fmpsectionproperty_check_dialog as fmpsectioncheck_ui
 from .forms import ui_fmprefh_check_dialog as refh_ui
 from .forms import ui_tuflowstability_check_dialog as tuflowstability_ui
 from .forms import ui_nrfa_viewer_dialog as nrfa_ui
+from .forms import ui_file_check_dialog as filecheck_ui
 
 from .tools import help
 from .tools import chainagecalculator as chain_calc
@@ -27,6 +28,7 @@ from .tools import fmpsectioncheck as fmpsection_check
 from .tools import refhcheck
 from .tools import tuflowstabilitycheck as tmb_check
 from .tools import nrfaviewer as nrfa_viewer
+from .tools import filecheck
 from .tools import settings as mrt_settings
 
 from .widgets import graphdialogs as graphs
@@ -1532,6 +1534,180 @@ class NrfaStationViewerDialog(QDialog, nrfa_ui.Ui_NrfaViewerDialog):
         self.exportData(
             'Daily_Flows_Data', self.nrfa_viewer.exportDailyFlowsData, **func_kwargs
         )
+        
+
+class FileCheckDialog(QDialog, filecheck_ui.Ui_CheckFilesDialog):
+    """Search model files and folders to check that files exist.
+    """
+#     update_status = pyqtSignal(name='update_status')
+    
+    def __init__(self, iface, project):
+        QDialog.__init__(self)
+        self.iface = iface
+        self.project = project
+        self.setupUi(self)
+        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+
+        model_root = mrt_settings.loadProjectSetting(
+            'model_root', self.project.readPath('./')
+        )
+        
+        # Connect the slots
+        self.modelFolderFileWidget.setStorageMode(QgsFileWidget.GetDirectory)
+        self.modelFolderFileWidget.setFilePath(model_root)
+        self.modelFolderFileWidget.fileChanged.connect(self.updateModelRoot)
+        self.reloadBtn.clicked.connect(self.checkFiles)
+
+#         self.elsewhereFilesTable.clicked.connect(self.showElsewhereParents)
+#         self.elsewhereParentList.currentRowChanged.connect(self.showElsewhereParentFile)
+        self.elsewhereFilesTable.clicked.connect(lambda i: self.showParents(i, 'elsewhere'))
+        self.iefElsewhereFilesTable.clicked.connect(lambda i: self.showParents(i, 'ief'))
+        self.missingFilesTable.clicked.connect(lambda i: self.showParents(i, 'missing'))
+        self.elsewhereParentList.currentRowChanged.connect(lambda i: self.showParentFile(i, 'elsewhere'))
+        self.iefElsewhereParentList.currentRowChanged.connect(lambda i: self.showParentFile(i, 'ief'))
+        self.missingParentList.currentRowChanged.connect(lambda i: self.showParentFile(i, 'missing'))
+
+        self.found_files = []
+        self.missing_files = []
+        self.ief_found_files = []
+        self.search_meta = {}
+        self.file_check = filecheck.FileChecker()
+        self.file_check.status_signal.connect(self.updateStatus)
+        
+    def updateModelRoot(self):
+        mrt_settings.saveProjectSetting('model_root', self.modelFolderFileWidget.filePath())
+        self.checkFiles()
+        
+    @pyqtSlot(str)
+    def updateStatus(self, status):
+        self.statusLabel.setText(status)
+        QApplication.processEvents()
+        
+    def checkFiles(self):
+        model_root = mrt_settings.loadProjectSetting('model_root', './temp')
+        results = self.file_check.auditModelFiles(model_root)
+        self.processResults(results)
+        self.resultsTabWidget.setCurrentIndex(0)
+        self.updateSummaryTab()
+        self.updateElsewhereTable(self.elsewhereFilesTable, self.found_files)
+        self.updateElsewhereTable(self.iefElsewhereFilesTable, self.ief_found_files)
+        self.updateMissingTable()
+        
+    def processResults(self, results):
+        self.found_files = []
+        self.missing_files = []
+        self.ief_found_files = []
+        self.search_meta['summary'] = results.summary
+        self.search_meta['ignored'] = results.ignored_files
+        self.search_meta['checked'] = results.seen_parents
+        for f, details in results.missing.items():
+            info = {'file': [], 'parents': []}
+            psplit = os.path.split(f)
+            filename = psplit[1] if len(psplit) > 1 else f
+            all_ief = True
+            for i, parent in enumerate(details['parent']):
+                if not parent[-3:] == 'ief':
+                    all_ief = False
+                info['parents'].append([parent, details['line'][i]])
+
+            if details['found']:
+                info['file'] = [filename, details['found'], f]
+                if all_ief:
+                    self.ief_found_files.append(info)
+                else:
+                    self.found_files.append(info)
+            else:
+                info['file'] = [filename, f]
+                self.missing_files.append(info)
+                
+    def updateSummaryTab(self):
+        output = ['File search summary\n'.upper()]
+        for k, v in self.search_meta['summary'].items():
+            name = k.replace('_', ' ').title()
+            output.append('{0:20}: {1}'.format(name, v))
+        output.append('\n\nlist of files ignored\n'.upper())
+        output += [f.filepath for f in self.search_meta['ignored']]
+        output.append('\n\nlist of model files reviewed\n'.upper())
+        output += self.search_meta['checked']
+        output = '\n'.join(output)
+        self.summaryTextEdit.clear()
+        self.summaryTextEdit.setText(output)
+                
+    def updateMissingTable(self):
+        row_position = 0
+        self.missingFilesTable.setRowCount(row_position)
+        for missing in self.missing_files:
+            self.missingFilesTable.insertRow(row_position)
+            self.missingFilesTable.setItem(row_position, 0, QTableWidgetItem(missing['file'][0]))
+            self.missingFilesTable.setItem(row_position, 1, QTableWidgetItem(missing['file'][1]))
+            row_position += 1
+
+    def updateElsewhereTable(self, table, file_list):
+        row_position = 0
+        table.setRowCount(row_position)
+        for found in file_list:
+            table.insertRow(row_position)
+            table.setItem(row_position, 0, QTableWidgetItem(found['file'][0]))
+            table.setItem(row_position, 1, QTableWidgetItem(found['file'][1]))
+            table.setItem(row_position, 2, QTableWidgetItem(found['file'][2]))
+            row_position += 1
+
+    def showParents(self, row, tab_name):
+        if tab_name == 'elsewhere':
+            the_table = self.elsewhereFilesTable
+            the_list = self.elsewhereParentList
+            parents = self.found_files[the_table.currentRow()]['parents']
+        elif tab_name == 'ief':
+            the_table = self.iefElsewhereFilesTable
+            the_list = self.iefElsewhereParentList
+            parents = self.ief_found_files[the_table.currentRow()]['parents']
+        elif tab_name == 'missing':
+            the_table = self.missingFilesTable
+            the_list = self.missingParentList
+            parents = self.missing_files[the_table.currentRow()]['parents']
+        else:
+            return
+
+        the_list.clear()
+        for p in parents:
+            filename = os.path.split(p[0])[1]
+            line = '{0} (line {1}) :\t {2}'.format(filename, p[1], p[0])
+            the_list.addItem(line)
+
+    def showParentFile(self, row, tab_name):
+        if row == -1: return
+        
+        if tab_name == 'elsewhere':
+            the_table = self.elsewhereFilesTable
+            table_row = the_table.currentRow()
+            parents = self.found_files[table_row]['parents']
+        elif tab_name == 'ief':
+            the_table = self.iefElsewhereFilesTable
+            table_row = the_table.currentRow()
+            parents = self.ief_found_files[table_row]['parents']
+        elif tab_name == 'missing':
+            the_table = self.missingFilesTable
+            table_row = the_table.currentRow()
+            parents = self.missing_files[table_row]['parents']
+        else:
+            return
+        
+        filename = the_table.item(table_row, 0).text()
+        parent_file = parents[row][0]
+        contents = []
+        try:
+            with open(parent_file, 'r') as pf:
+                for line in pf.readlines():
+                    contents.append(line)
+        except OSError as err:
+            QMessageBox.warning(
+                self, "Failed to open file {0} ".format(filename), err.args[0]
+            )
+        
+        dlg = graphs.ModelFileDialog(filename)
+        dlg.showText(''.join(contents), filename)
+        dlg.exec_()
 
 
 class HelpPageDialog(QDialog, help_ui.Ui_HelpDialog):

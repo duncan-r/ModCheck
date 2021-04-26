@@ -10,6 +10,7 @@
 '''
 
 from datetime import datetime
+import re
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
@@ -22,6 +23,46 @@ from matplotlib.dates import DateFormatter
 import numpy as np
 
 from ..forms import ui_graph_dialog as graph_ui
+from ..forms import ui_text_dialog as text_ui
+
+
+class ModelFileDialog(QDialog, text_ui.Ui_TextDialog):
+    
+    def __init__(self, title='Model File'):
+        QDialog.__init__(self)
+        self.setupUi(self)
+        self.title = title
+        self.setWindowTitle(title)
+        
+    def showText(self, text, pattern):
+        self.title = pattern
+        self.setWindowTitle(self.title)
+        self.textEdit.setText(text)
+        pattern = re.escape(pattern)
+
+        # Setup the desired format for matches
+        text_format = QTextCharFormat()
+        text_format.setBackground(QBrush(QColor("yellow")))
+
+        # Highlight the values that are different in red
+        cursor = self.textEdit.textCursor()
+
+        # Setup the regex engine
+#         pattern = "!!!"
+        regex = QRegExp(pattern)
+
+        # Process the displayed document
+        pos = 0
+        index = regex.indexIn(self.textEdit.toPlainText(), pos)
+        while (index != -1):
+            # Select the matched text and apply the desired text_format
+            cursor.setPosition(index)
+            cursor.movePosition(QTextCursor.EndOfLine, 1)
+            cursor.mergeCharFormat(text_format)
+            # Move to the next match
+            pos = index + regex.matchedLength()
+            index = regex.indexIn(self.textEdit.toPlainText(), pos)
+
 
 class ConveyanceGraphDialog(QDialog, graph_ui.Ui_GraphDialog):
     
