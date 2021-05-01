@@ -26,6 +26,18 @@ from ..forms import ui_graph_dialog as graph_ui
 from ..forms import ui_text_dialog as text_ui
 
 
+class LocalHelpDialog(QDialog, text_ui.Ui_TextDialog):
+
+    def __init__(self, title='Help'):
+        QDialog.__init__(self)
+        self.setupUi(self)
+        self.title = title
+        self.setWindowTitle(title)
+        
+    def showText(self, text):
+        self.textEdit.setText(text)
+
+
 class ModelFileDialog(QDialog, text_ui.Ui_TextDialog):
     
     def __init__(self, title='Model File'):

@@ -11,6 +11,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 from .forms import ui_help_dialog as help_ui
+from .forms import ui_text_dialog as text_dialog
 from .forms import ui_chainage_calculator_dialog as chaincalc_ui
 from .forms import ui_fmptuflow_widthcheck_dialog as fmptuflowwidthcheck_ui
 from .forms import ui_runvariables_check_dialog as fmptuflowvariablescheck_ui
@@ -32,11 +33,55 @@ from .tools import filecheck
 from .tools import settings as mrt_settings
 
 from .widgets import graphdialogs as graphs
+from PyQt5.pyrcc_main import showHelp
 
 DATA_DIR = './data'
 TEMP_DIR = './temp'
 
-class ChainageCalculatorDialog(QDialog, chaincalc_ui.Ui_ChainageCalculator):
+class DialogBase(QDialog):
+    """Base class interface for standard functionality in Dialog classes.
+    
+    """
+    closing = pyqtSignal(str)
+    
+    def __init__(self, dialog_name, iface, project, help_key):
+        QDialog.__init__(self)
+        self.dialog_name = dialog_name
+        self.iface = iface
+        self.project = project
+        self.help_key = help_key
+        self.setupUi(self)
+        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+        
+        self.buttonBox.clicked.connect(self.buttonBoxClicked)
+        
+    def buttonBoxClicked(self, btn):
+        name = btn.text()
+        if name == 'Close':
+            self.close()
+        elif name == 'Help':
+            self.showHelp()
+            
+    def signalClose(self):
+        """Notify listeners that the dialog is being closed."""
+        self.closing.emit(self.dialog_name)
+        
+    def closeEvent(self, *args, **kwargs):
+        """Override the close event to emit a signal.
+        
+        Overrides: QDialog.closeEvent.
+        """
+        self.signalClose()
+        return QDialog.closeEvent(self, *args, **kwargs)
+
+    def showHelp(self):
+        dialog = graphs.LocalHelpDialog('{0} - {1}'.format('Help', self.help_key))
+        dialog.showText(help.helpText(self.help_key))
+        dialog.exec_()
+
+
+class ChainageCalculatorDialog(DialogBase, chaincalc_ui.Ui_ChainageCalculator):
     """Retrieve and compare chainage values from FMP and TUFLOW models.
     
     Extracts the chainage (distance to next node) values for all sections in an
@@ -46,15 +91,9 @@ class ChainageCalculatorDialog(QDialog, chaincalc_ui.Ui_ChainageCalculator):
     the length values of the nwk_line to check that there is consistency 
     between the FMP and TUFLOW model chainages.
     """
-    closing = pyqtSignal(name='closing')
     
-    def __init__(self, iface, project):
-        QDialog.__init__(self)
-        self.iface = iface
-        self.project = project
-        self.setupUi(self)
-        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
-        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+    def __init__(self, dialog_name, iface, project):
+        DialogBase.__init__(self, dialog_name, iface, project, 'Check Chainage')
         
         self.chainage_calculator = chain_calc.CompareFmpTuflowChainage()
         
@@ -108,18 +147,6 @@ class ChainageCalculatorDialog(QDialog, chaincalc_ui.Ui_ChainageCalculator):
                     nwk_layer.select(f.id())
                     self.iface.mapCanvas().zoomToSelected(nwk_layer)
                     break
-
-    def signalClose(self):
-        """Notify listeners that the dialog is being closed."""
-        self.closing.emit()
-        
-    def closeEvent(self, *args, **kwargs):
-        """Override the close event to emit a signal.
-        
-        Overrides: QDialog.closeEvent.
-        """
-        self.signalClose()
-        return QDialog.closeEvent(self, *args, **kwargs)
 
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)
@@ -334,21 +361,15 @@ class ChainageCalculatorDialog(QDialog, chaincalc_ui.Ui_ChainageCalculator):
             )
 
 
-class FmpTuflowWidthCheckDialog(QDialog, fmptuflowwidthcheck_ui.Ui_FmpTuflowWidthCheckDialog):
+class FmpTuflowWidthCheckDialog(DialogBase, fmptuflowwidthcheck_ui.Ui_FmpTuflowWidthCheckDialog):
     """Compare FMP and TUFLOW model sections widths.
     
     Find the active section widths from the FMP model and compare them to the TUFLOW
     model.
     """
-    closing = pyqtSignal(name='closing')
     
-    def __init__(self, iface, project):
-        QDialog.__init__(self)
-        self.iface = iface
-        self.project = project
-        self.setupUi(self)
-        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
-        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+    def __init__(self, dialog_name, iface, project):
+        DialogBase.__init__(self, dialog_name, iface, project, 'Check Width')
         
         self.width_check = widthcheck.SectionWidthCheck(self.project)
 
@@ -395,18 +416,6 @@ class FmpTuflowWidthCheckDialog(QDialog, fmptuflowwidthcheck_ui.Ui_FmpTuflowWidt
                     nodes_layer.select(f.id())
                     self.iface.mapCanvas().zoomToSelected(nodes_layer)
                     break
-
-    def signalClose(self):
-        """Notify listeners that the dialog is being closed."""
-        self.closing.emit()
-        
-    def closeEvent(self, *args, **kwargs):
-        """Override the close event to emit a signal.
-        
-        Overrides: QDialog.closeEvent.
-        """
-        self.signalClose()
-        return QDialog.closeEvent(self, *args, **kwargs)
 
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)
@@ -828,17 +837,11 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
             row_position += 1
 
         
-class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyCheckDialog):
+class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionPropertyCheckDialog):
    
-    closing = pyqtSignal(name='closing')
 
-    def __init__(self, iface, project):
-        QDialog.__init__(self)
-        self.iface = iface
-        self.project = project
-        self.setupUi(self)
-        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
-        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+    def __init__(self, dialog_name, iface, project):
+        DialogBase.__init__(self, dialog_name, iface, project, 'Check FMP Sections')
         
         # Loaded section property details
         self.properties = None
@@ -867,18 +870,6 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
         self.bankDyToleranceSpinbox.setValue(dy_tol)
         self.kTolSpinbox.valueChanged.connect(self._kTolChange)
         self.bankDyToleranceSpinbox.valueChanged.connect(self._dyTolChange)
-
-    def signalClose(self):
-        """Notify listeners that the dialog is being closed."""
-        self.closing.emit()
-        
-    def closeEvent(self, *args, **kwargs):
-        """Override the close event to emit a signal.
-        
-        Overrides: QDialog.closeEvent.
-        """
-        self.signalClose()
-        return QDialog.closeEvent(self, *args, **kwargs)
 
     def _kTolChange(self, value):
         mrt_settings.saveProjectSetting('section_ktol', value)
@@ -1202,7 +1193,7 @@ class TuflowStabilityCheckDialog(QDialog, tuflowstability_ui.Ui_TuflowStabilityC
         proxy_widget = scene.addWidget(canvas)
 
 
-class NrfaStationViewerDialog(QDialog, nrfa_ui.Ui_NrfaViewerDialog):
+class NrfaStationViewerDialog(DialogBase, nrfa_ui.Ui_NrfaViewerDialog):
     """Dialog for selecting and viewing NRFA station information.
     
     Identify nearby NRFA stations and view the station information,
@@ -1212,15 +1203,9 @@ class NrfaStationViewerDialog(QDialog, nrfa_ui.Ui_NrfaViewerDialog):
     TOOL_NAME = 'nrfa_viewer'
     TOOL_DATA = os.path.join(DATA_DIR, TOOL_NAME)
     NRFA_STATIONS = os.path.join(TOOL_DATA, 'NRFA_Station_Info.shp')
-    closing = pyqtSignal(name='closing')
 
-    def __init__(self, iface, project):
-        QDialog.__init__(self)
-        self.iface = iface
-        self.project = project
-        self.setupUi(self)
-        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
-        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+    def __init__(self, dialog_name, iface, project):
+        DialogBase.__init__(self, dialog_name, iface, project, 'NRFA Station Viewer')
         
         self.do_dailyflow_update = False
         
@@ -1253,13 +1238,6 @@ class NrfaStationViewerDialog(QDialog, nrfa_ui.Ui_NrfaViewerDialog):
         
         self.nrfa_viewer = nrfa_viewer.NrfaViewer(self.project, self.iface)
         
-    def signalClose(self):
-        self.closing.emit()
-        
-    def closeEvent(self, *args, **kwargs):
-        self.signalClose()
-        return QDialog.closeEvent(self, *args, **kwargs)
-
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)
         
@@ -1292,7 +1270,6 @@ class NrfaStationViewerDialog(QDialog, nrfa_ui.Ui_NrfaViewerDialog):
         details of the default selected station.
         """
         nrfa_layer = QgsVectorLayer(self.nrfa_stations, "nrfa_stations", "ogr")
-#         nrfa_layer = QgsVectorLayer(NRFA_STATIONS, "nrfa_stations", "ogr")
         if not nrfa_layer.isValid():
             QMessageBox.warning(
                 self, "Unable to load NRFA layer", 
@@ -1539,7 +1516,6 @@ class NrfaStationViewerDialog(QDialog, nrfa_ui.Ui_NrfaViewerDialog):
 class FileCheckDialog(QDialog, filecheck_ui.Ui_CheckFilesDialog):
     """Search model files and folders to check that files exist.
     """
-#     update_status = pyqtSignal(name='update_status')
     
     def __init__(self, iface, project):
         QDialog.__init__(self)

@@ -123,7 +123,7 @@ class Ui_FmpTuflowWidthCheckDialog(object):
         self.horizontalLayout_2.addWidget(self.statusLabel)
         self.buttonBox = QtWidgets.QDialogButtonBox(FmpTuflowWidthCheckDialog)
         self.buttonBox.setOrientation(QtCore.Qt.Horizontal)
-        self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Cancel|QtWidgets.QDialogButtonBox.Ok)
+        self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Close|QtWidgets.QDialogButtonBox.Help)
         self.buttonBox.setObjectName("buttonBox")
         self.horizontalLayout_2.addWidget(self.buttonBox)
         self.verticalLayout_3.addLayout(self.horizontalLayout_2)
