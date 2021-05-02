@@ -563,15 +563,11 @@ class FmpTuflowWidthCheckDialog(DialogBase, fmptuflowwidthcheck_ui.Ui_FmpTuflowW
                     )
             
         
-class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTuflowVariablesCheckDialog):
+class FmpTuflowVariablesCheckDialog(DialogBase, fmptuflowvariablescheck_ui.Ui_FmpTuflowVariablesCheckDialog):
     
-    def __init__(self, iface, project):
-        QDialog.__init__(self)
-        self.iface = iface
-        self.project = project
-        self.setupUi(self)
-        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
-        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+    def __init__(self, dialog_name, iface, project):
+
+        DialogBase.__init__(self, dialog_name, iface, project, 'Run Variables Summary')
         
         tlf_path = mrt_settings.loadProjectSetting(
             'tlf_file', self.project.readPath('./temp')
@@ -1021,15 +1017,11 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
         self.statusLabel.setText("Section check complete")
 
 
-class FmpRefhCheckDialog(QDialog, refh_ui.Ui_FmpRefhCheckDialog):
+class FmpRefhCheckDialog(DialogBase, refh_ui.Ui_FmpRefhCheckDialog):
     
-    def __init__(self, iface, project):
-        QDialog.__init__(self)
-        self.iface = iface
-        self.project = project
-        self.setupUi(self)
-        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
-        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+    def __init__(self, dialog_name, iface, project):
+
+        DialogBase.__init__(self, dialog_name, iface, project, 'ReFH Check')
         
         self.csv_results = None
         
@@ -1129,15 +1121,11 @@ class FmpRefhCheckDialog(QDialog, refh_ui.Ui_FmpRefhCheckDialog):
                     writer.writerow(out)
 
 
-class TuflowStabilityCheckDialog(QDialog, tuflowstability_ui.Ui_TuflowStabilityCheckDialog):
+class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabilityCheckDialog):
     
-    def __init__(self, iface, project):
-        QDialog.__init__(self)
-        self.iface = iface
-        self.project = project
-        self.setupUi(self)
-        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
-        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+    def __init__(self, dialog_name, iface, project):
+
+        DialogBase.__init__(self, dialog_name, iface, project, 'Check TUFLOW MB')
         
         mb_file = mrt_settings.loadProjectSetting(
             'mb_file', self.project.readPath('./temp')
@@ -1513,17 +1501,13 @@ class NrfaStationViewerDialog(DialogBase, nrfa_ui.Ui_NrfaViewerDialog):
         )
         
 
-class FileCheckDialog(QDialog, filecheck_ui.Ui_CheckFilesDialog):
+class FileCheckDialog(DialogBase, filecheck_ui.Ui_CheckFilesDialog):
     """Search model files and folders to check that files exist.
     """
     
-    def __init__(self, iface, project):
-        QDialog.__init__(self)
-        self.iface = iface
-        self.project = project
-        self.setupUi(self)
-        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
-        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+    def __init__(self, dialog_name, iface, project):
+        
+        DialogBase.__init__(self, dialog_name, iface, project, 'Model File Audit')
 
         model_root = mrt_settings.loadProjectSetting(
             'model_root', self.project.readPath('./')

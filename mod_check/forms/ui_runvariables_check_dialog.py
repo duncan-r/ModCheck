@@ -302,7 +302,7 @@ class Ui_FmpTuflowVariablesCheckDialog(object):
         self.verticalLayout_3.addWidget(self.mainTabWidget)
         self.buttonBox = QtWidgets.QDialogButtonBox(FmpTuflowVariablesCheckDialog)
         self.buttonBox.setOrientation(QtCore.Qt.Horizontal)
-        self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Cancel|QtWidgets.QDialogButtonBox.Ok)
+        self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Close|QtWidgets.QDialogButtonBox.Help)
         self.buttonBox.setObjectName("buttonBox")
         self.verticalLayout_3.addWidget(self.buttonBox)
 

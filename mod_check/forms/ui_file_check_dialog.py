@@ -163,7 +163,7 @@ class Ui_CheckFilesDialog(object):
         self.horizontalLayout_2.addWidget(self.statusLabel)
         self.buttonBox = QtWidgets.QDialogButtonBox(CheckFilesDialog)
         self.buttonBox.setOrientation(QtCore.Qt.Horizontal)
-        self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Cancel|QtWidgets.QDialogButtonBox.Ok)
+        self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Close|QtWidgets.QDialogButtonBox.Help)
         self.buttonBox.setObjectName("buttonBox")
         self.horizontalLayout_2.addWidget(self.buttonBox)
         self.verticalLayout_6.addLayout(self.horizontalLayout_2)
