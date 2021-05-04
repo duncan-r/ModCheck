@@ -285,7 +285,7 @@ The other tabs contain list of files that failed the check:
   file and were not in the location specified, but were found somewhere else.
   
 - Ief Paths Found Elsewhere: this is exactly the same as the  Found Elsewhere tab
-  in terms of functionality expect it only applied to files referenced by an .ief
+  in terms of functionality except it only applies to files referenced by an .ief
   file. Ief files are commonly delivered with absolute paths which means that all
   of the files they reference will fail. These failures are moved to their own
   table to make it easier to identify the more important issues in the main 
@@ -360,20 +360,37 @@ point soon.
 
 """
 
+HELP_LOOKUP = {
+    'Overview': OVERVIEW,
+    'Check Chainage': CHECK_CHAINAGE,
+    'Check Width': CHECK_WIDTH,
+    'Run Variables Summary': VARIABLES_SUMMARY,
+    'Check FMP Sections': FMP_SECTIONS,
+    'ReFH Check': REFH_CHECK,
+    'Check TUFLOW MB': CHECK_TUFLOW_MB,
+    'Model File Audit': FILE_AUDIT,
+    'NRFA Station Viewer': NRFA_STATIONS,
+}
+
+def helpText(help_key):
+    return HELP_LOOKUP[help_key]
+
+
 class ModCheckHelp():
     
     def __init__(self):
-        self.help_lookup = {
-            'Overview': OVERVIEW,
-            'Check Chainage': CHECK_CHAINAGE,
-            'Check Width': CHECK_WIDTH,
-            'Run Variables Summary': VARIABLES_SUMMARY,
-            'Check FMP Sections': FMP_SECTIONS,
-            'ReFH Check': REFH_CHECK,
-            'Check TUFLOW MB': CHECK_TUFLOW_MB,
-            'Model File Audit': FILE_AUDIT,
-            'NRFA Station Viewer': NRFA_STATIONS,
-        }
+        self.help_lookup = HELP_LOOKUP
+#         {
+#             'Overview': OVERVIEW,
+#             'Check Chainage': CHECK_CHAINAGE,
+#             'Check Width': CHECK_WIDTH,
+#             'Run Variables Summary': VARIABLES_SUMMARY,
+#             'Check FMP Sections': FMP_SECTIONS,
+#             'ReFH Check': REFH_CHECK,
+#             'Check TUFLOW MB': CHECK_TUFLOW_MB,
+#             'Model File Audit': FILE_AUDIT,
+#             'NRFA Station Viewer': NRFA_STATIONS,
+#         }
         
     def helpList(self):
         return self.help_lookup.keys()

@@ -36,7 +36,7 @@ class Ui_TuflowStabilityCheckDialog(object):
         self.verticalLayout.addWidget(self.mbGraphicsView)
         self.buttonBox = QtWidgets.QDialogButtonBox(TuflowStabilityCheckDialog)
         self.buttonBox.setOrientation(QtCore.Qt.Horizontal)
-        self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Cancel|QtWidgets.QDialogButtonBox.Ok)
+        self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Close|QtWidgets.QDialogButtonBox.Help)
         self.buttonBox.setObjectName("buttonBox")
         self.verticalLayout.addWidget(self.buttonBox)
 

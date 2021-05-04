@@ -69,10 +69,17 @@ class Menu:
         self.dir = os.path.dirname(__file__)
         self.icon_dir = self.dir
         icon = QIcon(os.path.join(self.icon_dir, "icon.png"))
-        self.nrfa_dialog = None
-        self.chainage_dialog = None
-        self.fmpwidth_dialog = None
-        self.fmpsections_dialog = None
+        
+        self.dialogs = {
+            'FMP_TUFLOW_Chainage': {'dialog': None, 'class': ChainageCalculatorDialog},
+            'FMP_TUFLOW_Width_Check': {'dialog': None, 'class': FmpTuflowWidthCheckDialog},
+            'FMP_Section_Check': {'dialog': None, 'class': FmpSectionCheckDialog},
+            'View_NRFA_Station': {'dialog': None, 'class': NrfaStationViewerDialog},
+            'FMP_REFH_Check': {'dialog': None, 'class': FmpRefhCheckDialog},
+            'TUFLOW_Stability_Check': {'dialog': None, 'class': TuflowStabilityCheckDialog},
+            'Model_File_Audit': {'dialog': None, 'class': FileCheckDialog},
+            'Model_Variables_Check': {'dialog': None, 'class': FmpTuflowVariablesCheckDialog},
+        }
 
         # submenu example: Chainage submenu
 #         self.chainage_menu = QMenu(QCoreApplication.translate("ModCheck", "&Chainage"))
@@ -139,75 +146,47 @@ class Menu:
         self.iface.removePluginMenu("&ModCheck", self.nrfa_stationviewer_action)
         self.iface.removePluginMenu("&ModCheck", self.filecheck_action)
         
+    def launchDialog(self, dialog_name):
+        dialog_class = self.dialogs[dialog_name]['class']
+        if self.dialogs[dialog_name]['dialog'] is None:
+            self.dialogs[dialog_name]['dialog']= dialog_class(dialog_name, self.iface, QgsProject.instance())
+            self.dialogs[dialog_name]['dialog'].closing.connect(self._closeDialog)
+            self.dialogs[dialog_name]['dialog'].show()
+        else:
+            self.dialogs[dialog_name]['dialog'].setWindowState(
+                self.dialogs[dialog_name]['dialog'].windowState() & ~Qt.WindowMinimized | Qt.WindowActive
+            )
+            
+    def _closeDialog(self, dialog_name):
+        self.dialogs[dialog_name]['dialog'] = None
+        
+    def check_fmptuflow_chainage(self):
+        self.launchDialog('FMP_TUFLOW_Chainage')
+
+    def check_1d2d_width(self):
+        self.launchDialog('FMP_TUFLOW_Width_Check')
+        
+    def check_fmp_sections(self):
+        self.launchDialog('FMP_Section_Check')
+        
+    def view_nrfa_station(self):
+        self.launchDialog('View_NRFA_Station')
+
+    def check_fmp_refh(self):
+        self.launchDialog('FMP_REFH_Check')
+
+    def check_tuflow_stability(self): 
+        self.launchDialog('TUFLOW_Stability_Check')
+
+    def check_files(self):
+        self.launchDialog('Model_File_Audit')
+
+    def get_runsummary(self):
+        self.launchDialog('Model_Variables_Check')
+        
     def help_page(self):
         dialog = HelpPageDialog(self.iface, QgsProject.instance())
         dialog.exec_()
-        
-    def check_fmptuflow_chainage(self):
-        if self.chainage_dialog is None:
-            self.chainage_dialog = ChainageCalculatorDialog(self.iface, QgsProject.instance())
-            self.chainage_dialog.closing.connect(self._chainage_dialog_close)
-            self.chainage_dialog.show()
-        else:
-            self.chainage_dialog.setWindowState(self.chainage_dialog.windowState() & ~Qt.WindowMinimized | Qt.WindowActive)
-
-    def _chainage_dialog_close(self):
-        self.chainage_dialog = None
-        
-    def check_1d2d_width(self):
-        if self.fmpwidth_dialog is None:
-            self.fmpwidth_dialog = FmpTuflowWidthCheckDialog(self.iface, QgsProject.instance())
-            self.fmpwidth_dialog.closing.connect(self._fmpwidth_dialog_close)
-            self.fmpwidth_dialog.show()
-        else:
-            self.fmpwidth_dialog.setWindowState(self.fmpwidth_dialog.windowState() & ~Qt.WindowMinimized | Qt.WindowActive)
-
-    def _fmpwidth_dialog_close(self):
-        self.fmpwidth_dialog = None
-        
-    def get_runsummary(self):
-        dialog = FmpTuflowVariablesCheckDialog(self.iface, QgsProject.instance())
-        dialog.exec_()
-        
-    def check_fmp_sections(self):
-#         dialog = FmpSectionCheckDialog(self.iface, QgsProject.instance())
-#         dialog.exec_()
-        if self.fmpsections_dialog is None:
-            self.fmpsections_dialog = FmpSectionCheckDialog(self.iface, QgsProject.instance())
-            self.fmpsections_dialog.closing.connect(self._fmpsections_dialog_close)
-            self.fmpsections_dialog.show()
-        else:
-            self.fmpsections_dialog.setWindowState(self.fmpsections_dialog.windowState() & ~Qt.WindowMinimized | Qt.WindowActive)
-
-    def _fmpsections_dialog_close(self):
-        self.fmpsections_dialog = None
-
-    def check_fmp_refh(self):
-        dialog = FmpRefhCheckDialog(self.iface, QgsProject.instance())
-        dialog.exec_()
-        
-    def check_tuflow_stability(self): 
-        dialog = TuflowStabilityCheckDialog(self.iface, QgsProject.instance())
-        dialog.exec_()
-
-    def check_files(self):
-        dialog = FileCheckDialog(self.iface, QgsProject.instance())
-        dialog.exec_()
-
-    def view_nrfa_station(self): 
-        if self.nrfa_dialog is None:
-            self.nrfa_dialog = NrfaStationViewerDialog(self.iface, QgsProject.instance())
-            self.nrfa_dialog.closing.connect(self._nrfa_dialog_close)
-            self.nrfa_dialog.show()
-        else:
-            self.nrfa_dialog.setWindowState(self.nrfa_dialog.windowState() & ~Qt.WindowMinimized | Qt.WindowActive)
-        
-    def _nrfa_dialog_close(self):
-        self.nrfa_dialog = None
-        
-        
-        
-        
         
         
         

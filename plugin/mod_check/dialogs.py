@@ -11,6 +11,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 from .forms import ui_help_dialog as help_ui
+from .forms import ui_text_dialog as text_dialog
 from .forms import ui_chainage_calculator_dialog as chaincalc_ui
 from .forms import ui_fmptuflow_widthcheck_dialog as fmptuflowwidthcheck_ui
 from .forms import ui_runvariables_check_dialog as fmptuflowvariablescheck_ui
@@ -32,11 +33,55 @@ from .tools import filecheck
 from .tools import settings as mrt_settings
 
 from .widgets import graphdialogs as graphs
+from PyQt5.pyrcc_main import showHelp
 
 DATA_DIR = './data'
 TEMP_DIR = './temp'
 
-class ChainageCalculatorDialog(QDialog, chaincalc_ui.Ui_ChainageCalculator):
+class DialogBase(QDialog):
+    """Base class interface for standard functionality in Dialog classes.
+    
+    """
+    closing = pyqtSignal(str)
+    
+    def __init__(self, dialog_name, iface, project, help_key):
+        QDialog.__init__(self)
+        self.dialog_name = dialog_name
+        self.iface = iface
+        self.project = project
+        self.help_key = help_key
+        self.setupUi(self)
+        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+        
+        self.buttonBox.clicked.connect(self.buttonBoxClicked)
+        
+    def buttonBoxClicked(self, btn):
+        name = btn.text()
+        if name == 'Close':
+            self.close()
+        elif name == 'Help':
+            self.showHelp()
+            
+    def signalClose(self):
+        """Notify listeners that the dialog is being closed."""
+        self.closing.emit(self.dialog_name)
+        
+    def closeEvent(self, *args, **kwargs):
+        """Override the close event to emit a signal.
+        
+        Overrides: QDialog.closeEvent.
+        """
+        self.signalClose()
+        return QDialog.closeEvent(self, *args, **kwargs)
+
+    def showHelp(self):
+        dialog = graphs.LocalHelpDialog('{0} - {1}'.format('Help', self.help_key))
+        dialog.showText(help.helpText(self.help_key))
+        dialog.exec_()
+
+
+class ChainageCalculatorDialog(DialogBase, chaincalc_ui.Ui_ChainageCalculator):
     """Retrieve and compare chainage values from FMP and TUFLOW models.
     
     Extracts the chainage (distance to next node) values for all sections in an
@@ -46,15 +91,9 @@ class ChainageCalculatorDialog(QDialog, chaincalc_ui.Ui_ChainageCalculator):
     the length values of the nwk_line to check that there is consistency 
     between the FMP and TUFLOW model chainages.
     """
-    closing = pyqtSignal(name='closing')
     
-    def __init__(self, iface, project):
-        QDialog.__init__(self)
-        self.iface = iface
-        self.project = project
-        self.setupUi(self)
-        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
-        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+    def __init__(self, dialog_name, iface, project):
+        DialogBase.__init__(self, dialog_name, iface, project, 'Check Chainage')
         
         self.chainage_calculator = chain_calc.CompareFmpTuflowChainage()
         
@@ -108,18 +147,6 @@ class ChainageCalculatorDialog(QDialog, chaincalc_ui.Ui_ChainageCalculator):
                     nwk_layer.select(f.id())
                     self.iface.mapCanvas().zoomToSelected(nwk_layer)
                     break
-
-    def signalClose(self):
-        """Notify listeners that the dialog is being closed."""
-        self.closing.emit()
-        
-    def closeEvent(self, *args, **kwargs):
-        """Override the close event to emit a signal.
-        
-        Overrides: QDialog.closeEvent.
-        """
-        self.signalClose()
-        return QDialog.closeEvent(self, *args, **kwargs)
 
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)
@@ -334,21 +361,15 @@ class ChainageCalculatorDialog(QDialog, chaincalc_ui.Ui_ChainageCalculator):
             )
 
 
-class FmpTuflowWidthCheckDialog(QDialog, fmptuflowwidthcheck_ui.Ui_FmpTuflowWidthCheckDialog):
+class FmpTuflowWidthCheckDialog(DialogBase, fmptuflowwidthcheck_ui.Ui_FmpTuflowWidthCheckDialog):
     """Compare FMP and TUFLOW model sections widths.
     
     Find the active section widths from the FMP model and compare them to the TUFLOW
     model.
     """
-    closing = pyqtSignal(name='closing')
     
-    def __init__(self, iface, project):
-        QDialog.__init__(self)
-        self.iface = iface
-        self.project = project
-        self.setupUi(self)
-        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
-        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+    def __init__(self, dialog_name, iface, project):
+        DialogBase.__init__(self, dialog_name, iface, project, 'Check Width')
         
         self.width_check = widthcheck.SectionWidthCheck(self.project)
 
@@ -395,18 +416,6 @@ class FmpTuflowWidthCheckDialog(QDialog, fmptuflowwidthcheck_ui.Ui_FmpTuflowWidt
                     nodes_layer.select(f.id())
                     self.iface.mapCanvas().zoomToSelected(nodes_layer)
                     break
-
-    def signalClose(self):
-        """Notify listeners that the dialog is being closed."""
-        self.closing.emit()
-        
-    def closeEvent(self, *args, **kwargs):
-        """Override the close event to emit a signal.
-        
-        Overrides: QDialog.closeEvent.
-        """
-        self.signalClose()
-        return QDialog.closeEvent(self, *args, **kwargs)
 
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)
@@ -554,15 +563,11 @@ class FmpTuflowWidthCheckDialog(QDialog, fmptuflowwidthcheck_ui.Ui_FmpTuflowWidt
                     )
             
         
-class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTuflowVariablesCheckDialog):
+class FmpTuflowVariablesCheckDialog(DialogBase, fmptuflowvariablescheck_ui.Ui_FmpTuflowVariablesCheckDialog):
     
-    def __init__(self, iface, project):
-        QDialog.__init__(self)
-        self.iface = iface
-        self.project = project
-        self.setupUi(self)
-        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
-        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+    def __init__(self, dialog_name, iface, project):
+
+        DialogBase.__init__(self, dialog_name, iface, project, 'Run Variables Summary')
         
         tlf_path = mrt_settings.loadProjectSetting(
             'tlf_file', self.project.readPath('./temp')
@@ -828,17 +833,11 @@ class FmpTuflowVariablesCheckDialog(QDialog, fmptuflowvariablescheck_ui.Ui_FmpTu
             row_position += 1
 
         
-class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyCheckDialog):
+class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionPropertyCheckDialog):
    
-    closing = pyqtSignal(name='closing')
 
-    def __init__(self, iface, project):
-        QDialog.__init__(self)
-        self.iface = iface
-        self.project = project
-        self.setupUi(self)
-        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
-        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+    def __init__(self, dialog_name, iface, project):
+        DialogBase.__init__(self, dialog_name, iface, project, 'Check FMP Sections')
         
         # Loaded section property details
         self.properties = None
@@ -867,18 +866,6 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
         self.bankDyToleranceSpinbox.setValue(dy_tol)
         self.kTolSpinbox.valueChanged.connect(self._kTolChange)
         self.bankDyToleranceSpinbox.valueChanged.connect(self._dyTolChange)
-
-    def signalClose(self):
-        """Notify listeners that the dialog is being closed."""
-        self.closing.emit()
-        
-    def closeEvent(self, *args, **kwargs):
-        """Override the close event to emit a signal.
-        
-        Overrides: QDialog.closeEvent.
-        """
-        self.signalClose()
-        return QDialog.closeEvent(self, *args, **kwargs)
 
     def _kTolChange(self, value):
         mrt_settings.saveProjectSetting('section_ktol', value)
@@ -1030,15 +1017,11 @@ class FmpSectionCheckDialog(QDialog, fmpsectioncheck_ui.Ui_FmpSectionPropertyChe
         self.statusLabel.setText("Section check complete")
 
 
-class FmpRefhCheckDialog(QDialog, refh_ui.Ui_FmpRefhCheckDialog):
+class FmpRefhCheckDialog(DialogBase, refh_ui.Ui_FmpRefhCheckDialog):
     
-    def __init__(self, iface, project):
-        QDialog.__init__(self)
-        self.iface = iface
-        self.project = project
-        self.setupUi(self)
-        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
-        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+    def __init__(self, dialog_name, iface, project):
+
+        DialogBase.__init__(self, dialog_name, iface, project, 'ReFH Check')
         
         self.csv_results = None
         
@@ -1138,15 +1121,11 @@ class FmpRefhCheckDialog(QDialog, refh_ui.Ui_FmpRefhCheckDialog):
                     writer.writerow(out)
 
 
-class TuflowStabilityCheckDialog(QDialog, tuflowstability_ui.Ui_TuflowStabilityCheckDialog):
+class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabilityCheckDialog):
     
-    def __init__(self, iface, project):
-        QDialog.__init__(self)
-        self.iface = iface
-        self.project = project
-        self.setupUi(self)
-        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
-        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+    def __init__(self, dialog_name, iface, project):
+
+        DialogBase.__init__(self, dialog_name, iface, project, 'Check TUFLOW MB')
         
         mb_file = mrt_settings.loadProjectSetting(
             'mb_file', self.project.readPath('./temp')
@@ -1202,7 +1181,7 @@ class TuflowStabilityCheckDialog(QDialog, tuflowstability_ui.Ui_TuflowStabilityC
         proxy_widget = scene.addWidget(canvas)
 
 
-class NrfaStationViewerDialog(QDialog, nrfa_ui.Ui_NrfaViewerDialog):
+class NrfaStationViewerDialog(DialogBase, nrfa_ui.Ui_NrfaViewerDialog):
     """Dialog for selecting and viewing NRFA station information.
     
     Identify nearby NRFA stations and view the station information,
@@ -1212,15 +1191,9 @@ class NrfaStationViewerDialog(QDialog, nrfa_ui.Ui_NrfaViewerDialog):
     TOOL_NAME = 'nrfa_viewer'
     TOOL_DATA = os.path.join(DATA_DIR, TOOL_NAME)
     NRFA_STATIONS = os.path.join(TOOL_DATA, 'NRFA_Station_Info.shp')
-    closing = pyqtSignal(name='closing')
 
-    def __init__(self, iface, project):
-        QDialog.__init__(self)
-        self.iface = iface
-        self.project = project
-        self.setupUi(self)
-        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
-        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+    def __init__(self, dialog_name, iface, project):
+        DialogBase.__init__(self, dialog_name, iface, project, 'NRFA Station Viewer')
         
         self.do_dailyflow_update = False
         
@@ -1253,13 +1226,6 @@ class NrfaStationViewerDialog(QDialog, nrfa_ui.Ui_NrfaViewerDialog):
         
         self.nrfa_viewer = nrfa_viewer.NrfaViewer(self.project, self.iface)
         
-    def signalClose(self):
-        self.closing.emit()
-        
-    def closeEvent(self, *args, **kwargs):
-        self.signalClose()
-        return QDialog.closeEvent(self, *args, **kwargs)
-
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)
         
@@ -1292,7 +1258,6 @@ class NrfaStationViewerDialog(QDialog, nrfa_ui.Ui_NrfaViewerDialog):
         details of the default selected station.
         """
         nrfa_layer = QgsVectorLayer(self.nrfa_stations, "nrfa_stations", "ogr")
-#         nrfa_layer = QgsVectorLayer(NRFA_STATIONS, "nrfa_stations", "ogr")
         if not nrfa_layer.isValid():
             QMessageBox.warning(
                 self, "Unable to load NRFA layer", 
@@ -1536,18 +1501,13 @@ class NrfaStationViewerDialog(QDialog, nrfa_ui.Ui_NrfaViewerDialog):
         )
         
 
-class FileCheckDialog(QDialog, filecheck_ui.Ui_CheckFilesDialog):
+class FileCheckDialog(DialogBase, filecheck_ui.Ui_CheckFilesDialog):
     """Search model files and folders to check that files exist.
     """
-#     update_status = pyqtSignal(name='update_status')
     
-    def __init__(self, iface, project):
-        QDialog.__init__(self)
-        self.iface = iface
-        self.project = project
-        self.setupUi(self)
-        self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
-        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+    def __init__(self, dialog_name, iface, project):
+        
+        DialogBase.__init__(self, dialog_name, iface, project, 'Model File Audit')
 
         model_root = mrt_settings.loadProjectSetting(
             'model_root', self.project.readPath('./')
@@ -1558,9 +1518,7 @@ class FileCheckDialog(QDialog, filecheck_ui.Ui_CheckFilesDialog):
         self.modelFolderFileWidget.setFilePath(model_root)
         self.modelFolderFileWidget.fileChanged.connect(self.updateModelRoot)
         self.reloadBtn.clicked.connect(self.checkFiles)
-
-#         self.elsewhereFilesTable.clicked.connect(self.showElsewhereParents)
-#         self.elsewhereParentList.currentRowChanged.connect(self.showElsewhereParentFile)
+        self.exportResultsBtn.clicked.connect(self.exportResults)
         self.elsewhereFilesTable.clicked.connect(lambda i: self.showParents(i, 'elsewhere'))
         self.iefElsewhereFilesTable.clicked.connect(lambda i: self.showParents(i, 'ief'))
         self.missingFilesTable.clicked.connect(lambda i: self.showParents(i, 'missing'))
@@ -1568,10 +1526,7 @@ class FileCheckDialog(QDialog, filecheck_ui.Ui_CheckFilesDialog):
         self.iefElsewhereParentList.currentRowChanged.connect(lambda i: self.showParentFile(i, 'ief'))
         self.missingParentList.currentRowChanged.connect(lambda i: self.showParentFile(i, 'missing'))
 
-        self.found_files = []
-        self.missing_files = []
-        self.ief_found_files = []
-        self.search_meta = {}
+        self.search_results = None
         self.file_check = filecheck.FileChecker()
         self.file_check.status_signal.connect(self.updateStatus)
         
@@ -1585,59 +1540,33 @@ class FileCheckDialog(QDialog, filecheck_ui.Ui_CheckFilesDialog):
         QApplication.processEvents()
         
     def checkFiles(self):
+        self.search_results = None
+        self.missingParentList.clear()
+        self.elsewhereParentList.clear()
+        self.iefElsewhereParentList.clear()
         model_root = mrt_settings.loadProjectSetting('model_root', './temp')
-        results = self.file_check.auditModelFiles(model_root)
-        self.processResults(results)
+        self.search_results = self.file_check.auditModelFiles(model_root)
         self.resultsTabWidget.setCurrentIndex(0)
         self.updateSummaryTab()
-        self.updateElsewhereTable(self.elsewhereFilesTable, self.found_files)
-        self.updateElsewhereTable(self.iefElsewhereFilesTable, self.ief_found_files)
-        self.updateMissingTable()
+        self.updateElsewhereTable(self.elsewhereFilesTable, self.search_results.results['found'])
+        self.updateElsewhereTable(self.iefElsewhereFilesTable, self.search_results.results['found_ief'])
+        self.updateMissingTable(self.search_results.results['missing'])
         
-    def processResults(self, results):
-        self.found_files = []
-        self.missing_files = []
-        self.ief_found_files = []
-        self.search_meta['summary'] = results.summary
-        self.search_meta['ignored'] = results.ignored_files
-        self.search_meta['checked'] = results.seen_parents
-        for f, details in results.missing.items():
-            info = {'file': [], 'parents': []}
-            psplit = os.path.split(f)
-            filename = psplit[1] if len(psplit) > 1 else f
-            all_ief = True
-            for i, parent in enumerate(details['parent']):
-                if not parent[-3:] == 'ief':
-                    all_ief = False
-                info['parents'].append([parent, details['line'][i]])
-
-            if details['found']:
-                info['file'] = [filename, details['found'], f]
-                if all_ief:
-                    self.ief_found_files.append(info)
-                else:
-                    self.found_files.append(info)
-            else:
-                info['file'] = [filename, f]
-                self.missing_files.append(info)
-                
     def updateSummaryTab(self):
         output = ['File search summary\n'.upper()]
-        for k, v in self.search_meta['summary'].items():
-            name = k.replace('_', ' ').title()
-            output.append('{0:20}: {1}'.format(name, v))
-        output.append('\n\nlist of files ignored\n'.upper())
-        output += [f.filepath for f in self.search_meta['ignored']]
-        output.append('\n\nlist of model files reviewed\n'.upper())
-        output += self.search_meta['checked']
+        output.append(self.search_results.summaryText())
+        output.append('\n\nFiles that were ignored\n'.upper())
+        output += [f.filepath for f in self.search_results.results_meta['ignored']]
+        output.append('\n\nModel files reviewed\n'.upper())
+        output += self.search_results.results_meta['checked']
         output = '\n'.join(output)
         self.summaryTextEdit.clear()
         self.summaryTextEdit.setText(output)
                 
-    def updateMissingTable(self):
+    def updateMissingTable(self, missing_files):
         row_position = 0
         self.missingFilesTable.setRowCount(row_position)
-        for missing in self.missing_files:
+        for missing in missing_files:
             self.missingFilesTable.insertRow(row_position)
             self.missingFilesTable.setItem(row_position, 0, QTableWidgetItem(missing['file'][0]))
             self.missingFilesTable.setItem(row_position, 1, QTableWidgetItem(missing['file'][1]))
@@ -1657,15 +1586,15 @@ class FileCheckDialog(QDialog, filecheck_ui.Ui_CheckFilesDialog):
         if tab_name == 'elsewhere':
             the_table = self.elsewhereFilesTable
             the_list = self.elsewhereParentList
-            parents = self.found_files[the_table.currentRow()]['parents']
+            parents = self.search_results.results['found'][the_table.currentRow()]['parents']
         elif tab_name == 'ief':
             the_table = self.iefElsewhereFilesTable
             the_list = self.iefElsewhereParentList
-            parents = self.ief_found_files[the_table.currentRow()]['parents']
+            parents = self.search_results.results['found_ief'][the_table.currentRow()]['parents']
         elif tab_name == 'missing':
             the_table = self.missingFilesTable
             the_list = self.missingParentList
-            parents = self.missing_files[the_table.currentRow()]['parents']
+            parents = self.search_results.results['missing'][the_table.currentRow()]['parents']
         else:
             return
 
@@ -1681,15 +1610,15 @@ class FileCheckDialog(QDialog, filecheck_ui.Ui_CheckFilesDialog):
         if tab_name == 'elsewhere':
             the_table = self.elsewhereFilesTable
             table_row = the_table.currentRow()
-            parents = self.found_files[table_row]['parents']
+            parents = self.search_results.results['found'][table_row]['parents']
         elif tab_name == 'ief':
             the_table = self.iefElsewhereFilesTable
             table_row = the_table.currentRow()
-            parents = self.ief_found_files[table_row]['parents']
+            parents = self.search_results.results['found_ief'][table_row]['parents']
         elif tab_name == 'missing':
             the_table = self.missingFilesTable
             table_row = the_table.currentRow()
-            parents = self.missing_files[table_row]['parents']
+            parents = self.search_results.results['missing'][table_row]['parents']
         else:
             return
         
@@ -1704,10 +1633,30 @@ class FileCheckDialog(QDialog, filecheck_ui.Ui_CheckFilesDialog):
             QMessageBox.warning(
                 self, "Failed to open file {0} ".format(filename), err.args[0]
             )
-        
         dlg = graphs.ModelFileDialog(filename)
         dlg.showText(''.join(contents), filename)
         dlg.exec_()
+    
+    def exportResults(self):
+        if self.search_results is None:
+            QMessageBox.warning(
+                self, "No results loaded", "There are no results loaded. Please run the check first."
+            )
+            return
+        save_folder = mrt_settings.loadProjectSetting('model_root', './temp')
+        default_path = os.path.join(save_folder, 'filecheck_results.txt')
+        filepath = QFileDialog(self).getSaveFileName(
+            self, 'Export Results', default_path, "TXT File (*.txt)"
+        )[0]
+        if filepath:
+            mrt_settings.saveProjectSetting('file_check_results', filepath)
+            try:
+                self.search_results.exportResults(filepath)
+            except OSError as err:
+                QMessageBox.warning(
+                    self, "Results export failed", err.args[0] 
+                )
+                return
 
 
 class HelpPageDialog(QDialog, help_ui.Ui_HelpDialog):

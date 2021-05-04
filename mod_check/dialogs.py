@@ -1518,9 +1518,7 @@ class FileCheckDialog(DialogBase, filecheck_ui.Ui_CheckFilesDialog):
         self.modelFolderFileWidget.setFilePath(model_root)
         self.modelFolderFileWidget.fileChanged.connect(self.updateModelRoot)
         self.reloadBtn.clicked.connect(self.checkFiles)
-
-#         self.elsewhereFilesTable.clicked.connect(self.showElsewhereParents)
-#         self.elsewhereParentList.currentRowChanged.connect(self.showElsewhereParentFile)
+        self.exportResultsBtn.clicked.connect(self.exportResults)
         self.elsewhereFilesTable.clicked.connect(lambda i: self.showParents(i, 'elsewhere'))
         self.iefElsewhereFilesTable.clicked.connect(lambda i: self.showParents(i, 'ief'))
         self.missingFilesTable.clicked.connect(lambda i: self.showParents(i, 'missing'))
@@ -1528,10 +1526,7 @@ class FileCheckDialog(DialogBase, filecheck_ui.Ui_CheckFilesDialog):
         self.iefElsewhereParentList.currentRowChanged.connect(lambda i: self.showParentFile(i, 'ief'))
         self.missingParentList.currentRowChanged.connect(lambda i: self.showParentFile(i, 'missing'))
 
-        self.found_files = []
-        self.missing_files = []
-        self.ief_found_files = []
-        self.search_meta = {}
+        self.search_results = None
         self.file_check = filecheck.FileChecker()
         self.file_check.status_signal.connect(self.updateStatus)
         
@@ -1545,59 +1540,33 @@ class FileCheckDialog(DialogBase, filecheck_ui.Ui_CheckFilesDialog):
         QApplication.processEvents()
         
     def checkFiles(self):
+        self.search_results = None
+        self.missingParentList.clear()
+        self.elsewhereParentList.clear()
+        self.iefElsewhereParentList.clear()
         model_root = mrt_settings.loadProjectSetting('model_root', './temp')
-        results = self.file_check.auditModelFiles(model_root)
-        self.processResults(results)
+        self.search_results = self.file_check.auditModelFiles(model_root)
         self.resultsTabWidget.setCurrentIndex(0)
         self.updateSummaryTab()
-        self.updateElsewhereTable(self.elsewhereFilesTable, self.found_files)
-        self.updateElsewhereTable(self.iefElsewhereFilesTable, self.ief_found_files)
-        self.updateMissingTable()
+        self.updateElsewhereTable(self.elsewhereFilesTable, self.search_results.results['found'])
+        self.updateElsewhereTable(self.iefElsewhereFilesTable, self.search_results.results['found_ief'])
+        self.updateMissingTable(self.search_results.results['missing'])
         
-    def processResults(self, results):
-        self.found_files = []
-        self.missing_files = []
-        self.ief_found_files = []
-        self.search_meta['summary'] = results.summary
-        self.search_meta['ignored'] = results.ignored_files
-        self.search_meta['checked'] = results.seen_parents
-        for f, details in results.missing.items():
-            info = {'file': [], 'parents': []}
-            psplit = os.path.split(f)
-            filename = psplit[1] if len(psplit) > 1 else f
-            all_ief = True
-            for i, parent in enumerate(details['parent']):
-                if not parent[-3:] == 'ief':
-                    all_ief = False
-                info['parents'].append([parent, details['line'][i]])
-
-            if details['found']:
-                info['file'] = [filename, details['found'], f]
-                if all_ief:
-                    self.ief_found_files.append(info)
-                else:
-                    self.found_files.append(info)
-            else:
-                info['file'] = [filename, f]
-                self.missing_files.append(info)
-                
     def updateSummaryTab(self):
         output = ['File search summary\n'.upper()]
-        for k, v in self.search_meta['summary'].items():
-            name = k.replace('_', ' ').title()
-            output.append('{0:20}: {1}'.format(name, v))
-        output.append('\n\nlist of files ignored\n'.upper())
-        output += [f.filepath for f in self.search_meta['ignored']]
-        output.append('\n\nlist of model files reviewed\n'.upper())
-        output += self.search_meta['checked']
+        output.append(self.search_results.summaryText())
+        output.append('\n\nFiles that were ignored\n'.upper())
+        output += [f.filepath for f in self.search_results.results_meta['ignored']]
+        output.append('\n\nModel files reviewed\n'.upper())
+        output += self.search_results.results_meta['checked']
         output = '\n'.join(output)
         self.summaryTextEdit.clear()
         self.summaryTextEdit.setText(output)
                 
-    def updateMissingTable(self):
+    def updateMissingTable(self, missing_files):
         row_position = 0
         self.missingFilesTable.setRowCount(row_position)
-        for missing in self.missing_files:
+        for missing in missing_files:
             self.missingFilesTable.insertRow(row_position)
             self.missingFilesTable.setItem(row_position, 0, QTableWidgetItem(missing['file'][0]))
             self.missingFilesTable.setItem(row_position, 1, QTableWidgetItem(missing['file'][1]))
@@ -1617,15 +1586,15 @@ class FileCheckDialog(DialogBase, filecheck_ui.Ui_CheckFilesDialog):
         if tab_name == 'elsewhere':
             the_table = self.elsewhereFilesTable
             the_list = self.elsewhereParentList
-            parents = self.found_files[the_table.currentRow()]['parents']
+            parents = self.search_results.results['found'][the_table.currentRow()]['parents']
         elif tab_name == 'ief':
             the_table = self.iefElsewhereFilesTable
             the_list = self.iefElsewhereParentList
-            parents = self.ief_found_files[the_table.currentRow()]['parents']
+            parents = self.search_results.results['found_ief'][the_table.currentRow()]['parents']
         elif tab_name == 'missing':
             the_table = self.missingFilesTable
             the_list = self.missingParentList
-            parents = self.missing_files[the_table.currentRow()]['parents']
+            parents = self.search_results.results['missing'][the_table.currentRow()]['parents']
         else:
             return
 
@@ -1641,15 +1610,15 @@ class FileCheckDialog(DialogBase, filecheck_ui.Ui_CheckFilesDialog):
         if tab_name == 'elsewhere':
             the_table = self.elsewhereFilesTable
             table_row = the_table.currentRow()
-            parents = self.found_files[table_row]['parents']
+            parents = self.search_results.results['found'][table_row]['parents']
         elif tab_name == 'ief':
             the_table = self.iefElsewhereFilesTable
             table_row = the_table.currentRow()
-            parents = self.ief_found_files[table_row]['parents']
+            parents = self.search_results.results['found_ief'][table_row]['parents']
         elif tab_name == 'missing':
             the_table = self.missingFilesTable
             table_row = the_table.currentRow()
-            parents = self.missing_files[table_row]['parents']
+            parents = self.search_results.results['missing'][table_row]['parents']
         else:
             return
         
@@ -1664,10 +1633,30 @@ class FileCheckDialog(DialogBase, filecheck_ui.Ui_CheckFilesDialog):
             QMessageBox.warning(
                 self, "Failed to open file {0} ".format(filename), err.args[0]
             )
-        
         dlg = graphs.ModelFileDialog(filename)
         dlg.showText(''.join(contents), filename)
         dlg.exec_()
+    
+    def exportResults(self):
+        if self.search_results is None:
+            QMessageBox.warning(
+                self, "No results loaded", "There are no results loaded. Please run the check first."
+            )
+            return
+        save_folder = mrt_settings.loadProjectSetting('model_root', './temp')
+        default_path = os.path.join(save_folder, 'filecheck_results.txt')
+        filepath = QFileDialog(self).getSaveFileName(
+            self, 'Export Results', default_path, "TXT File (*.txt)"
+        )[0]
+        if filepath:
+            mrt_settings.saveProjectSetting('file_check_results', filepath)
+            try:
+                self.search_results.exportResults(filepath)
+            except OSError as err:
+                QMessageBox.warning(
+                    self, "Results export failed", err.args[0] 
+                )
+                return
 
 
 class HelpPageDialog(QDialog, help_ui.Ui_HelpDialog):

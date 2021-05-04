@@ -217,7 +217,7 @@ class Ui_NrfaViewerDialog(object):
         self.horizontalLayout_7.addWidget(self.statusLabel)
         self.buttonBox = QtWidgets.QDialogButtonBox(NrfaViewerDialog)
         self.buttonBox.setOrientation(QtCore.Qt.Horizontal)
-        self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Cancel|QtWidgets.QDialogButtonBox.Ok)
+        self.buttonBox.setStandardButtons(QtWidgets.QDialogButtonBox.Close|QtWidgets.QDialogButtonBox.Help)
         self.buttonBox.setObjectName("buttonBox")
         self.horizontalLayout_7.addWidget(self.buttonBox)
         self.verticalLayout_5.addLayout(self.horizontalLayout_7)

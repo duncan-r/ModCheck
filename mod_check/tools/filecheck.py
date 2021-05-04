@@ -35,7 +35,6 @@ class FileChecker(QtCore.QObject):
         self.status_signal.emit('Categorising results ...')
         result_holder = ResultHolder()
         result_holder.ignored_files = ignore_files
-        result_holder.summary = audit.getSummary()
         
         self.status_signal.emit('Checking paths ...')
         for f in audit.getModelFiles():
@@ -65,6 +64,9 @@ class FileChecker(QtCore.QObject):
                         search_successes += 1
             errors[f] = errorlist
             
+        result_holder.model_root = model_root
+        result_holder.summary = audit.getFileCounts()
+        result_holder.processResults()
         self.status_signal.emit('Check complete')
         return result_holder
 
@@ -101,28 +103,30 @@ class FileChecker(QtCore.QObject):
         return model_files, other_files, ignore_files
         
 
-class Audit(QtCore.QObject):
-    '''
-        Parent class for all of the audit tools
-    '''
-    def __init__(self, model_root):
-        self.model_root = model_root
-        #print 'initialised audit'
-        if not os.path.isdir(model_root):
-            raise ValueError ('Unable to find that directory')
-
-
-class ResultHolder(object):    
+class ResultHolder():    
     """
     """
     
     def __init__(self):
+        self.model_root = ''
         self.parent = ''
         self.seen_parents = []
         self.missing = {}
-        self.summary = {}
         self.ignored_files = []
 #         self.found = {}
+
+        self._summary = {'model_files': 0, 'other_files': 0, 'ignored_files': 0, 'total_files': 0}
+        self.results = {'missing': [], 'found': [], 'found_ief': []}
+        self.results_meta = {'summary': None, 'ignored': None, 'checked': None}
+
+    @property
+    def summary(self):
+        return self._summary
+
+    @summary.setter
+    def summary(self, summary):
+        self._summary = summary
+        self._summary['total_files'] = self.getFileTotal()
     
     def addMissing(self, path, line, found=''):
         if path in self.missing:
@@ -137,9 +141,109 @@ class ResultHolder(object):
             self.missing[path]['found'] = found
         except KeyError:
             raise 
+        
+    def summaryText(self):
+        return 'Model Files: {0:<10}\nOther Files: {1:<10}\nIgnored Files: {2:<10}\nTotal Files: {3:<10}'.format(
+            self._summary['model_files'], self._summary['other_files'], 
+            self._summary['ignored_files'], self._summary['total_files']
+        )
+        
+    def getFileTotal(self):
+        return self._summary['model_files'] + self._summary['other_files'] + self._summary['ignored_files']
+
+    def processResults(self):
+        self.results = {'missing': [], 'found': [], 'found_ief': []}
+        self.results_meta['summary'] = self.summary
+        self.results_meta['ignored'] = self.ignored_files
+        self.results_meta['checked'] = self.seen_parents
+
+        for f, details in self.missing.items():
+            info = {'file': [], 'parents': []}
+            psplit = os.path.split(f)
+            filename = psplit[1] if len(psplit) > 1 else f
+            all_ief = True
+            for i, parent in enumerate(details['parent']):
+                if not parent[-3:] == 'ief':
+                    all_ief = False
+                info['parents'].append([parent, details['line'][i]])
+
+            if details['found']:
+                info['file'] = [filename, details['found'], f]
+                if all_ief:
+                    self.results['found_ief'].append(info)
+                else:
+                    self.results['found'].append(info)
+            else:
+                info['file'] = [filename, f]
+                self.results['missing'].append(info)
+                
+    def exportResults(self, save_path):
+        """
+        """
+        with open(save_path, 'w', newline='\n') as outfile:
+            outfile.write('\n###########################')
+            outfile.write('\n# FILE SEARCH SUMMARY')
+            outfile.write('\n###########################\n\n')
+            outfile.write('Root folder: {0}\n'.format(self.model_root))
+            outfile.write(self.summaryText())
+
+            outfile.write('\n\nFILES THAT WERE IGNORED\n')
+            if self.ignored_files:
+                outfile.write('\n'.join([i.filepath for i in self.ignored_files]))
+            else:
+                outfile.write('\nNo files were ignored')
+
+            outfile.write('\n\nMISSING FILES')
+            if self.results['missing']:
+                outfile.write('\n'.join(m['file'][0] for m in self.results['missing']))
+            else:
+                outfile.write('\nNo missing files')
+
+            outfile.write('\n\nFOUND FILES (Incorrect paths)\n')
+            if self.results['found'] or self.results['found_ief']:
+                outfile.write('\n'.join(f['file'][0] for f in self.results['found']))
+                outfile.write('\n'.join(f['file'][0] for f in self.results['found_ief']))
+            else:
+                outfile.write('\nNo misreferenced files')
+                
+            outfile.write('\n\nMODEL FILES CHECKED\n')
+            outfile.write('\n'.join([p for p in self.seen_parents]))
+            
+            outfile.write('\n\n\n###########################')
+            outfile.write('\n# DETAILED RESULTS')
+            outfile.write('\n###########################\n')
+
+            outfile.write('\n\nMISSING FILES')
+            if self.results['missing']:
+                for m in self.results['missing']:
+                    outfile.write('\n{0:<20}{1}'.format('File:', m['file'][0]))
+                    outfile.write('\n{0:<20}{1}'.format('Path:', m['file'][1]))
+                    outfile.write('\nReferenced by parent files:\n')
+                    outfile.write('\n'.join(['Line ({0})\t {1}'.format(p[1], p[0]) for p in m['parents']]))
+            else:
+                outfile.write('\nNo missing files')
+
+            outfile.write('\n\n\nFOUND FILES (Incorrect paths)\n')
+            if self.results['found'] or self.results['found_ief']:
+                for f in self.results['found']:
+                    outfile.write('\n{0:<20}{1}'.format('File:', f['file'][0]))
+                    outfile.write('\n{0:<20}{1}'.format('Original Path:', f['file'][2]))
+                    outfile.write('\n{0:<20}{1}'.format('Found Path:', f['file'][1]))
+                    outfile.write('\nReferenced by parent files:\n')
+                    outfile.write('\n'.join(['Line ({0})\t {1}'.format(p[1], p[0]) for p in f['parents']]))
+                    outfile.write('\n')
+                for f in self.results['found_ief']:
+                    outfile.write('\n{0:<20}{1}'.format('File:', f['file'][0]))
+                    outfile.write('\n{0:<20}{1}'.format('Original Path:', f['file'][2]))
+                    outfile.write('\n{0:<20}{1}'.format('Found Path:', f['file'][1]))
+                    outfile.write('\nReferenced by parent files:\n')
+                    outfile.write('\n'.join(['Line ({0})\t {1}'.format(p[1], p[0]) for p in f['parents']]))
+                    outfile.write('\n')
+            else:
+                outfile.write('\nNo misreferenced files')
 
 
-class AuditFiles(Audit):
+class AuditFiles():
     '''
         Path checking audit tool
     '''
@@ -147,7 +251,10 @@ class AuditFiles(Audit):
         '''
             Takes a string describing the path to the root of the model folder structure being audited
         '''
-        Audit.__init__(self, model_root)
+        self.model_root = model_root
+        if not os.path.isdir(model_root):
+            raise ValueError('Unable to find that directory')
+
         self.modelFiles = model_files
         self.otherFiles = other_files
         self.ignoreFiles = ignore_files
@@ -158,25 +265,12 @@ class AuditFiles(Audit):
     def getOtherFiles(self):
         return self.otherFiles
     
-    def getSummary(self):    
-        """"""
+    def getFileCounts(self):
         return {
-            'model_files': str(len(self.modelFiles)),
-            'other_files': str(len(self.otherFiles)),
-            'ignored_files': str(len(self.ignoreFiles)),
-            'total_files': str(len(self.ignoreFiles) + len(self.otherFiles) + len(self.ignoreFiles))
+            'model_files': len(self.modelFiles),
+            'other_files': len(self.otherFiles),
+            'ignored_files': len(self.ignoreFiles),
         }
-        
-    def summary(self):
-        '''
-            Method for printing a summary of the file structure of the model
-        
-        print "Model files:  \t" + str(len(self.modelFiles))
-        print "Other files:  \t" + str(len(self.otherFiles))
-        print "Ignored files:\t" + str(len(self.ignoreFiles))
-        print "Total         \t" + str(len(self.modelFiles)+len(self.otherFiles)+len(self.ignoreFiles))
-        '''
-        return "\nModel files:  \t" + str(len(self.modelFiles)) + "\nOther files:  \t" + str(len(self.otherFiles))+"\nIgnored files:\t" + str(len(self.ignoreFiles)) + "\nTotal         \t" + str(len(self.modelFiles) + len(self.otherFiles) + len(self.ignoreFiles)) + '\n'
 
         
 class SomeFile(object):
@@ -385,15 +479,26 @@ class ModelPath():
             Returns true if path exists, false otherwise
         '''
         # if we are looking for a mid file we need a mif file (and vice versa).
-        
         if self.getPathFileExt() == 'mif':
-            return os.path.exists(self.absPath) and (os.path.exists(self.absPath.rsplit('.',1)[0] + '.mid') or os.path.exists(self.absPath.rsplit('.',1)[0] + '.MID'))
+            return os.path.exists(self.absPath) and (
+                os.path.exists(self.absPath.rsplit('.',1)[0] + '.mid') or os.path.exists(
+                    self.absPath.rsplit('.',1)[0] + '.MID'
+                )
+            )
             
         elif self.getPathFileExt() == 'mid':
-            return os.path.exists(self.absPath) and (os.path.exists(self.absPath.rsplit('.',1)[0] + '.mif') or os.path.exists(self.absPath.rsplit('.',1)[0] + '.MIF'))
-        
+            return os.path.exists(self.absPath) and (
+                os.path.exists(self.absPath.rsplit('.',1)[0] + '.mif') or os.path.exists(
+                    self.absPath.rsplit('.',1)[0] + '.MIF'
+                )
+            )
+        # With shape files we need .shp, dbf and shx files too
         elif self.getPathFileExt() == 'shp':
-            return os.path.exists(self.absPath) and os.path.exists(self.absPath.rsplit('.',1)[0].lower() + '.dbf') and os.path.exists(self.absPath.rsplit('.',1)[0].lower() + '.shx')
+            return os.path.exists(self.absPath) and (
+                os.path.exists(self.absPath.rsplit('.',1)[0].lower() + '.dbf') and os.path.exists(
+                    self.absPath.rsplit('.',1)[0].lower() + '.shx'
+                )
+            )
         
         else:
             return os.path.exists(self.absPath)
@@ -476,10 +581,12 @@ class IEF_file(ModelFile):
         Class for IEF model files
     '''
     def __init__(self, filepath):
-        ModelFile.__init__(self, filepath)        
+        ModelFile.__init__(self, filepath)
+        
     def PathSearch(self):
         return ModelFile.PathSearch(self, ['Datafile', 'InitialConditions', 'EventData', '2DFile'], splitOn = '=')
         
 # file extension pointing the the associated paths. trd files follow the same format as tcf files hence share the same class
 model_file_exts = {'tcf': TCF_file, 'trd': TCF_file, 'ecf': ECF_file, 'tbc': TBC_file, 'tgc': TGC_file, 'tef': TEF_file, 'ief': IEF_file}
-ignore_file_exts = ['log', 'doc']
+ignore_file_exts = ['log', 'doc', 'xlsx', 'pdf']
+#model_file_ignore = []
