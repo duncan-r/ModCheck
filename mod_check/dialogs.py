@@ -583,6 +583,7 @@ class FmpTuflowVariablesCheckDialog(DialogBase, fmptuflowvariablescheck_ui.Ui_Fm
         )
         
         self.fmpIefFolderFileWidget.setStorageMode(QgsFileWidget.GetDirectory)
+        self.tuflowFolderFileWidget.setStorageMode(QgsFileWidget.GetDirectory)
 
         # Connect the slots
         self.iefTableRefreshBtn.clicked.connect(self.loadIefVariables)
@@ -595,8 +596,11 @@ class FmpTuflowVariablesCheckDialog(DialogBase, fmptuflowvariablescheck_ui.Ui_Fm
         self.zzdFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'zzd_file'))
         self.tlfFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'tlf_file'))
         self.fmpIefFolderFileWidget.fileChanged.connect(self.loadMultipleIefSummary)
+        self.tuflowFolderFileWidget.fileChanged.connect(self.loadMultipleTsfSummary)
         self.fmpMultipleSummaryTable.setContextMenuPolicy(Qt.CustomContextMenu)
         self.fmpMultipleSummaryTable.customContextMenuRequested.connect(self._multipleIefTableContext)
+        self.tuflowMultipleSummaryTable.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tuflowMultipleSummaryTable.customContextMenuRequested.connect(self._multipleTsfTableContext)
 
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)
@@ -631,6 +635,28 @@ class FmpTuflowVariablesCheckDialog(DialogBase, fmptuflowvariablescheck_ui.Ui_Fm
             self.iefFileWidget.setFilePath(full_path)
 #             self.iefFileWidget.blockSignals(False)
 #             self.loadIefVariables()
+
+    def _multipleTsfTableContext(self, pos):
+        """Add context menu to failed sections table.
+        
+        Allow user to select and zoom to the chosen section in the map window.
+        """
+        index = self.tuflowMultipleSummaryTable.itemAt(pos)
+        if index is None: return
+        menu = QMenu()
+        locate_section_action = menu.addAction("Show detailed view")
+
+        # Get the action and do whatever it says
+        action = menu.exec_(self.tuflowMultipleSummaryTable.viewport().mapToGlobal(pos))
+        if action == locate_section_action:
+            row = self.tuflowMultipleSummaryTable.currentRow()
+            col_count = self.tuflowMultipleSummaryTable.columnCount()
+            full_path = self.tuflowMultipleSummaryTable.item(row, col_count-1).text()
+            mrt_settings.saveProjectSetting('tlf_path', full_path)
+            self.tuflowMainTabWidget.setCurrentIndex(1)
+            self.tuflowTabWidget.setCurrentIndex(0)
+            QApplication.processEvents()
+            self.tlfFileWidget.setFilePath(full_path)
             
     def loadMultipleIefSummary(self, path):
         mrt_settings.saveProjectSetting('ief_folder', path)
@@ -665,6 +691,29 @@ class FmpTuflowVariablesCheckDialog(DialogBase, fmptuflowvariablescheck_ui.Ui_Fm
                 row_position += 1
         except Exception as err:
             pass
+        
+    def loadMultipleTsfSummary(self, path):
+        mrt_settings.saveProjectSetting('runs_folder', path)
+        
+        tsf_check = runvariables_check.TsfSummaryCheck(self.project)
+        tsf_files = tsf_check.findTsfFiles(path)
+        output, key_order = tsf_check.loadTsfData(tsf_files)
+        
+        row_position = 0
+        self.tuflowMultipleSummaryTable.setRowCount(row_position)
+        for row in output:
+            self.tuflowMultipleSummaryTable.insertRow(row_position)
+            for i, item in enumerate(key_order):
+                try:
+                    self.tuflowMultipleSummaryTable.setItem(
+                        row_position, i, QTableWidgetItem(str(output[row_position][item]))
+                    )
+                except KeyError:
+                    self.tuflowMultipleSummaryTable.setItem(
+                        row_position, i, QTableWidgetItem("Not Found")
+                    )
+            row_position += 1
+        pass
             
     def loadIefVariables(self):
         
@@ -780,10 +829,17 @@ class FmpTuflowVariablesCheckDialog(DialogBase, fmptuflowvariablescheck_ui.Ui_Fm
             self.tuflowVariablesTable.setItem(row_position, 3, QTableWidgetItem(details['default']))
             self.tuflowVariablesTable.setItem(row_position, 4, QTableWidgetItem(details['options']))
             self.tuflowVariablesTable.setItem(row_position, 5, QTableWidgetItem(details['description']))
+            
+        self.tuflowVariablesTable.setRowCount(0)
+        self.tuflowFilesTable.setRowCount(0)
+        self.tuflowRunSummaryTable.setRowCount(0)
+        self.tuflowDiagnosticsTable.setRowCount(0)
 
         tlf_path = mrt_settings.loadProjectSetting(
             'tlf_file', self.project.readPath('./temp')
         )
+        self.statusLabel.setText('Loading detailed TUFLOW .tlf data ...')
+        QApplication.processEvents()
         variables_check = runvariables_check.TlfDetailsCheck(self.project, tlf_path)
         try:
             variables_check.run_tool()
@@ -796,6 +852,8 @@ class FmpTuflowVariablesCheckDialog(DialogBase, fmptuflowvariablescheck_ui.Ui_Fm
         checks = variables_check.checks
         run_summary = variables_check.run_summary
 
+        self.statusLabel.setText('Updating TUFLOW Tables ...')
+        QApplication.processEvents()
         row_position = 0
         self.tuflowVariablesTable.setRowCount(row_position)
         for variable, details in variables.items():
@@ -831,6 +889,9 @@ class FmpTuflowVariablesCheckDialog(DialogBase, fmptuflowvariablescheck_ui.Ui_Fm
             self.tuflowRunSummaryTable.setItem(row_position, 1, QTableWidgetItem(details['value']))
             self.tuflowRunSummaryTable.setItem(row_position, 2, QTableWidgetItem(details['description']))
             row_position += 1
+            
+        self.statusLabel.setText('Update complete')
+        QApplication.processEvents()
 
         
 class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionPropertyCheckDialog):

@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>783</width>
-    <height>584</height>
+    <width>866</width>
+    <height>626</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -23,7 +23,7 @@
    <item>
     <widget class="QTabWidget" name="mainTabWidget">
      <property name="currentIndex">
-      <number>0</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="fmpTab">
       <attribute name="title">
@@ -395,215 +395,351 @@
       <attribute name="title">
        <string>TUFLOW</string>
       </attribute>
-      <layout class="QVBoxLayout" name="verticalLayout_5">
+      <layout class="QVBoxLayout" name="verticalLayout_9">
        <item>
-        <widget class="QLabel" name="label_2">
-         <property name="text">
-          <string>TUFLOW .tlf File</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QgsFileWidget" name="tlfFileWidget">
-         <property name="filter">
-          <string>*.tlf</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_2">
-         <item>
-          <widget class="QPushButton" name="tlfTableRefreshBtn">
-           <property name="text">
-            <string>Refresh</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <spacer name="horizontalSpacer_2">
-           <property name="orientation">
-            <enum>Qt::Horizontal</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>40</width>
-             <height>20</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-        </layout>
-       </item>
-       <item>
-        <widget class="QTabWidget" name="tuflowTabWidget">
+        <widget class="QTabWidget" name="tuflowMainTabWidget">
          <property name="currentIndex">
           <number>0</number>
          </property>
-         <widget class="QWidget" name="tuflowVariablesTab">
+         <widget class="QWidget" name="multipleTlfTab">
           <attribute name="title">
-           <string>Variables</string>
+           <string>Multiple Summary</string>
           </attribute>
-          <layout class="QVBoxLayout" name="verticalLayout_2">
+          <layout class="QVBoxLayout" name="verticalLayout_10">
            <item>
-            <widget class="QLabel" name="label_9">
+            <widget class="QLabel" name="label_13">
              <property name="text">
-              <string>Variables Settings</string>
+              <string>TUFLOW Folder</string>
              </property>
             </widget>
            </item>
            <item>
-            <widget class="QTableWidget" name="tuflowVariablesTable">
-             <property name="alternatingRowColors">
-              <bool>false</bool>
-             </property>
+            <widget class="QgsFileWidget" name="tuflowFolderFileWidget"/>
+           </item>
+           <item>
+            <widget class="QTableWidget" name="tuflowMultipleSummaryTable">
              <attribute name="horizontalHeaderDefaultSectionSize">
-              <number>100</number>
-             </attribute>
-             <attribute name="horizontalHeaderMinimumSectionSize">
-              <number>100</number>
+              <number>150</number>
              </attribute>
              <attribute name="horizontalHeaderStretchLastSection">
               <bool>true</bool>
              </attribute>
              <column>
               <property name="text">
-               <string>Variable</string>
+               <string>TCF</string>
               </property>
              </column>
              <column>
               <property name="text">
-               <string>Is Default?</string>
+               <string>Build</string>
               </property>
              </column>
              <column>
               <property name="text">
-               <string>Value</string>
+               <string>Scheme</string>
               </property>
              </column>
              <column>
               <property name="text">
-               <string>Default</string>
+               <string>Hardware</string>
               </property>
              </column>
              <column>
               <property name="text">
-               <string>Options</string>
+               <string>Status</string>
               </property>
              </column>
              <column>
               <property name="text">
-               <string>Description</string>
-              </property>
-             </column>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLabel" name="label_10">
-             <property name="text">
-              <string>Files</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QTableWidget" name="tuflowFilesTable">
-             <attribute name="horizontalHeaderStretchLastSection">
-              <bool>true</bool>
-             </attribute>
-             <column>
-              <property name="text">
-               <string>Type</string>
+               <string>Sim Time (h)</string>
               </property>
              </column>
              <column>
               <property name="text">
-               <string>Domain</string>
+               <string>Start Time (h)</string>
               </property>
              </column>
              <column>
               <property name="text">
-               <string>File Name</string>
+               <string>End time (h)</string>
               </property>
              </column>
              <column>
               <property name="text">
-               <string>TLF Line</string>
+               <string>% Complete</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Run Time</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>2D Negative Depths</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Warnings</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Checks</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>Volume Error (%)</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>CME (%)</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>No. of Domains</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>2D Cell Sizes</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>2D Timestep</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>TLF Path</string>
               </property>
              </column>
             </widget>
            </item>
           </layout>
          </widget>
-         <widget class="QWidget" name="tuflowDiagnosticsTab">
+         <widget class="QWidget" name="singleTlfCheck">
           <attribute name="title">
-           <string>Diagnostics</string>
+           <string>Single Tlf</string>
           </attribute>
-          <layout class="QVBoxLayout" name="verticalLayout_7">
+          <layout class="QVBoxLayout" name="verticalLayout_5">
            <item>
-            <widget class="QLabel" name="label_8">
+            <widget class="QLabel" name="label_2">
              <property name="text">
-              <string>Run Summary</string>
+              <string>TUFLOW .tlf File</string>
              </property>
             </widget>
            </item>
            <item>
-            <widget class="QTableWidget" name="tuflowRunSummaryTable">
-             <attribute name="horizontalHeaderStretchLastSection">
-              <bool>true</bool>
-             </attribute>
-             <column>
-              <property name="text">
-               <string>Type</string>
-              </property>
-             </column>
-             <column>
-              <property name="text">
-               <string>Value</string>
-              </property>
-             </column>
-             <column>
-              <property name="text">
-               <string>Description</string>
-              </property>
-             </column>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLabel" name="label_11">
-             <property name="text">
-              <string>Checks, Warnings and Errors</string>
+            <widget class="QgsFileWidget" name="tlfFileWidget">
+             <property name="filter">
+              <string>*.tlf</string>
              </property>
             </widget>
            </item>
            <item>
-            <widget class="QTableWidget" name="tuflowDiagnosticsTable">
-             <attribute name="horizontalHeaderStretchLastSection">
-              <bool>true</bool>
-             </attribute>
-             <column>
-              <property name="text">
-               <string>Type</string>
-              </property>
-             </column>
-             <column>
-              <property name="text">
-               <string>Code</string>
-              </property>
-             </column>
-             <column>
-              <property name="text">
-               <string>Count</string>
-              </property>
-             </column>
-             <column>
-              <property name="text">
-               <string>Message</string>
-              </property>
-             </column>
-             <column>
-              <property name="text">
-               <string>Wiki Link</string>
-              </property>
-             </column>
+            <layout class="QHBoxLayout" name="horizontalLayout_2">
+             <item>
+              <widget class="QPushButton" name="tlfTableRefreshBtn">
+               <property name="text">
+                <string>Refresh</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="horizontalSpacer_2">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QTabWidget" name="tuflowTabWidget">
+             <property name="currentIndex">
+              <number>0</number>
+             </property>
+             <widget class="QWidget" name="tuflowVariablesTab">
+              <attribute name="title">
+               <string>Variables</string>
+              </attribute>
+              <layout class="QVBoxLayout" name="verticalLayout_2">
+               <item>
+                <widget class="QLabel" name="label_9">
+                 <property name="text">
+                  <string>Variables Settings</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QTableWidget" name="tuflowVariablesTable">
+                 <property name="alternatingRowColors">
+                  <bool>false</bool>
+                 </property>
+                 <attribute name="horizontalHeaderDefaultSectionSize">
+                  <number>100</number>
+                 </attribute>
+                 <attribute name="horizontalHeaderMinimumSectionSize">
+                  <number>100</number>
+                 </attribute>
+                 <attribute name="horizontalHeaderStretchLastSection">
+                  <bool>true</bool>
+                 </attribute>
+                 <column>
+                  <property name="text">
+                   <string>Variable</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Is Default?</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Value</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Default</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Options</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Description</string>
+                  </property>
+                 </column>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="label_10">
+                 <property name="text">
+                  <string>Files</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QTableWidget" name="tuflowFilesTable">
+                 <attribute name="horizontalHeaderStretchLastSection">
+                  <bool>true</bool>
+                 </attribute>
+                 <column>
+                  <property name="text">
+                   <string>Type</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Domain</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>File Name</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>TLF Line</string>
+                  </property>
+                 </column>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+             <widget class="QWidget" name="tuflowDiagnosticsTab">
+              <attribute name="title">
+               <string>Diagnostics</string>
+              </attribute>
+              <layout class="QVBoxLayout" name="verticalLayout_7">
+               <item>
+                <widget class="QLabel" name="label_8">
+                 <property name="text">
+                  <string>Run Summary</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QTableWidget" name="tuflowRunSummaryTable">
+                 <attribute name="horizontalHeaderStretchLastSection">
+                  <bool>true</bool>
+                 </attribute>
+                 <column>
+                  <property name="text">
+                   <string>Type</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Value</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Description</string>
+                  </property>
+                 </column>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="label_11">
+                 <property name="text">
+                  <string>Checks, Warnings and Errors</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QTableWidget" name="tuflowDiagnosticsTable">
+                 <attribute name="horizontalHeaderStretchLastSection">
+                  <bool>true</bool>
+                 </attribute>
+                 <column>
+                  <property name="text">
+                   <string>Type</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Code</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Count</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Message</string>
+                  </property>
+                 </column>
+                 <column>
+                  <property name="text">
+                   <string>Wiki Link</string>
+                  </property>
+                 </column>
+                </widget>
+               </item>
+              </layout>
+             </widget>
             </widget>
            </item>
           </layout>
@@ -615,14 +751,25 @@
     </widget>
    </item>
    <item>
-    <widget class="QDialogButtonBox" name="buttonBox">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-     <property name="standardButtons">
-      <set>QDialogButtonBox::Close|QDialogButtonBox::Help</set>
-     </property>
-    </widget>
+    <layout class="QHBoxLayout" name="horizontalLayout_5">
+     <item>
+      <widget class="QLabel" name="statusLabel">
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QDialogButtonBox" name="buttonBox">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="standardButtons">
+        <set>QDialogButtonBox::Close|QDialogButtonBox::Help</set>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
   </layout>
  </widget>

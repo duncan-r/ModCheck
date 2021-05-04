@@ -249,27 +249,6 @@ class IefVariablesCheck(ti.ToolInterface):
         outputs.append([ief_path, False])
         return outputs
         
-        
-#         loader = fl.FileLoader()
-#         ief = loader.loadFile(ief_path)
-#         filename = os.path.split(ief_path)[1]
-#         outputs = [filename]
-#         if not ief.getValue('Timestep') is None:
-#             outputs.append(ief.getValue('Timestep'))
-#         else:
-#             outputs.append('Not set')
-#         for l in lookup:
-#             val = ief.getValue(l[0])
-#             if val is None or val == 'None':
-#                 val = l[1]
-#             elif val == '1' and (
-#                 l[0] == '2DDoublePrecision' or l[0] == 'Slot' or l[0] == 'LaunchDoublePrecisionVersion'
-#             ):
-#                 val = 'Yes'
-#             outputs.append(val)
-#         outputs.append(ief_path)
-#         return outputs
-
 
 class ZzdFileCheck(ti.ToolInterface): 
     
@@ -354,6 +333,84 @@ class ZzdFileCheck(ti.ToolInterface):
 
                 line_count += 1
         return details, warnings
+        
+        
+class TsfSummaryCheck():
+    
+    def __init__(self, project):
+        self.project = project
+        self.FILE_KEYS = [
+            'TUFLOW Control File', 'TUFLOW Build', 'Solution Scheme', 'Hardware',
+            'Simulation Status', 'Simulation Time (h)', 'Simulation Start Time (h)', 'Simulation End Time (h)',
+            'Percentage Complete (%)', 'Clock Time (h)', 'Classic 2D Negative Depths', 
+            'Volume Error (%)', 'Cumulative Mass Error [ME] (%)',
+            'Number 2D Domains', '2D Domain Cell Sizes', '2D Domain Timestep(s)', 'TUFLOW Log File',
+        ]
+        self.LOOKUP_KEYS = [
+            'TCF', 'Build', 'Scheme', 'Hardware', 'Status', 'Sim Time (h)', 'Start Time (h)', 
+            'End Time (h)', '% Complete', 'Run Time', '2D Negative Depths', 'Volume Error (%)', 
+            'CME (%)', 'No. of Domains', '2D Cell Sizes', '2D Timestep','TLF Path', 
+        ]
+        
+    def findTsfFiles(self, model_root):
+        """Search folder for TUFLOW .tsf summary files.
+        
+        Args:
+            model_root(str): the root folder used for searching.
+
+        Exception:
+            OSError - if file error is raised while walking directories.
+        """
+        tsf_files = []
+        for root, dirs, files in os.walk(model_root):
+            for file in files:
+                fext = os.path.splitext(file)
+                if len(fext) > 1 and fext[1] == '.tsf':
+                    tsf_files.append(os.path.join(root, file))
+        return tsf_files
+    
+    def loadTsfData(self, tsf_paths):
+        """Load the data required from the given TUFLOW tsf files.
+        
+        Exception:
+            OSError - if file error is raised while reading files.
+        """
+#         warning_keys = [
+#             'WARNINGs Prior to Simulation', 'WARNINGs During Simulation', 
+#             'CHECKs Prior to Simulation', 'CHECKs During Simulation', 
+#         ]
+            
+        lookup_vals = dict(zip(self.FILE_KEYS, self.LOOKUP_KEYS))
+        output = []
+        for tsf in tsf_paths:
+            tsf_dir = os.path.split(tsf)[0]
+            temp_dict = {'Warnings': 0, 'Checks': 0}
+            with open(tsf, 'r') as tsf_file:
+                lines = tsf_file.readlines()
+                for line in lines:
+                    if '==' in line:
+                        split_line = line.split('==')
+                        k = split_line[0].strip()
+                        v = split_line[1].strip()
+                        if 'WARNINGs' in k:
+                            temp_dict['Warnings'] += int(v)
+                        elif 'CHECKs' in k:
+                            temp_dict['Checks'] += int(v)
+                        elif k in self.FILE_KEYS:
+                            temp_dict[lookup_vals[k]] = v
+            tcf = temp_dict['TCF']
+            tcf = tcf.replace('"', '')
+            tcf_name = os.path.split(tcf)[1]
+            temp_dict['TCF'] = tcf_name
+            tlf_name = os.path.split(temp_dict['TLF Path'].replace('"', ''))[1]
+            temp_dict['TLF Path'] = os.path.join(tsf_dir, tlf_name)
+            if 'Volume Error (%)' in temp_dict.keys():
+                temp_dict['Volume Error (%)'] = temp_dict['Volume Error (%)'].split('!')[0].strip()
+            output.append(temp_dict)
+        lookup_keys = self.LOOKUP_KEYS
+        lookup_keys.insert(11, 'Warnings')
+        lookup_keys.insert(12, 'Checks')
+        return output, lookup_keys
         
  
 class TlfDetailsCheck(ti.ToolInterface):

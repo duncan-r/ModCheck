@@ -213,13 +213,14 @@ class ResultHolder():
             outfile.write('\n# DETAILED RESULTS')
             outfile.write('\n###########################\n')
 
-            outfile.write('\n\nMISSING FILES')
+            outfile.write('\n\nMISSING FILES\n')
             if self.results['missing']:
                 for m in self.results['missing']:
                     outfile.write('\n{0:<20}{1}'.format('File:', m['file'][0]))
                     outfile.write('\n{0:<20}{1}'.format('Path:', m['file'][1]))
                     outfile.write('\nReferenced by parent files:\n')
                     outfile.write('\n'.join(['Line ({0})\t {1}'.format(p[1], p[0]) for p in m['parents']]))
+                    outfile.write('\n')
             else:
                 outfile.write('\nNo missing files')
 
