@@ -23,7 +23,7 @@
    <item>
     <widget class="QTabWidget" name="mainTabWidget">
      <property name="currentIndex">
-      <number>1</number>
+      <number>0</number>
      </property>
      <widget class="QWidget" name="fmpTab">
       <attribute name="title">
@@ -154,6 +154,30 @@
               </property>
              </column>
             </widget>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_6">
+             <item>
+              <widget class="QPushButton" name="exportFmpSummaryBtn">
+               <property name="text">
+                <string>Export Summary</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="horizontalSpacer_4">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
            </item>
           </layout>
          </widget>
@@ -426,6 +450,11 @@
              </attribute>
              <column>
               <property name="text">
+               <string>Run Name</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
                <string>TCF</string>
               </property>
              </column>
@@ -521,6 +550,30 @@
              </column>
             </widget>
            </item>
+           <item>
+            <layout class="QHBoxLayout" name="horizontalLayout_7">
+             <item>
+              <widget class="QPushButton" name="exportTuflowSummaryBtn">
+               <property name="text">
+                <string>Export Summary</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="horizontalSpacer_5">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
           </layout>
          </widget>
          <widget class="QWidget" name="singleTlfCheck">
@@ -569,7 +622,7 @@
            <item>
             <widget class="QTabWidget" name="tuflowTabWidget">
              <property name="currentIndex">
-              <number>0</number>
+              <number>1</number>
              </property>
              <widget class="QWidget" name="tuflowVariablesTab">
               <attribute name="title">

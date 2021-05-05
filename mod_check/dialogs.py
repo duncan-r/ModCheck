@@ -589,6 +589,8 @@ class FmpTuflowVariablesCheckDialog(DialogBase, fmptuflowvariablescheck_ui.Ui_Fm
         self.iefTableRefreshBtn.clicked.connect(self.loadIefVariables)
         self.zzdTableRefreshBtn.clicked.connect(self.loadZzdResults)
         self.tlfTableRefreshBtn.clicked.connect(self.loadTlfDetails)
+        self.exportFmpSummaryBtn.clicked.connect(self.exportFmpSummary)
+        self.exportTuflowSummaryBtn.clicked.connect(self.exportTuflowSummary)
         self.iefFileWidget.setFilePath(ief_path)
         self.zzdFileWidget.setFilePath(zzd_path)
         self.tlfFileWidget.setFilePath(tlf_path)
@@ -629,12 +631,8 @@ class FmpTuflowVariablesCheckDialog(DialogBase, fmptuflowvariablescheck_ui.Ui_Fm
             col_count = self.fmpMultipleSummaryTable.columnCount()
             full_path = self.fmpMultipleSummaryTable.item(row, col_count-1).text()
             mrt_settings.saveProjectSetting('ief_path', full_path)
-#             self.loadIefVariables()
             self.fmpTabWidget.setCurrentIndex(1)
-#             self.iefFileWidget.blockSignals(True)
             self.iefFileWidget.setFilePath(full_path)
-#             self.iefFileWidget.blockSignals(False)
-#             self.loadIefVariables()
 
     def _multipleTsfTableContext(self, pos):
         """Add context menu to failed sections table.
@@ -657,6 +655,56 @@ class FmpTuflowVariablesCheckDialog(DialogBase, fmptuflowvariablescheck_ui.Ui_Fm
             self.tuflowTabWidget.setCurrentIndex(0)
             QApplication.processEvents()
             self.tlfFileWidget.setFilePath(full_path)
+            
+    def exportFmpSummary(self):
+        self.exportSummary(self.fmpMultipleSummaryTable, 'ief_summary')
+    
+    def exportTuflowSummary(self):
+        self.exportSummary(self.tuflowMultipleSummaryTable, 'tsf_summary')
+        
+    def exportSummary(self, table, save_name):
+        """Export contents of the ief/tsf summary tables.
+        
+        Args:
+            table(QTableWidget): the table to export the data from.
+            save_name(str): the default save file name.
+        """
+        csv_file = mrt_settings.loadProjectSetting('csv_file', './temp')
+        default_path = os.path.split(csv_file)[0]
+        default_path = os.path.join(default_path, save_name + '.csv')
+        filepath = QFileDialog(self).getSaveFileName(
+            self, 'Export Results', default_path, "CSV File (*.csv)"
+        )
+        if not filepath[0]:
+            return
+        mrt_settings.saveProjectSetting('csv_file', filepath[0])
+
+        cur_row = 0
+        cur_col = 0
+        row_count = table.rowCount()
+        col_count = table.columnCount()
+        
+        output = []
+        headers = []
+        while cur_col < col_count:
+            headers.append(table.horizontalHeaderItem(cur_col).text())
+            cur_col += 1
+
+        while cur_row < row_count:
+            cur_col = 0
+            line = []
+            while cur_col < col_count:
+                line.append(table.item(cur_row, cur_col).text())
+                cur_col += 1
+            output.append(line)
+            cur_row += 1
+            
+        try:
+            runvariables_check.exportTableSummary(filepath[0], headers, output)
+        except OSError as err:
+            QMessageBox.warning(
+                self, "Results export failed", err.args[0] 
+            )
             
     def loadMultipleIefSummary(self, path):
         mrt_settings.saveProjectSetting('ief_folder', path)

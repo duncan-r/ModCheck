@@ -25,6 +25,15 @@ from ship.utils.fileloaders import fileloader as fl
 from . import toolinterface as ti
 
 
+def exportTableSummary(save_path, table_headers, table_data):
+    """
+    """
+    with open(save_path, 'w') as outfile:
+        outfile.write(','.join(table_headers))
+        for row in table_data:
+            outfile.write('\n{0}'.format(','.join(row)))
+
+
 class DefaultVariables():
     
     IEF_VARS = {
@@ -404,12 +413,15 @@ class TsfSummaryCheck():
             temp_dict['TCF'] = tcf_name
             tlf_name = os.path.split(temp_dict['TLF Path'].replace('"', ''))[1]
             temp_dict['TLF Path'] = os.path.join(tsf_dir, tlf_name)
+            run_name = os.path.splitext(tlf_name)[0]
+            temp_dict['Run Name'] = run_name
             if 'Volume Error (%)' in temp_dict.keys():
                 temp_dict['Volume Error (%)'] = temp_dict['Volume Error (%)'].split('!')[0].strip()
             output.append(temp_dict)
         lookup_keys = self.LOOKUP_KEYS
         lookup_keys.insert(11, 'Warnings')
         lookup_keys.insert(12, 'Checks')
+        lookup_keys.insert(0, 'Run Name')
         return output, lookup_keys
         
  
