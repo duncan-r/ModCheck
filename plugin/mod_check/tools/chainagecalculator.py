@@ -32,6 +32,8 @@ class CompareFmpTuflowChainage():
         self.reach_chainage = None
         self.tuflow_chainage = None
         self.comparison = None
+        self.nwk_has_len_or_ana = True
+        self.nwk_has_id = True
         
     def fmpChainage(self, dat_path):
         model = self.loadFmpModel(dat_path)
@@ -40,9 +42,29 @@ class CompareFmpTuflowChainage():
 
     def tuflowChainage(self, nwk_layer):
         self.tuflow_chainage = {}
+        self.nwk_has_id = True
+        self.nwk_has_len_or_ana = True
+
+        # Check what kind of layer we're dealing with. Make a note of whether there
+        # is a Len_or_ANA column and whether there is an ID column.
+        # If no Len_or_ANA it's ignored. If no ID we fall back to the first column
+        headers = [f.name() for f in nwk_layer.fields()]
+        if not 'Len_or_ANA' in headers:
+            self.nwk_has_len_or_ana = False
+        if not 'ID' in headers:
+            self.nwk_has_id = False
+
         for feature in nwk_layer.getFeatures():
-            fmp_id = feature['ID']
-            tuflow_table_length = feature['Len_or_ANA']
+            if self.nwk_has_id:
+                fmp_id = feature['ID']
+            else:
+                fmp_id = feature[0]
+            
+            if self.nwk_has_len_or_ana:
+                tuflow_table_length = feature['Len_or_ANA']
+            else:
+                tuflow_table_length = 0
+
             tuflow_geom_length = feature.geometry().length()
             self.tuflow_chainage[fmp_id] = [tuflow_table_length, tuflow_geom_length]
         return self.tuflow_chainage 
@@ -64,16 +86,18 @@ class CompareFmpTuflowChainage():
                         'nwk_line_length': -1, 'nwk_len_or_ana': -1, 'diff': -1, 'status': 'NOT FOUND'
                     })
             else:
+                # If Len_or_ANA value > 0 (default) use that, otherwise use line length
                 if tuflow_chainage[node_id][0] > 0.0000:
                     nwk_chain = tuflow_chainage[node_id][0]
                 else:
                     nwk_chain = tuflow_chainage[node_id][1]
+
                 chain_diff = abs(node['chainage'] - nwk_chain)
                 output_diff = node['chainage'] - nwk_chain
                 temp = {
                     'type': node['category'], 'name': node_id, 'chainage': node['chainage'],
                     'nwk_line_length': tuflow_chainage[node_id][1], 
-                    'nwk_len_or_ana': tuflow_chainage[node_id][1], 'diff': output_diff,
+                    'nwk_len_or_ana': tuflow_chainage[node_id][0], 'diff': output_diff,
                     'status': 'NA',
                 }
                 if chain_diff > dx_tol:

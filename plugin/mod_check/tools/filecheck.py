@@ -193,7 +193,7 @@ class ResultHolder():
             else:
                 outfile.write('\nNo files were ignored')
 
-            outfile.write('\n\nMISSING FILES')
+            outfile.write('\n\nMISSING FILES\n')
             if self.results['missing']:
                 outfile.write('\n'.join(m['file'][0] for m in self.results['missing']))
             else:
