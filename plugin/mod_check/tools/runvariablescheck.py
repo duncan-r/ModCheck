@@ -141,7 +141,7 @@ class IefVariablesCheck(ti.ToolInterface):
             'TopSlotHeight': {'var_name': 'Top Slot Height', 'value_default': ['value', '0'], 'description': 'Height of top slot in conduit units'},
             'TopSlotdh': {'var_name': 'Top Slot dh', 'value_default': ['value', '0'], 'description': 'Depth of top slot below soffit in conduit units'},
             '2DScheme': {'var_name': '2D Scheme', 'check_value': '0', 'value_default': ['value', 'No'], 'description': 'Whether a 2D scheme (like TUFLOW) is being used'},
-            '2DTimestep': {'var_name': '2D Timestep', 'value_default': ['value', 'Between 1/4 - 1/2 of cell size'], 'description': '2D Timestep - may also be set and/or overriden in the 2D model'},
+            '2DTimestep': {'var_name': '2D Timestep', 'value_default': ['value', ''], 'description': '2D Timestep - may also be set and/or overriden in the 2D model'},
             'LaunchDoublePrecisionVersion': {'var_name': 'Double Precision FMP', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Whether double precision FMP is being used'},
             '2DDoublePrecision': {'var_name': 'Double Precision TUFLOW', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Whether double precision 2D model (like TUFLOW) is being used'},
             '2DOptions': {'var_name': '2D Run Options', 'value_default': ['value', ''], 'description': 'Run options (scenarios/events) for 2D scheme'},
@@ -212,13 +212,22 @@ class IefVariablesCheck(ti.ToolInterface):
         
         # Check if any key params have been changed from default
         params = {'changed': {}, 'default': {}}
-        params['changed']['Timestep'] = ['Not found', '']
+        params['changed']['Timestep'] = {
+            'ief_variables_name': 'Timestep', 'value': 'Not Found',
+            'default': '', 'description': 'If Not found this is probably a steady state run'
+        }
         if not ief.getValue('Timestep') is None:
             params['changed']['Timestep'] = {
                 'ief_variable_name': 'Timestep', 'value': ief.getValue('Timestep'), 
-                'default': 'If 2D model - No less than 1/2 of 2D timestep',
-                'description': ''
+                'default': '',
+                'description': 'If 2D model - No less than 1/2 of 2D timestep'
             }
+        else:
+            try:
+                run_type = ief.getValue('RunType')
+                if run_type != 'Unsteady':
+                    params['changed']['Timestep']['description'] = 'Run Type = {0}'.format(run_type)
+            except: pass
         params = self.checkFmpVariables(ief, params)
         return filepaths, params
     

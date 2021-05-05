@@ -709,6 +709,8 @@ class FmpTuflowVariablesCheckDialog(DialogBase, fmptuflowvariablescheck_ui.Ui_Fm
     def loadMultipleIefSummary(self, path):
         mrt_settings.saveProjectSetting('ief_folder', path)
 
+        failed_load = []
+        has_error = False
         try:
             ief_files = []
             for root, dirs, files in os.walk(path):
@@ -720,7 +722,12 @@ class FmpTuflowVariablesCheckDialog(DialogBase, fmptuflowvariablescheck_ui.Ui_Fm
             check = runvariables_check.IefVariablesCheck(self.project, 'fakepath')
             outputs = []
             for ief in ief_files:
-                outputs.append(check.loadSummaryInfo(ief))
+                try:
+                    result = check.loadSummaryInfo(ief)
+                    outputs.append(check.loadSummaryInfo(ief))
+                except Exception as err:
+                    has_error = True
+                    failed_load.append(ief)
                 
             row_position = 0
             self.fmpMultipleSummaryTable.setRowCount(row_position)
@@ -738,7 +745,17 @@ class FmpTuflowVariablesCheckDialog(DialogBase, fmptuflowvariablescheck_ui.Ui_Fm
                         self.fmpMultipleSummaryTable.setItem(row_position, i, QTableWidgetItem(value[0]))
                 row_position += 1
         except Exception as err:
-            pass
+            has_error = True
+            
+        if has_error:
+            if failed_load:
+                msg = 'Failed to load some .ief files\n'
+                msg += '\n'.join(failed_load)
+            else:
+                msg = 'Unable to read .ief file folders'
+            QMessageBox.warning(
+                self, "IEF file read fail", msg
+            )
         
     def loadMultipleTsfSummary(self, path):
         mrt_settings.saveProjectSetting('runs_folder', path)
