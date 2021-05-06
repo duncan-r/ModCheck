@@ -9,6 +9,7 @@ from qgis.core import *
 from qgis.gui import QgsMessageBar, QgsFileWidget
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
 from .forms import ui_help_dialog as help_ui
 from .forms import ui_text_dialog as text_dialog
@@ -967,15 +968,7 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
         
         # Loaded section property details
         self.properties = None
-        
-        # Setup context menus on tables
-        self.negativeConveyanceTable.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.negativeConveyanceTable.customContextMenuRequested.connect(self._conveyanceTableContext)
-        self.banktopCheckTable.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.banktopCheckTable.customContextMenuRequested.connect(self._banktopCheckTableContext)
-        
-        # Connect the slots
-        self.datFileReloadBtn.clicked.connect(self.loadSectionData)
+        self.graph_toolbar = None
         
         # Load existing settings
         dat_path = mrt_settings.loadProjectSetting(
@@ -985,6 +978,7 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
         dy_tol = mrt_settings.loadProjectSetting('section_dytol', 0.1)
 
         # Connect file widgets and update slots
+        self.datFileReloadBtn.clicked.connect(self.loadSectionData)
         self.datFileWidget.setFilePath(dat_path)
         self.datFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'dat_file'))
         self.fmpNodesLayerCbox.setFilters(QgsMapLayerProxyModel.PointLayer)
@@ -992,6 +986,11 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
         self.bankDyToleranceSpinbox.setValue(dy_tol)
         self.kTolSpinbox.valueChanged.connect(self._kTolChange)
         self.bankDyToleranceSpinbox.valueChanged.connect(self._dyTolChange)
+        self.negativeConveyanceTable.clicked.connect(self.conveyanceTableClicked)
+        self.banktopCheckTable.clicked.connect(self.banktopTableClicked)
+        self.graphics_view = graphs.SectionPropertiesGraphicsView()
+#         self.resultsLayout.addWidget(self.graphics_view)
+        self.graphLayout.addWidget(self.graphics_view)
 
     def _kTolChange(self, value):
         mrt_settings.saveProjectSetting('section_ktol', value)
@@ -999,77 +998,62 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
     def _dyTolChange(self, value):
         mrt_settings.saveProjectSetting('section_dytol', value)
         
-    def _conveyanceTableContext(self, pos):
-        index = self.negativeConveyanceTable.itemAt(pos)
-        if index is None: return
-        menu = QMenu()
-        locate_section_action = menu.addAction("Locate Section")
-        graph_section_action = menu.addAction("Graph Section")
+        
+    def banktopTableClicked(self, item):
+        node_id = self.banktopCheckTable.item(item.row(), 0).text()
+        self.graphSection(node_id, 'bad_banks')
+        self.showSelectedNode(node_id)
 
-        # Get the action and do whatever it says
-        action = menu.exec_(self.negativeConveyanceTable.viewport().mapToGlobal(pos))
-
-        if action is None: return
-        if action == locate_section_action or action == graph_section_action:
-            row = self.negativeConveyanceTable.currentRow()
-            id = self.negativeConveyanceTable.item(row, 0).text()
-            if action == locate_section_action:
-                self.showSelectedNode(id)
-            elif action == graph_section_action:
-                self.graphSection(id, 'conveyance')
-
-    def _setupTableContext(self, pos, table, caller):
-        index = table.itemAt(pos)
-        if index is None: return
-        menu = QMenu()
-        locate_section_action = menu.addAction("Locate Section")
-        graph_section_action = menu.addAction("Graph Section")
-
-        # Get the action and do whatever it says
-        action = menu.exec_(table.viewport().mapToGlobal(pos))
-
-        if action is None: return
-        if action == locate_section_action or action == graph_section_action:
-            row = table.currentRow()
-            id = table.item(row, 0).text()
-            if action == locate_section_action:
-                self.showSelectedNode(id)
-            elif action == graph_section_action:
-                self.graphSection(id, caller)
-                
-    def _banktopCheckTableContext(self, pos):
-        self._setupTableContext(pos, self.banktopCheckTable, 'bad_banks')
-
+    def conveyanceTableClicked(self, item):
+        node_id = self.negativeConveyanceTable.item(item.row(), 0).text()
+        self.graphSection(node_id, 'conveyance')
+        self.showSelectedNode(node_id)
+        
     def graphSection(self, node_id, caller):
         """
         """
+        def showToolbar():
+            if self.graph_toolbar is not None:
+                self.graphLayout.removeWidget(self.graph_toolbar)
+            self.graph_toolbar = NavigationToolbar(self.graphics_view.canvas, self)
+            self.graphLayout.addWidget(self.graph_toolbar)
+
         if caller == 'conveyance':
-            dlg = graphs.ConveyanceGraphDialog()
-            dlg.setupGraph(self.properties['negative_k'][node_id], node_id)
-            dlg.exec_()
+            self.graphics_view.drawConveyancePlot(
+                self.properties['negative_k'][node_id], node_id
+            )
+            showToolbar()
         elif caller == 'bad_banks':
-            dlg = graphs.BadBanksGraphDialog()
-            dlg.setupGraph(self.properties['bad_banks'][node_id], node_id)
-            dlg.exec_()
+            self.graphics_view.drawBanktopsPlot(
+                self.properties['bad_banks'][node_id], node_id
+            )
+            showToolbar()
         
     def showSelectedNode(self, node_id):
+        self.statusLabel.setText('')
         node_layer = self.fmpNodesLayerCbox.currentLayer()
-        self.iface.mainWindow().findChild(QAction, 'mActionDeselectAll').trigger()
-        node_layer.removeSelection()
-        found_node = False
-        for f in node_layer.getFeatures():
-            id = f[0]
-            if id == node_id:
-                found_node = True
-                node_layer.select(f.id())
-                self.iface.mapCanvas().zoomToSelected(node_layer)
-                break
+        if not node_layer:
+            self.statusLabel.setText('Cannot select node: no layer selected')
+            return
+        
+        try:
+            self.iface.mainWindow().findChild(QAction, 'mActionDeselectAll').trigger()
+            node_layer.removeSelection()
+            found_node = False
+            for f in node_layer.getFeatures():
+                id = f[0]
+                if id == node_id:
+                    found_node = True
+                    node_layer.select(f.id())
+                    self.iface.mapCanvas().zoomToSelected(node_layer)
+                    break
 
-        if not found_node:
-            QMessageBox.warning(
-                self, "FMP Node Not Found", 
-                "FMP node {} could not be found in nodes layer".format(node_id)
-            )
+            if not found_node:
+                self.statusLabel.setText(
+                    'Cannot select node: node id ({0}) not in nodes layer'.format(node_id)
+                )
+        except:
+            self.statusLabel.setText("Cannot select node: error reading nodes layer")
         
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)

@@ -212,9 +212,15 @@ acceptable for some models. Ideally the extreme left/right values should be the
 highest elevations in the section to avoid early overtopping of the channel and/or
 artificially increased channel conveyance.
 
-There is a right-click menu on both tables that allow you to locate the node
-associated with the failed section and to graph the cross section and conveyance / 
-banktop errors. 
+
+The K tolerance and dy tolerance values can be changed under the Setup group. Once
+the values have been changed you need to reload the data with the Reload button.
+
+Click on one of the rows in the table to zoom to the relevant node and show a graph 
+of the section being reviewed. In order for the zoom-to-node functionality to work
+the Tuflow nodes layer must be selected. If the node can not be found in the nodes
+layer the status will be updated to let you know. Graph interrogation tools, like
+zoom and pan funcionality, and saving the graph image are available on the toolbar.
 
 """
 

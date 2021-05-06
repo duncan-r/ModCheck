@@ -76,21 +76,25 @@ class ModelFileDialog(QDialog, text_ui.Ui_TextDialog):
             index = regex.indexIn(self.textEdit.toPlainText(), pos)
 
 
-class ConveyanceGraphDialog(QDialog, graph_ui.Ui_GraphDialog):
+class SectionPropertiesGraphicsView(QGraphicsView):
+    """GraphicsView to display section properties graphs.
     
-    def __init__(self, title="Section Conveyance"):
-        QDialog.__init__(self)
-        self.setupUi(self)
-        self.title = title
-        self.setWindowTitle(title)
-
-    def setupGraph(self, section_data, section_id):
-        try:
-            self.setWindowTitle('{} - {}'.format(self.title, section_id))
-        except: pass
+    Contains methods for drawing conveyance and banktop issues.
+    """
+    
+    def __init__(self):
+        QGraphicsView.__init__(self)
         
+    def drawConveyancePlot(self, section_data, section_id):
+        """Plot the conveyance and cross section data provided.
+        
+        Args:
+            section_data(dict): containing lists of the 'xvals', 'yvals',
+            'panels' and 'conveyance' data to be drawn on the graph.
+            section_id(str): the node id for this section.
+        """
         scene = QGraphicsScene()
-        view = self.graphGraphicsView.setScene(scene)
+        self.setScene(scene)
         fig = Figure()
         axes = fig.gca()
         
@@ -102,9 +106,14 @@ class ConveyanceGraphDialog(QDialog, graph_ui.Ui_GraphDialog):
         x = section_data['xvals']
         y = section_data['yvals']
         
-#         axes.set_title(self.title)
-        axes.set_ylabel('Elevation (mAOD)')
-        axes.set_xlabel('Chainage (m)')
+#         axes.set_ylabel('Elevation (mAOD)')
+#         axes.set_xlabel('Chainage (m)')
+#         axes.set_title="ID: {0}".format(section_id)
+        axes.set(
+            ylabel='Elevation (mAOD)',
+            xlabel='Chainage (m)',
+            title="Node Name: {0}".format(section_id)
+        )
 
         xs_plot = axes.plot(x, y, "-k", label="Cross Section")
         p_plot = None
@@ -137,34 +146,35 @@ class ConveyanceGraphDialog(QDialog, graph_ui.Ui_GraphDialog):
 #         axes2.legend()
 
         axes.grid(True)
-        canvas = FigureCanvas(fig)
-        proxy_widget = scene.addWidget(canvas)
-        
-        
-class BadBanksGraphDialog(QDialog, graph_ui.Ui_GraphDialog):
-    
-    def __init__(self, title="Banktop Check"):
-        QDialog.__init__(self)
-        self.setupUi(self)
-        self.title = title
-        self.setWindowTitle(title)
+        fig.tight_layout()
+        self.canvas = FigureCanvas(fig)
+        proxy_widget = scene.addWidget(self.canvas)
 
-    def setupGraph(self, section_data, section_id):
-        try:
-            self.setWindowTitle('{} - {}'.format(self.title, section_id))
-        except: pass
+    def drawBanktopsPlot(self, section_data, section_id):
+        """Plot the bad banks and cross section data provided.
         
+        Args:
+            section_data(dict): containing lists of the 'xvals', 'yvals',
+            'left_drop' and 'right_drop' data for the section.
+            section_id(str): the node id for this section.
+            
+        The left_drop and right_drop values are the difference between the
+        highest section elevation on the left and right sides and the extreme
+        left and right elevations (the misplaces bank elevation).
+        """
         scene = QGraphicsScene()
-        view = self.graphGraphicsView.setScene(scene)
+        view = self.setScene(scene)
         fig = Figure()
         axes = fig.gca()
         
         x = section_data['xvals']
         y = section_data['yvals']
         
-#         axes.set_title(self.title)
-        axes.set_ylabel('Elevation (mAOD)')
-        axes.set_xlabel('Chainage (m)')
+        axes.set(
+            ylabel='Elevation (mAOD)',
+            xlabel='Chainage (m)',
+            title="Node Name: {0}".format(section_id)
+        )
 
         xs_plot = axes.plot(x, y, "-k", label="Cross Section")
         fill_plot = axes.fill(np.NaN, np.NaN, 'r', alpha=0.5)
@@ -188,10 +198,11 @@ class BadBanksGraphDialog(QDialog, graph_ui.Ui_GraphDialog):
 
         axes.legend(xs_plot + fill_plot, ['Cross Section', 'Poor Banks'], loc='lower right')
         axes.grid(True)
-        canvas = FigureCanvas(fig)
-        proxy_widget = scene.addWidget(canvas)
-        
-        
+        fig.tight_layout()
+        self.canvas = FigureCanvas(fig)
+        proxy_widget = scene.addWidget(self.canvas)
+
+
 class AmaxGraphDialog(QDialog, graph_ui.Ui_GraphDialog):
     
     def __init__(self, title="AMAX"):
