@@ -1237,24 +1237,135 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
 
         DialogBase.__init__(self, dialog_name, iface, project, 'Check TUFLOW MB')
         
+        self.summary_results = []
+        self.summary_mboptions = ['_MB']
+        
         mb_file = mrt_settings.loadProjectSetting(
             'mb_file', self.project.readPath('./temp')
         )
-        self.mbFileWidget.setFilePath(mb_file)
+        self.mbFileWidget.setStorageMode(QgsFileWidget.GetDirectory)
+        self.mbFileWidget.setFilePath(os.path.dirname(mb_file))
         self.mbFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'mb_file'))
-        self.mbReloadBtn.clicked.connect(self.loadMbFile)
+        self.mbReloadBtn.clicked.connect(self.findMbFiles)
+        self.summaryTable.cellChanged.connect(self.summaryCellChanged)
+        self.summaryTable.cellClicked.connect(self.summaryTableClicked)
+        self.MBCheckbox.stateChanged.connect(self.summaryMbCheckChanged)
+        self.MB2DCheckbox.stateChanged.connect(self.summaryMbCheckChanged)
+        self.MB1DCheckbox.stateChanged.connect(self.summaryMbCheckChanged)
+
+        self.summaryTable.setColumnWidth(0, 40)
+        self.summaryTable.setColumnWidth(1, 70)
+        self.summaryTable.setColumnWidth(2, 70)
         
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)
-        self.loadMbFile()
+        self.findMbFiles()
+    
+    def summaryMbCheckChanged(self):
+        self.summary_mboptions = []
+        if self.MBCheckbox.isChecked():
+            self.summary_mboptions.append('_MB')
+        if self.MB2DCheckbox.isChecked():
+            self.summary_mboptions.append('_MB2D')
+        if self.MB1DCheckbox.isChecked():
+            self.summary_mboptions.append('_MB1D')
+    
+    def findMbFiles(self):
+        mb_path = mrt_settings.loadProjectSetting(
+            'mb_file', self.project.readPath('./temp')
+        )
+        self.summaryTable.setRowCount(0)
+        mb_check = tmb_check.TuflowStabilityCheck()
+        mb_files = mb_check.findMbFiles(mb_path, self.summary_mboptions)
+        self.summary_results = mb_check.loadMultipleFiles(mb_files)
+        if self.summary_results:
+            self.summaryTable.blockSignals(True)
+            self.updateSummaryTable()
+            self.summaryTable.blockSignals(False)
+            self.graphMultipleResults()
+        else:
+            QMessageBox.warning(
+                self, "MB files not found", 
+                "No TUFLOW MB, MB1D, or MB2D file were found within subfolders."
+            )
+        
+#         self.graphResults(results)
     
     def loadMbFile(self):
         mb_path = mrt_settings.loadProjectSetting(
             'mb_file', self.project.readPath('./temp')
         )
-        mb_check = tmb_check.TuflowStabilityCheck(mb_path)
+        mb_check = tmb_check.TuflowStabilityCheck()
         results = mb_check.run_tool()
         self.graphResults(results)
+        
+    def summaryCellChanged(self, row, col):
+        if col != 0: return
+        item = self.summaryTable.item(row, col)
+        check_state = item.checkState()
+        if check_state == Qt.Checked:
+            self.summary_results[row]['draw'] = True
+        else:
+            self.summary_results[row]['draw'] = False
+        self.graphMultipleResults()
+            
+    def summaryTableClicked(self, row, col):
+        if col == 0: return
+        for i, r in enumerate(self.summary_results):
+            self.summary_results[i]['color'] = '-r'
+        self.summary_results[row]['color'] = '-b'
+        self.graphMultipleResults()
+        
+    def updateSummaryTable(self):
+        row_position = 0
+        self.summaryTable.setRowCount(0)
+        for i, r in enumerate(self.summary_results):
+            self.summary_results[i]['color'] = '-r'
+            self.summary_results[i]['draw'] = True
+            check_item = QTableWidgetItem()
+            check_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            check_item.setCheckState(Qt.Checked)       
+            
+            self.summaryTable.insertRow(row_position)
+            self.summaryTable.setItem(row_position, 0, check_item)
+            self.summaryTable.setItem(row_position, 1, QTableWidgetItem(str(r['fail'])))
+            self.summaryTable.setItem(row_position, 2, QTableWidgetItem(str(r['max_mb'])))
+            self.summaryTable.setItem(row_position, 3, QTableWidgetItem(r['name']))
+            self.summaryTable.setItem(row_position, 4, QTableWidgetItem(r['path']))
+            row_position += 1
+
+    def graphMultipleResults(self):
+    
+        scene = QGraphicsScene()
+        view = self.summaryGraphicsView.setScene(scene)
+        fig = Figure()
+        axes = fig.gca()
+        
+        x = self.summary_results[0]['data']['Time (h)']
+        
+#         axes.set_title(self.title)
+        axes.set_ylabel('CME (%)', color='r')
+        axes.set_xlabel('Time (h)')
+        
+        cme_min = [1 for i in x]
+        cme_max = [-1 for i in x]
+
+        mb_max_plot = axes.plot(x, cme_min, "-g", alpha=0.5, label="CME max recommended", dashes=[6,2])
+        mb_min_plot = axes.plot(x, cme_max, "-g", alpha=0.5, label="CME min recommended", dashes=[6,2])
+
+        for r in self.summary_results:
+            if r['draw']:
+                cme = r['data']['Cum ME (%)']
+                plot_color = r['color']
+                mb_plot = axes.plot(x, cme, plot_color, label="CME")
+
+        plot_lines = mb_max_plot
+        labels = [l.get_label() for l in plot_lines]
+        axes.legend(plot_lines, labels, loc='lower right')
+
+        axes.grid(True)
+        canvas = FigureCanvas(fig)
+        proxy_widget = scene.addWidget(canvas)
         
     def graphResults(self, results):
     

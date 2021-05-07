@@ -149,7 +149,7 @@ class Ui_FmpSectionPropertyCheckDialog(object):
         self.label.setText(_translate("FmpSectionPropertyCheckDialog", "FMP .dat File"))
         self.datFileWidget.setFilter(_translate("FmpSectionPropertyCheckDialog", "*.dat"))
         self.groupBox.setTitle(_translate("FmpSectionPropertyCheckDialog", "Setup"))
-        self.label_3.setText(_translate("FmpSectionPropertyCheckDialog", "TUFLOW nodes layer (only used for locating the section in the nodes layer - right-click table options)"))
+        self.label_3.setText(_translate("FmpSectionPropertyCheckDialog", "TUFLOW nodes layer (only used for locating the section in the nodes layer when clicking on table row)"))
         self.label_2.setText(_translate("FmpSectionPropertyCheckDialog", "K Tolerance"))
         self.kTolSpinbox.setSuffix(_translate("FmpSectionPropertyCheckDialog", " m3/s"))
         self.label_4.setText(_translate("FmpSectionPropertyCheckDialog", "dy Tolerance"))
