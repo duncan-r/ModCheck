@@ -1237,35 +1237,139 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
 
         DialogBase.__init__(self, dialog_name, iface, project, 'Check TUFLOW MB')
         
-        mb_file = mrt_settings.loadProjectSetting(
-            'mb_file', self.project.readPath('./temp')
+        self.summary_results = []
+        self.file_results = None
+        self.summary_mboptions = ['_MB']
+        self.current_mb_filetype = ''
+        
+        mb_folder = mrt_settings.loadProjectSetting(
+            'mb_folder', self.project.readPath('./temp')
         )
+        mb_file = mrt_settings.loadProjectSetting(
+            'mb_file', mb_folder
+        )
+        self.mbFolderWidget.setStorageMode(QgsFileWidget.GetDirectory)
+        self.mbFolderWidget.setFilePath(os.path.dirname(mb_file))
+        self.mbFolderWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'mb_folder'))
         self.mbFileWidget.setFilePath(mb_file)
         self.mbFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'mb_file'))
-        self.mbReloadBtn.clicked.connect(self.loadMbFile)
+        self.reloadSummaryBtn.clicked.connect(self.findMbFiles)
+        self.reloadIndividualBtn.clicked.connect(self.loadMbFile)
+        self.individualUpdateGraphBtn.clicked.connect(self.updateIndividualGraph)
+        self.summaryTable.cellChanged.connect(self.summaryCellChanged)
+        self.summaryTable.cellClicked.connect(self.summaryTableClicked)
+        self.MBCheckbox.stateChanged.connect(self.summaryMbCheckChanged)
+        self.MB2DCheckbox.stateChanged.connect(self.summaryMbCheckChanged)
+        self.MB1DCheckbox.stateChanged.connect(self.summaryMbCheckChanged)
+        self.mbAndDvolRadioBtn.toggled.connect(self.updateIndividualGraph)
+        self.volumesRadioBtn.toggled.connect(self.updateIndividualGraph)
+        self.massErrorsRadioBtn.toggled.connect(self.updateIndividualGraph)
+        self.volumeErrorsRadioBtn.toggled.connect(self.updateIndividualGraph)
+
+        self.summaryTable.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.summaryTable.customContextMenuRequested.connect(self._showIndividualMbPlot)
+
+        self.summaryTable.setColumnWidth(0, 40)
+        self.summaryTable.setColumnWidth(1, 70)
+        self.summaryTable.setColumnWidth(2, 70)
         
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)
-        self.loadMbFile()
+        if caller == 'mb_folder':
+            self.findMbFiles()
+        elif caller == 'mb_file':
+            self.loadMbFile()
+            
+    def _showIndividualMbPlot(self, pos):
+        index = self.summaryTable.itemAt(pos)
+        if index is None: return
+        menu = QMenu()
+        locate_section_action = menu.addAction("Show detailed graph")
+
+        # Get the action and do whatever it says
+        action = menu.exec_(self.summaryTable.viewport().mapToGlobal(pos))
+        if action == locate_section_action:
+            row = self.summaryTable.currentRow()
+            col_count = self.summaryTable.columnCount()
+            full_path = self.summaryTable.item(row, col_count-1).text()
+            mrt_settings.saveProjectSetting('mb_file', full_path)
+            self.mainTabWidget.setCurrentIndex(1)
+            self.individualSeriesTabWidget.setCurrentIndex(0)
+            QApplication.processEvents()
+            self.mbFileWidget.setFilePath(full_path)
+            self.loadMbFile()
+
+    def summaryMbCheckChanged(self):
+        self.summary_mboptions = []
+        if self.MBCheckbox.isChecked():
+            self.summary_mboptions.append('_MB')
+        if self.MB2DCheckbox.isChecked():
+            self.summary_mboptions.append('_MB2D')
+        if self.MB1DCheckbox.isChecked():
+            self.summary_mboptions.append('_MB1D')
     
-    def loadMbFile(self):
+    def findMbFiles(self):
         mb_path = mrt_settings.loadProjectSetting(
-            'mb_file', self.project.readPath('./temp')
+            'mb_folder', self.project.readPath('./temp')
         )
-        mb_check = tmb_check.TuflowStabilityCheck(mb_path)
-        results = mb_check.run_tool()
-        self.graphResults(results)
+        self.summaryTable.setRowCount(0)
+        mb_check = tmb_check.TuflowStabilityCheck()
+        mb_files = mb_check.findMbFiles(mb_path, self.summary_mboptions)
+        self.summary_results = mb_check.loadMultipleFiles(mb_files)
+        if self.summary_results:
+            self.summaryTable.blockSignals(True)
+            self.updateSummaryTable()
+            self.summaryTable.blockSignals(False)
+            self.graphMultipleResults()
+        else:
+            QMessageBox.warning(
+                self, "MB files not found", 
+                "No TUFLOW MB, MB1D, or MB2D file were found within subfolders."
+            )
         
-    def graphResults(self, results):
+    def summaryCellChanged(self, row, col):
+        if col != 0: return
+        item = self.summaryTable.item(row, col)
+        check_state = item.checkState()
+        if check_state == Qt.Checked:
+            self.summary_results[row]['draw'] = True
+        else:
+            self.summary_results[row]['draw'] = False
+        self.graphMultipleResults()
+            
+    def summaryTableClicked(self, row, col):
+        if col == 0: return
+        for i, r in enumerate(self.summary_results):
+            self.summary_results[i]['color'] = '-r'
+        self.summary_results[row]['color'] = '-b'
+        self.graphMultipleResults()
+        
+    def updateSummaryTable(self):
+        row_position = 0
+        self.summaryTable.setRowCount(0)
+        for i, r in enumerate(self.summary_results):
+            self.summary_results[i]['color'] = '-r'
+            self.summary_results[i]['draw'] = True
+            check_item = QTableWidgetItem()
+            check_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            check_item.setCheckState(Qt.Checked)       
+            
+            self.summaryTable.insertRow(row_position)
+            self.summaryTable.setItem(row_position, 0, check_item)
+            self.summaryTable.setItem(row_position, 1, QTableWidgetItem(str(r['fail'])))
+            self.summaryTable.setItem(row_position, 2, QTableWidgetItem(str(r['max_mb'])))
+            self.summaryTable.setItem(row_position, 3, QTableWidgetItem(r['name']))
+            self.summaryTable.setItem(row_position, 4, QTableWidgetItem(r['path']))
+            row_position += 1
+
+    def graphMultipleResults(self):
     
         scene = QGraphicsScene()
-        view = self.mbGraphicsView.setScene(scene)
+        view = self.summaryGraphicsView.setScene(scene)
         fig = Figure()
         axes = fig.gca()
         
-        x = results['time']
-        cme = results['cme']
-        dvol = results['dvol']
+        x = self.summary_results[0]['data']['Time (h)']
         
 #         axes.set_title(self.title)
         axes.set_ylabel('CME (%)', color='r')
@@ -1274,19 +1378,141 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         cme_min = [1 for i in x]
         cme_max = [-1 for i in x]
 
-        mb_plot = axes.plot(x, cme, "-r", label="CME")
         mb_max_plot = axes.plot(x, cme_min, "-g", alpha=0.5, label="CME max recommended", dashes=[6,2])
         mb_min_plot = axes.plot(x, cme_max, "-g", alpha=0.5, label="CME min recommended", dashes=[6,2])
 
-        axes2 = axes.twinx()
-        dvol_plot = axes2.plot(x, dvol, "-b", label="dVol")
-        axes2.set_ylabel('dVol (m3/s/s)', color='b')
-        
+        for r in self.summary_results:
+            if r['draw']:
+                cme = r['data']['Cum ME (%)']
+                plot_color = r['color']
+                mb_plot = axes.plot(x, cme, plot_color, label="CME")
+
         plot_lines = mb_max_plot
         labels = [l.get_label() for l in plot_lines]
         axes.legend(plot_lines, labels, loc='lower right')
 
         axes.grid(True)
+        canvas = FigureCanvas(fig)
+        proxy_widget = scene.addWidget(canvas)
+        
+    def loadMbFile(self):
+        mb_path = mrt_settings.loadProjectSetting(
+            'mb_file', self.project.readPath('./temp')
+        )
+        
+        mb_type = ''
+        headers = []
+        if mb_path.endswith('_MB.csv'):
+            headers = [
+                'Q Vol In', 'Q Vol Out', 'Tot Vol In', 'Tot Vol Out', 'Vol I-O', 
+                'dVol', 'Vol Err', 'Q ME (%)', 'Vol I+O', 'Tot Vol', 'Cum Vol I+O',
+                'Cum Vol Err', 'Cum ME (%)', 'Cum Q ME (%)',
+            ]
+            self.current_mb_filetype = 'MB'
+        elif mb_path.endswith('_MB2D.csv'):
+            headers = [
+                'V In-Out', 'dVol', 'V Err', 'Q ME (%)', 'Total V', 'Cum V In+Out',
+                'Cum V Error', 'Cum ME (%)', 'Cum Q ME (%)',
+            ]
+            self.current_mb_filetype = 'MB2D'
+        elif mb_path.endswith('_MB1D.csv'):
+            headers = [
+                'Vol In-Out', 'dVol', 'Vol Err', 'Q ME (%)', 'Total Vol', 'Cum Vol I+O',
+                'Cum Vol Err', 'Cum ME (%)', 'Cum Q ME (%)',
+            ]
+            self.current_mb_filetype = 'MB1D'
+        else:
+            filename = os.path.split(mb_path)[1]
+            QMessageBox.warning(
+                self, "This file is not supported", 
+                "The file {0} is not currently supported, or is not an MB file".format(filename)
+            )
+            return
+        
+        mb_check = tmb_check.TuflowStabilityCheck()
+        self.file_results = mb_check.loadMbFile(mb_path, headers)
+        self.updateIndividualGraph()
+
+    def updateIndividualGraph(self):
+        if self.file_results is None:
+            QMessageBox.warning(
+                self, "No MB File Loaded", 
+                "Please load an MB File or select one from the summary table."
+            )
+            return
+
+        graph_series = []
+        if self.current_mb_filetype == 'MB':
+            if self.mbAndDvolRadioBtn.isChecked():
+                graph_series = [['Cum ME (%)'], ['dVol']]
+            elif self.volumesRadioBtn.isChecked():
+                graph_series = [['Q Vol In', 'Q Vol Out', 'Tot Vol In', 'Tot Vol Out'],[]]
+            elif self.massErrorsRadioBtn.isChecked():
+                graph_series = [['Q ME (%)', 'Cum ME (%)', 'Cum Q ME (%)'],[]]
+            elif self.volumeErrorsRadioBtn.isChecked():
+                graph_series = [['Vol Err'], ['Cum Vol Err']]
+        elif self.current_mb_filetype == 'MB2D':
+            if self.mbAndDvolRadioBtn.isChecked():
+                graph_series = [['Cum ME (%)'], ['dVol']]
+            elif self.volumesRadioBtn.isChecked():
+                graph_series = [['V In-Out'],['Cum V In+Out']]
+            elif self.massErrorsRadioBtn.isChecked():
+                graph_series = [['Q ME (%)', 'Cum ME (%)', 'Cum Q ME (%)'],[]]
+            elif self.volumeErrorsRadioBtn.isChecked():
+                graph_series = [['V Err'], ['Cum V Error']]
+        elif self.current_mb_filetype == 'MB1D':
+            if self.mbAndDvolRadioBtn.isChecked():
+                graph_series = [['Cum ME (%)'], ['dVol']]
+            elif self.volumesRadioBtn.isChecked():
+                graph_series = [['Vol In-Out'],['Cum Vol I+O']]
+            elif self.massErrorsRadioBtn.isChecked():
+                graph_series = [['Q ME (%)', 'Cum ME (%)', 'Cum Q ME (%)'],[]]
+            elif self.volumeErrorsRadioBtn.isChecked():
+                graph_series = [['Vol Err'], ['Cum Vol Err']]
+
+        if graph_series:
+            self.graphResults(graph_series)
+        
+    def graphResults(self, graph_series):
+        plot_colors = ['-b', '-g', '-r', '-c', '-m', '-y', '-k',]
+        color_count = 0
+        labels = []
+        plot_lines = []
+    
+        scene = QGraphicsScene()
+        view = self.individualGraphicsView.setScene(scene)
+        fig = Figure()
+        axes = fig.gca()
+        
+        x = self.file_results['Time (h)']
+        axes.set_xlabel('Time (h)')
+
+        for gs in graph_series[0]:
+            s = self.file_results[gs]
+            left_plot = axes.plot(x, s, plot_colors[color_count], label=gs)
+            pl = [p for p in left_plot]
+            plot_lines += pl
+            labels += ['(L) ' + l.get_label() for l in pl]
+            color_count += 1
+            if color_count > len(plot_colors):
+                color_count = 0
+            
+        if graph_series[1]:
+            axes2 = axes.twinx()
+            for gs in graph_series[1]:
+                s = self.file_results[gs]
+                right_plot = axes2.plot(x, s, plot_colors[color_count], label=gs)
+                pl = [p for p in right_plot]
+                plot_lines += pl
+                labels += ['(R) ' + l.get_label() for l in pl]
+                color_count += 1
+                if color_count > len(plot_colors):
+                    color_count = 0
+
+#         labels = [l.get_label() for l in plot_lines]
+        axes.legend(plot_lines, labels, loc='upper right')
+
+#         axes.grid(True)
         canvas = FigureCanvas(fig)
         proxy_widget = scene.addWidget(canvas)
 

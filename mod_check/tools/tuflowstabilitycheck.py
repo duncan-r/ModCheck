@@ -86,8 +86,9 @@ class TuflowStabilityCheck(ti.ToolInterface):
                     # This is a dirty approach but there will only ever be about 20
                     # columns and it's only run on one row so it shouldn't take too long
                     for i, col in enumerate(r):
+                        strip_col = col.strip()
                         for l in col_lookup.keys():
-                            if l in col: col_lookup[l] = i 
+                            if l == strip_col: col_lookup[l] = i 
                 else:
                     for res in results.keys():
                         results[res].append(float(r[col_lookup[res]]))

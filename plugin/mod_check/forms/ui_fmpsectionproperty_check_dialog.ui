@@ -43,7 +43,7 @@
         <item>
          <widget class="QLabel" name="label_3">
           <property name="text">
-           <string>TUFLOW nodes layer (only used for locating the section in the nodes layer - right-click table options)</string>
+           <string>TUFLOW nodes layer (only used for locating the section in the nodes layer when clicking on table row)</string>
           </property>
          </widget>
         </item>
@@ -231,7 +231,7 @@
       </widget>
      </item>
      <item>
-      <layout class="QVBoxLayout" name="graphLayout" stretch=""/>
+      <layout class="QVBoxLayout" name="graphLayout"/>
      </item>
     </layout>
    </item>
