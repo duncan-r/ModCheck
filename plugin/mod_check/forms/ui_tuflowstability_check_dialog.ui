@@ -95,6 +95,13 @@
             </layout>
            </item>
            <item>
+            <widget class="QCheckBox" name="showDvolCheckbox">
+             <property name="text">
+              <string>Show dVol</string>
+             </property>
+            </widget>
+           </item>
+           <item>
             <widget class="QTableWidget" name="summaryTable">
              <attribute name="horizontalHeaderCascadingSectionResizes">
               <bool>false</bool>

@@ -1265,6 +1265,7 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         self.volumesRadioBtn.toggled.connect(self.updateIndividualGraph)
         self.massErrorsRadioBtn.toggled.connect(self.updateIndividualGraph)
         self.volumeErrorsRadioBtn.toggled.connect(self.updateIndividualGraph)
+        self.showDvolCheckbox.stateChanged.connect(self.graphMultipleResults)
 
         self.summaryTable.setContextMenuPolicy(Qt.CustomContextMenu)
         self.summaryTable.customContextMenuRequested.connect(self._showIndividualMbPlot)
@@ -1312,6 +1313,7 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         mb_path = mrt_settings.loadProjectSetting(
             'mb_folder', self.project.readPath('./temp')
         )
+        self.summary_results = []
         self.summaryTable.setRowCount(0)
         mb_check = tmb_check.TuflowStabilityCheck()
         mb_files = mb_check.findMbFiles(mb_path, self.summary_mboptions)
@@ -1363,6 +1365,8 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
             row_position += 1
 
     def graphMultipleResults(self):
+        if not self.summary_results:
+            return
     
         scene = QGraphicsScene()
         view = self.summaryGraphicsView.setScene(scene)
@@ -1374,6 +1378,8 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
 #         axes.set_title(self.title)
         axes.set_ylabel('CME (%)', color='r')
         axes.set_xlabel('Time (h)')
+        if self.showDvolCheckbox.isChecked():
+            axes2 = axes.twinx()
         
         cme_min = [1 for i in x]
         cme_max = [-1 for i in x]
@@ -1386,6 +1392,14 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
                 cme = r['data']['Cum ME (%)']
                 plot_color = r['color']
                 mb_plot = axes.plot(x, cme, plot_color, label="CME")
+                if self.showDvolCheckbox.isChecked():
+                    dvol = r['data']['dVol']
+                    if plot_color == '-b':
+                        plot_color2 = '-c'
+                    else:
+                        plot_color2 = '-y'
+                    dvol_plot = axes2.plot(x, dvol, plot_color2, label="dVol")
+                    axes2.set_ylabel('dVol')
 
         plot_lines = mb_max_plot
         labels = [l.get_label() for l in plot_lines]
