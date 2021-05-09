@@ -74,8 +74,65 @@ class ModelFileDialog(QDialog, text_ui.Ui_TextDialog):
             # Move to the next match
             pos = index + regex.matchedLength()
             index = regex.indexIn(self.textEdit.toPlainText(), pos)
+            
+            
+class MbCheckIndividualGraphicsView(QGraphicsView):
+    """GraphicsView to display the Individual MB Check tab graphs.
+    """
+    
+    def __init__(self):
+        QGraphicsView.__init__(self)
 
+        scene = QGraphicsScene()
+        self.setScene(scene)
+        self.fig = Figure()
+        self.axes = self.fig.gca()
+        self.axes2 = self.axes.twinx()
+        self.fig.tight_layout()
+        self.canvas = FigureCanvas(self.fig)
+        proxy_widget = scene.addWidget(self.canvas)
+        
+    def drawPlot(self, graph_series, results, title):
+        plot_colors = ['-b', '-g', '-r', '-c', '-m', '-y', '-k',]
+        color_count = 0
+        labels = []
+        plot_lines = []
+        self.axes2.clear()
+        self.axes.clear()
+        self.fig.clear()
+        self.axes = self.fig.gca()
+        self.axes2 = self.axes.twinx()
+    
+        x = results['Time (h)']
+        self.axes.set_xlabel('Time (h)')
+        self.axes.set_title(title)
 
+        for gs in graph_series[0]:
+            s = results[gs]
+            left_plot = self.axes.plot(x, s, plot_colors[color_count], label=gs)
+            pl = [p for p in left_plot]
+            plot_lines += pl
+            labels += ['(L) ' + l.get_label() for l in pl]
+            color_count += 1
+            if color_count > len(plot_colors):
+                color_count = 0
+            
+        if graph_series[1]:
+            for gs in graph_series[1]:
+                s = results[gs]
+                right_plot = self.axes2.plot(x, s, plot_colors[color_count], label=gs)
+                pl = [p for p in right_plot]
+                plot_lines += pl
+                labels += ['(R) ' + l.get_label() for l in pl]
+                color_count += 1
+                if color_count > len(plot_colors):
+                    color_count = 0
+
+        self.axes.legend(plot_lines, labels, loc='upper right')
+        self.fig.tight_layout()
+        self.canvas.draw()
+        
+        
 class SectionPropertiesGraphicsView(QGraphicsView):
     """GraphicsView to display section properties graphs.
     
@@ -84,6 +141,14 @@ class SectionPropertiesGraphicsView(QGraphicsView):
     
     def __init__(self):
         QGraphicsView.__init__(self)
+        scene = QGraphicsScene()
+        self.setScene(scene)
+        self.fig = Figure()
+        self.axes = self.fig.gca()
+        self.axes2 = self.axes.twinx()
+        self.fig.tight_layout()
+        self.canvas = FigureCanvas(self.fig)
+        proxy_widget = scene.addWidget(self.canvas)
         
     def drawConveyancePlot(self, section_data, section_id):
         """Plot the conveyance and cross section data provided.
@@ -93,10 +158,11 @@ class SectionPropertiesGraphicsView(QGraphicsView):
             'panels' and 'conveyance' data to be drawn on the graph.
             section_id(str): the node id for this section.
         """
-        scene = QGraphicsScene()
-        self.setScene(scene)
-        fig = Figure()
-        axes = fig.gca()
+        self.axes2.clear()
+        self.axes.clear()
+        self.fig.clear()
+        self.axes = self.fig.gca()
+        self.axes2 = self.axes.twinx()
         
         minx = section_data['xvals'][0]
         maxx = section_data['xvals'][-1]
@@ -106,16 +172,13 @@ class SectionPropertiesGraphicsView(QGraphicsView):
         x = section_data['xvals']
         y = section_data['yvals']
         
-#         axes.set_ylabel('Elevation (mAOD)')
-#         axes.set_xlabel('Chainage (m)')
-#         axes.set_title="ID: {0}".format(section_id)
-        axes.set(
+        self.axes.set(
             ylabel='Elevation (mAOD)',
             xlabel='Chainage (m)',
             title="Node Name: {0}".format(section_id)
         )
 
-        xs_plot = axes.plot(x, y, "-k", label="Cross Section")
+        xs_plot = self.axes.plot(x, y, "-k", label="Cross Section")
         p_plot = None
 
         panel_count = 0
@@ -125,30 +188,27 @@ class SectionPropertiesGraphicsView(QGraphicsView):
                 panel_label = 'Panel {}'.format(panel_count)
                 panelx = [section_data['xvals'][i], section_data['xvals'][i]]
                 panely = [miny, maxy]
-                p_plot = axes.plot(panelx, panely, "-b", label=panel_label)
+                p_plot = self.axes.plot(panelx, panely, "-b", label=panel_label)
         
         cx = []
         cy = []
         for c in section_data['conveyance']:
             cx.append(c[0])
             cy.append(c[1])
-        axes2 = axes.twiny()
-        k_plot = axes2.plot(cx, cy, "-r", label="Conveyance")
-        axes2.set_xlabel('Conveyance (m3/s)', color='r')
+        self.axes2 = self.axes.twiny()
+        k_plot = self.axes2.plot(cx, cy, "-r", label="Conveyance")
+        self.axes2.set_xlabel('Conveyance (m3/s)', color='r')
 
         plot_lines = xs_plot + k_plot
         labels = [l.get_label() for l in plot_lines]
         if p_plot is not None: 
             plot_lines += p_plot
             labels.append('Panels')
-        axes.legend(plot_lines, labels, loc='lower right')
-#         axes.legend()
-#         axes2.legend()
+        self.axes.legend(plot_lines, labels, loc='lower right')
 
-        axes.grid(True)
-        fig.tight_layout()
-        self.canvas = FigureCanvas(fig)
-        proxy_widget = scene.addWidget(self.canvas)
+        self.axes.grid(True)
+        self.fig.tight_layout()
+        self.canvas.draw()
 
     def drawBanktopsPlot(self, section_data, section_id):
         """Plot the bad banks and cross section data provided.
@@ -162,45 +222,187 @@ class SectionPropertiesGraphicsView(QGraphicsView):
         highest section elevation on the left and right sides and the extreme
         left and right elevations (the misplaces bank elevation).
         """
-        scene = QGraphicsScene()
-        view = self.setScene(scene)
-        fig = Figure()
-        axes = fig.gca()
+        self.axes2.clear()
+        self.axes.clear()
+        self.fig.clear()
+        self.axes = self.fig.gca()
+        self.axes2 = self.axes.twinx()
         
         x = section_data['xvals']
         y = section_data['yvals']
         
-        axes.set(
+        self.axes.set(
             ylabel='Elevation (mAOD)',
             xlabel='Chainage (m)',
             title="Node Name: {0}".format(section_id)
         )
 
-        xs_plot = axes.plot(x, y, "-k", label="Cross Section")
-        fill_plot = axes.fill(np.NaN, np.NaN, 'r', alpha=0.5)
+        xs_plot = self.axes.plot(x, y, "-k", label="Cross Section")
+        fill_plot = self.axes.fill(np.NaN, np.NaN, 'r', alpha=0.5)
         
         if section_data['left_drop'] > 0:
             line_x = x[:(section_data['max_left_idx']+1)]
             line_y = y[:(section_data['max_left_idx']+1)]
             line_elev = [section_data['max_left'] for i in line_x]
-            axes.plot(
+            self.axes.plot(
                 line_x, line_elev, '-r'
             )
-            axes.fill_between(line_x, line_y, line_elev, interpolate=True, alpha=0.5, color='r')
+            self.axes.fill_between(line_x, line_y, line_elev, interpolate=True, alpha=0.5, color='r')
         if section_data['right_drop'] > 0:
             line_x = x[section_data['max_right_idx']:]
             line_y = y[section_data['max_right_idx']:]
             line_elev = [section_data['max_right'] for i in line_x]
-            axes.plot(
+            self.axes.plot(
                 line_x, line_elev, '-r'
             )
-            axes.fill_between(line_x, line_y, line_elev, interpolate=True, alpha=0.5, color='r')
+            self.axes.fill_between(line_x, line_y, line_elev, interpolate=True, alpha=0.5, color='r')
 
-        axes.legend(xs_plot + fill_plot, ['Cross Section', 'Poor Banks'], loc='lower right')
-        axes.grid(True)
-        fig.tight_layout()
-        self.canvas = FigureCanvas(fig)
-        proxy_widget = scene.addWidget(self.canvas)
+        self.axes.legend(xs_plot + fill_plot, ['Cross Section', 'Poor Banks'], loc='lower right')
+        self.axes.grid(True)
+        self.fig.tight_layout()
+        self.canvas.draw()
+
+
+# class SectionPropertiesGraphicsView(QGraphicsView):
+#     """GraphicsView to display section properties graphs.
+#     
+#     Contains methods for drawing conveyance and banktop issues.
+#     """
+#     
+#     def __init__(self):
+#         QGraphicsView.__init__(self)
+#         self.canvas = None
+#         
+#     def drawConveyancePlot(self, section_data, section_id):
+#         """Plot the conveyance and cross section data provided.
+#         
+#         Args:
+#             section_data(dict): containing lists of the 'xvals', 'yvals',
+#             'panels' and 'conveyance' data to be drawn on the graph.
+#             section_id(str): the node id for this section.
+#         """
+#         if self.canvas is None:
+#             scene = QGraphicsScene()
+#             self.setScene(scene)
+#         fig = Figure()
+#         axes = fig.gca()
+#         
+#         minx = section_data['xvals'][0]
+#         maxx = section_data['xvals'][-1]
+#         miny = min(section_data['yvals'])
+#         maxy = max(section_data['yvals'])
+#         
+#         x = section_data['xvals']
+#         y = section_data['yvals']
+#         
+# #         axes.set_ylabel('Elevation (mAOD)')
+# #         axes.set_xlabel('Chainage (m)')
+# #         axes.set_title="ID: {0}".format(section_id)
+#         axes.set(
+#             ylabel='Elevation (mAOD)',
+#             xlabel='Chainage (m)',
+#             title="Node Name: {0}".format(section_id)
+#         )
+# 
+#         xs_plot = axes.plot(x, y, "-k", label="Cross Section")
+#         p_plot = None
+# 
+#         panel_count = 0
+#         for i, panel in enumerate(section_data['panels']):
+#             if panel:
+#                 panel_count += 1
+#                 panel_label = 'Panel {}'.format(panel_count)
+#                 panelx = [section_data['xvals'][i], section_data['xvals'][i]]
+#                 panely = [miny, maxy]
+#                 p_plot = axes.plot(panelx, panely, "-b", label=panel_label)
+#         
+#         cx = []
+#         cy = []
+#         for c in section_data['conveyance']:
+#             cx.append(c[0])
+#             cy.append(c[1])
+#         axes2 = axes.twiny()
+#         k_plot = axes2.plot(cx, cy, "-r", label="Conveyance")
+#         axes2.set_xlabel('Conveyance (m3/s)', color='r')
+# 
+#         plot_lines = xs_plot + k_plot
+#         labels = [l.get_label() for l in plot_lines]
+#         if p_plot is not None: 
+#             plot_lines += p_plot
+#             labels.append('Panels')
+#         axes.legend(plot_lines, labels, loc='lower right')
+# #         axes.legend()
+# #         axes2.legend()
+# 
+#         axes.grid(True)
+#         fig.tight_layout()
+# #         self.canvas = FigureCanvas(fig)
+# #         proxy_widget = scene.addWidget(self.canvas)
+#         if self.canvas is None:
+#             self.canvas = FigureCanvas(fig)
+#             proxy_widget = scene.addWidget(self.canvas)
+#         else:
+#             self.canvas.figure = fig
+#             self.canvas.draw()
+# 
+#     def drawBanktopsPlot(self, section_data, section_id):
+#         """Plot the bad banks and cross section data provided.
+#         
+#         Args:
+#             section_data(dict): containing lists of the 'xvals', 'yvals',
+#             'left_drop' and 'right_drop' data for the section.
+#             section_id(str): the node id for this section.
+#             
+#         The left_drop and right_drop values are the difference between the
+#         highest section elevation on the left and right sides and the extreme
+#         left and right elevations (the misplaces bank elevation).
+#         """
+#         if self.canvas is None:
+#             scene = QGraphicsScene()
+#             view = self.setScene(scene)
+#         fig = Figure()
+#         axes = fig.gca()
+#         
+#         x = section_data['xvals']
+#         y = section_data['yvals']
+#         
+#         axes.set(
+#             ylabel='Elevation (mAOD)',
+#             xlabel='Chainage (m)',
+#             title="Node Name: {0}".format(section_id)
+#         )
+# 
+#         xs_plot = axes.plot(x, y, "-k", label="Cross Section")
+#         fill_plot = axes.fill(np.NaN, np.NaN, 'r', alpha=0.5)
+#         
+#         if section_data['left_drop'] > 0:
+#             line_x = x[:(section_data['max_left_idx']+1)]
+#             line_y = y[:(section_data['max_left_idx']+1)]
+#             line_elev = [section_data['max_left'] for i in line_x]
+#             axes.plot(
+#                 line_x, line_elev, '-r'
+#             )
+#             axes.fill_between(line_x, line_y, line_elev, interpolate=True, alpha=0.5, color='r')
+#         if section_data['right_drop'] > 0:
+#             line_x = x[section_data['max_right_idx']:]
+#             line_y = y[section_data['max_right_idx']:]
+#             line_elev = [section_data['max_right'] for i in line_x]
+#             axes.plot(
+#                 line_x, line_elev, '-r'
+#             )
+#             axes.fill_between(line_x, line_y, line_elev, interpolate=True, alpha=0.5, color='r')
+# 
+#         axes.legend(xs_plot + fill_plot, ['Cross Section', 'Poor Banks'], loc='lower right')
+#         axes.grid(True)
+#         fig.tight_layout()
+# #         self.canvas = FigureCanvas(fig)
+# #         proxy_widget = scene.addWidget(self.canvas)
+#         if self.canvas is None:
+#             self.canvas = FigureCanvas(fig)
+#             proxy_widget = scene.addWidget(self.canvas)
+#         else:
+#             self.canvas.figure = fig
+#             self.canvas.draw()
 
 
 class AmaxGraphDialog(QDialog, graph_ui.Ui_GraphDialog):

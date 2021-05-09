@@ -968,7 +968,9 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
         
         # Loaded section property details
         self.properties = None
-        self.graph_toolbar = None
+        self.graphics_view = graphs.SectionPropertiesGraphicsView()
+        self.graph_toolbar = NavigationToolbar(self.graphics_view.canvas, self)
+
         
         # Load existing settings
         dat_path = mrt_settings.loadProjectSetting(
@@ -988,9 +990,9 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
         self.bankDyToleranceSpinbox.valueChanged.connect(self._dyTolChange)
         self.negativeConveyanceTable.clicked.connect(self.conveyanceTableClicked)
         self.banktopCheckTable.clicked.connect(self.banktopTableClicked)
-        self.graphics_view = graphs.SectionPropertiesGraphicsView()
 #         self.resultsLayout.addWidget(self.graphics_view)
         self.graphLayout.addWidget(self.graphics_view)
+        self.graphLayout.addWidget(self.graph_toolbar)
 
     def _kTolChange(self, value):
         mrt_settings.saveProjectSetting('section_ktol', value)
@@ -1012,22 +1014,23 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
     def graphSection(self, node_id, caller):
         """
         """
-        def showToolbar():
-            if self.graph_toolbar is not None:
-                self.graphLayout.removeWidget(self.graph_toolbar)
-            self.graph_toolbar = NavigationToolbar(self.graphics_view.canvas, self)
-            self.graphLayout.addWidget(self.graph_toolbar)
+#         def showToolbar():
+#             if self.graph_toolbar is None:
+# #                 self.graphLayout.removeWidget(self.graph_toolbar)
+#                 self.graph_toolbar = NavigationToolbar(self.graphics_view.canvas, self)
+#                 self.graphLayout.addWidget(self.graph_toolbar)
 
         if caller == 'conveyance':
             self.graphics_view.drawConveyancePlot(
                 self.properties['negative_k'][node_id], node_id
             )
-            showToolbar()
+#             showToolbar()
         elif caller == 'bad_banks':
             self.graphics_view.drawBanktopsPlot(
                 self.properties['bad_banks'][node_id], node_id
             )
-            showToolbar()
+#             showToolbar()
+
         
     def showSelectedNode(self, node_id):
         self.statusLabel.setText('')
@@ -1241,6 +1244,8 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         self.file_results = None
         self.summary_mboptions = ['_MB']
         self.current_mb_filetype = ''
+        self.individual_graphics_view = graphs.MbCheckIndividualGraphicsView()
+        self.individual_graph_toolbar = NavigationToolbar(self.individual_graphics_view.canvas, self)
         
         mb_folder = mrt_settings.loadProjectSetting(
             'mb_folder', self.project.readPath('./temp')
@@ -1269,10 +1274,12 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
 
         self.summaryTable.setContextMenuPolicy(Qt.CustomContextMenu)
         self.summaryTable.customContextMenuRequested.connect(self._showIndividualMbPlot)
-
         self.summaryTable.setColumnWidth(0, 40)
         self.summaryTable.setColumnWidth(1, 70)
         self.summaryTable.setColumnWidth(2, 70)
+
+        self.individualGraphLayout.addWidget(self.individual_graphics_view)
+        self.individualGraphLayout.addWidget(self.individual_graph_toolbar)
         
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)
@@ -1342,16 +1349,16 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
     def summaryTableClicked(self, row, col):
         if col == 0: return
         for i, r in enumerate(self.summary_results):
-            self.summary_results[i]['color'] = '-r'
-        self.summary_results[row]['color'] = '-b'
+            self.summary_results[i]['alpha'] = 0.4
+        self.summary_results[row]['alpha'] = 1
         self.graphMultipleResults()
         
     def updateSummaryTable(self):
         row_position = 0
         self.summaryTable.setRowCount(0)
         for i, r in enumerate(self.summary_results):
-            self.summary_results[i]['color'] = '-r'
             self.summary_results[i]['draw'] = True
+            self.summary_results[i]['alpha'] = 0.4
             check_item = QTableWidgetItem()
             check_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
             check_item.setCheckState(Qt.Checked)       
@@ -1390,15 +1397,11 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         for r in self.summary_results:
             if r['draw']:
                 cme = r['data']['Cum ME (%)']
-                plot_color = r['color']
-                mb_plot = axes.plot(x, cme, plot_color, label="CME")
+                plot_alpha = r['alpha']
+                mb_plot = axes.plot(x, cme, '-r', alpha=plot_alpha, label="CME")
                 if self.showDvolCheckbox.isChecked():
                     dvol = r['data']['dVol']
-                    if plot_color == '-b':
-                        plot_color2 = '-c'
-                    else:
-                        plot_color2 = '-y'
-                    dvol_plot = axes2.plot(x, dvol, plot_color2, label="dVol")
+                    dvol_plot = axes2.plot(x, dvol, '-b', alpha=plot_alpha, label="dVol")
                     axes2.set_ylabel('dVol')
 
         plot_lines = mb_max_plot
@@ -1416,6 +1419,7 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         
         mb_type = ''
         headers = []
+        filename = os.path.split(mb_path)[1]
         if mb_path.endswith('_MB.csv'):
             headers = [
                 'Q Vol In', 'Q Vol Out', 'Tot Vol In', 'Tot Vol Out', 'Vol I-O', 
@@ -1436,13 +1440,13 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
             ]
             self.current_mb_filetype = 'MB1D'
         else:
-            filename = os.path.split(mb_path)[1]
             QMessageBox.warning(
                 self, "This file is not supported", 
                 "The file {0} is not currently supported, or is not an MB file".format(filename)
             )
             return
         
+        self.current_mb_filename = filename
         mb_check = tmb_check.TuflowStabilityCheck()
         self.file_results = mb_check.loadMbFile(mb_path, headers)
         self.updateIndividualGraph()
@@ -1460,7 +1464,7 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
             if self.mbAndDvolRadioBtn.isChecked():
                 graph_series = [['Cum ME (%)'], ['dVol']]
             elif self.volumesRadioBtn.isChecked():
-                graph_series = [['Q Vol In', 'Q Vol Out', 'Tot Vol In', 'Tot Vol Out'],[]]
+                graph_series = [['Q Vol In', 'Q Vol Out'], ['Tot Vol In', 'Tot Vol Out']]
             elif self.massErrorsRadioBtn.isChecked():
                 graph_series = [['Q ME (%)', 'Cum ME (%)', 'Cum Q ME (%)'],[]]
             elif self.volumeErrorsRadioBtn.isChecked():
@@ -1485,50 +1489,9 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
                 graph_series = [['Vol Err'], ['Cum Vol Err']]
 
         if graph_series:
-            self.graphResults(graph_series)
-        
-    def graphResults(self, graph_series):
-        plot_colors = ['-b', '-g', '-r', '-c', '-m', '-y', '-k',]
-        color_count = 0
-        labels = []
-        plot_lines = []
-    
-        scene = QGraphicsScene()
-        view = self.individualGraphicsView.setScene(scene)
-        fig = Figure()
-        axes = fig.gca()
-        
-        x = self.file_results['Time (h)']
-        axes.set_xlabel('Time (h)')
-
-        for gs in graph_series[0]:
-            s = self.file_results[gs]
-            left_plot = axes.plot(x, s, plot_colors[color_count], label=gs)
-            pl = [p for p in left_plot]
-            plot_lines += pl
-            labels += ['(L) ' + l.get_label() for l in pl]
-            color_count += 1
-            if color_count > len(plot_colors):
-                color_count = 0
-            
-        if graph_series[1]:
-            axes2 = axes.twinx()
-            for gs in graph_series[1]:
-                s = self.file_results[gs]
-                right_plot = axes2.plot(x, s, plot_colors[color_count], label=gs)
-                pl = [p for p in right_plot]
-                plot_lines += pl
-                labels += ['(R) ' + l.get_label() for l in pl]
-                color_count += 1
-                if color_count > len(plot_colors):
-                    color_count = 0
-
-#         labels = [l.get_label() for l in plot_lines]
-        axes.legend(plot_lines, labels, loc='upper right')
-
-#         axes.grid(True)
-        canvas = FigureCanvas(fig)
-        proxy_widget = scene.addWidget(canvas)
+            self.individual_graphics_view.drawPlot(
+                graph_series, self.file_results, self.current_mb_filename
+            )
 
 
 class NrfaStationViewerDialog(DialogBase, nrfa_ui.Ui_NrfaViewerDialog):

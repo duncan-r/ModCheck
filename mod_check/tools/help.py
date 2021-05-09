@@ -241,6 +241,52 @@ The results of the check can be exported to a csv file with the Export to CSV bu
 """
 
 CHECK_TUFLOW_MB = """
+Review TUFLOW MB files to check key stability outputs from model runs.
+
+Allows you to load TUFLOW MB, MB1D and MB2D csv files to review some of the main
+stability check outputs from an ESTRY-TUFLOW model. There are two main tabs:
+
+
+Summary:
+Select a root folder from which to load all of the TUFLOW MB, MB1D and MB2D files -
+searches all of the subfolders for the relevant file types - and graph them
+alongside each other.
+
+The file types loaded can be selected with the "_MB", "_MB1D" and "_MB2D" checkboxes
+at the top of the tab. If you update the selection you will need to reload the 
+folder with the Reload button. 
+All of the files found in the subfolders will be added to table, along with some
+summary information including, whether it failed the normal max/min cumulative max
+error (CME) percentage of +-1%, the maximum absolute CME value, the name of the
+run and the absolute path to the file.
+
+Individual results can be added or removed from the graph by checking or unchecking
+the checkbox in the Graph column of the table. Clicking on a table row will 
+highlight the series associated with that row to make them stand out from the others.
+The dVol series for each MB file can be plotted alongside the CME results by ticking
+the Show dVol checkbox above the table.
+
+Right-clicking a row in the table will bring up a context menu where you can select
+"Show detailed graph" to open that particular file in the Individual tab and few
+more detailed results for the simulation.
+
+
+Individual:
+Selecting a TUFLOW MB file with the file select box at the top will open more detailed
+information about a specific MB output. This can also be achieved by selecting the
+"Show detailed graph" option from the righ-click menu on the Summary tab table.
+
+There are several preset graph setups to view commonly used outputs from the MB files
+in the Presets tab to the left. Selecting one of the radio boxes will update the
+graph with results related to that preset group. Series that are graphed on the 
+primary (left) y axis will be labelled with "(L)" and series graphed on the
+secondary (right) y axis will be labelled with "(R)".
+
+A future release will allow you to select which series to display on the graph
+under the Custom tab. This is not currently implemented.
+
+
+
 Check TUFLOW MB allows you to quickly review the cumulative mass balance and dVol
 graphs from the TUFLOW csv result outputs. 
 

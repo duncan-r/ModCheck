@@ -268,14 +268,14 @@
            <item>
             <widget class="QPushButton" name="individualUpdateGraphBtn">
              <property name="text">
-              <string>Update Graph</string>
+              <string>Reset Graph</string>
              </property>
             </widget>
            </item>
           </layout>
          </item>
          <item>
-          <widget class="QGraphicsView" name="individualGraphicsView"/>
+          <layout class="QVBoxLayout" name="individualGraphLayout"/>
          </item>
         </layout>
        </item>

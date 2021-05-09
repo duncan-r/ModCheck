@@ -136,9 +136,9 @@ class Ui_TuflowStabilityCheckDialog(object):
         self.individualUpdateGraphBtn.setObjectName("individualUpdateGraphBtn")
         self.verticalLayout_7.addWidget(self.individualUpdateGraphBtn)
         self.horizontalLayout_3.addLayout(self.verticalLayout_7)
-        self.individualGraphicsView = QtWidgets.QGraphicsView(self.individualTab)
-        self.individualGraphicsView.setObjectName("individualGraphicsView")
-        self.horizontalLayout_3.addWidget(self.individualGraphicsView)
+        self.individualGraphLayout = QtWidgets.QVBoxLayout()
+        self.individualGraphLayout.setObjectName("individualGraphLayout")
+        self.horizontalLayout_3.addLayout(self.individualGraphLayout)
         self.horizontalLayout_3.setStretch(0, 2)
         self.horizontalLayout_3.setStretch(1, 8)
         self.verticalLayout_5.addLayout(self.horizontalLayout_3)
@@ -187,7 +187,7 @@ class Ui_TuflowStabilityCheckDialog(object):
         self.volumeErrorsRadioBtn.setText(_translate("TuflowStabilityCheckDialog", "Volume Errors"))
         self.individualSeriesTabWidget.setTabText(self.individualSeriesTabWidget.indexOf(self.presetSeriesTab), _translate("TuflowStabilityCheckDialog", "Presets"))
         self.individualSeriesTabWidget.setTabText(self.individualSeriesTabWidget.indexOf(self.customSeriesTab), _translate("TuflowStabilityCheckDialog", "Custom"))
-        self.individualUpdateGraphBtn.setText(_translate("TuflowStabilityCheckDialog", "Update Graph"))
+        self.individualUpdateGraphBtn.setText(_translate("TuflowStabilityCheckDialog", "Reset Graph"))
         self.mainTabWidget.setTabText(self.mainTabWidget.indexOf(self.individualTab), _translate("TuflowStabilityCheckDialog", "Individual"))
 
 from qgsfilewidget import QgsFileWidget
