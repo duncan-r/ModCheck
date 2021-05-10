@@ -1254,7 +1254,7 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
             'mb_file', mb_folder
         )
         self.mbFolderWidget.setStorageMode(QgsFileWidget.GetDirectory)
-        self.mbFolderWidget.setFilePath(os.path.dirname(mb_file))
+        self.mbFolderWidget.setFilePath(os.path.dirname(mb_folder))
         self.mbFolderWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'mb_folder'))
         self.mbFileWidget.setFilePath(mb_file)
         self.mbFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'mb_file'))
@@ -1350,7 +1350,9 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         if col == 0: return
         for i, r in enumerate(self.summary_results):
             self.summary_results[i]['alpha'] = 0.4
+            self.summary_results[i]['color'] = '-r'
         self.summary_results[row]['alpha'] = 1
+        self.summary_results[row]['color'] = '-m'
         self.graphMultipleResults()
         
     def updateSummaryTable(self):
@@ -1359,6 +1361,7 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         for i, r in enumerate(self.summary_results):
             self.summary_results[i]['draw'] = True
             self.summary_results[i]['alpha'] = 0.4
+            self.summary_results[i]['color'] = '-r'
             check_item = QTableWidgetItem()
             check_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
             check_item.setCheckState(Qt.Checked)       
@@ -1380,7 +1383,15 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         fig = Figure()
         axes = fig.gca()
         
-        x = self.summary_results[0]['data']['Time (h)']
+#         x = self.summary_results[0]['data']['Time (h)']
+        max_time = -1
+        count = -1
+        for i, r in enumerate(self.summary_results):
+            temp = max(r['data']['Time (h)'])
+            if temp > max_time:
+                max_time = temp
+                count = i
+        x = self.summary_results[count]['data']['Time (h)']
         
 #         axes.set_title(self.title)
         axes.set_ylabel('CME (%)', color='r')
@@ -1396,12 +1407,18 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
 
         for r in self.summary_results:
             if r['draw']:
+                x = r['data']['Time (h)']
                 cme = r['data']['Cum ME (%)']
                 plot_alpha = r['alpha']
-                mb_plot = axes.plot(x, cme, '-r', alpha=plot_alpha, label="CME")
+                plot_color = r['color']
+                if plot_color == '-m':
+                    plot_color2 = '-k'
+                else:
+                    plot_color2 = '-b'
+                mb_plot = axes.plot(x, cme, plot_color, alpha=plot_alpha, label="CME")
                 if self.showDvolCheckbox.isChecked():
                     dvol = r['data']['dVol']
-                    dvol_plot = axes2.plot(x, dvol, '-b', alpha=plot_alpha, label="dVol")
+                    dvol_plot = axes2.plot(x, dvol, plot_color2, alpha=plot_alpha, label="dVol")
                     axes2.set_ylabel('dVol')
 
         plot_lines = mb_max_plot
