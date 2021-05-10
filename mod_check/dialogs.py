@@ -33,7 +33,7 @@ from .tools import nrfaviewer as nrfa_viewer
 from .tools import filecheck
 from .tools import settings as mrt_settings
 
-from .widgets import graphdialogs as graphs
+from .mywidgets import graphdialogs as graphs
 from PyQt5.pyrcc_main import showHelp
 
 DATA_DIR = './data'
