@@ -76,6 +76,91 @@ class ModelFileDialog(QDialog, text_ui.Ui_TextDialog):
             index = regex.indexIn(self.textEdit.toPlainText(), pos)
             
             
+class MbCheckMultipleGraphicsView(QGraphicsView):
+    """GraphicsView for displaying multiple mb/dvol series.
+    """
+    
+    def __init__(self):
+        QGraphicsView.__init__(self)
+        scene = QGraphicsScene()
+        self.setScene(scene)
+        self.fig = Figure()
+        self.axes = self.fig.gca()
+        self.axes2 = None
+        self.fig.tight_layout()
+        self.canvas = FigureCanvas(self.fig)
+        proxy_widget = scene.addWidget(self.canvas)
+        
+    def resetPlot(self):
+        if self.axes2 is not None:
+            self.axes2.clear()
+            self.axes2 = None
+        self.axes.clear()
+        self.fig.clear()
+        self.axes = self.fig.gca()
+        
+    def drawPlot(self, results, show_dvol):
+        """Update the graph plot."""
+        self.resetPlot()
+
+        # Get the time series with the largest range
+        max_time = -1
+        count = -1
+        for i, r in enumerate(results):
+            temp = max(r['data']['Time (h)'])
+            if temp > max_time:
+                max_time = temp
+                count = i
+        x = results[count]['data']['Time (h)']
+        
+        self.axes.set_ylabel('CME (%)', color='m')
+        self.axes.set_xlabel('Time (h)')
+        if show_dvol:
+            self.axes2 = self.axes.twinx()
+        
+        # Plot recommended cme boundary lines
+        cme_min = [1 for i in x]
+        cme_max = [-1 for i in x]
+        mb_max_plot = self.axes.plot(x, cme_min, "-g", alpha=0.5, label="CME max recommended", dashes=[6,2])
+        mb_min_plot = self.axes.plot(x, cme_max, "-g", alpha=0.5, label="CME min recommended", dashes=[6,2])
+
+        hl_index = -1
+        for i, r in enumerate(results):
+            if r['draw']:
+                # Store index of highlight section and skip
+                if r['highlight']:
+                    hl_index = i
+                    continue
+
+                x = r['data']['Time (h)']
+                cme = r['data']['Cum ME (%)']
+                mb_plot = self.axes.plot(x, cme, '-m', alpha=0.4, label="CME")
+                if show_dvol:
+                    dvol = r['data']['dVol']
+                    dvol_plot = self.axes2.plot(x, dvol, '-c', alpha=0.4, label="dVol")
+                    self.axes2.set_ylabel('dVol', color='c')
+        
+        # Draw the series to highlight last so it shows up on top
+        if hl_index > -1:
+            self.axes.set_title("Selected: {0}".format(results[hl_index]['name']))
+            x = results[hl_index]['data']['Time (h)']
+            cme = results[hl_index]['data']['Cum ME (%)']
+            mb_plot = self.axes.plot(x, cme, '-r', alpha=1, label="CME")
+            if show_dvol:
+                dvol = results[hl_index]['data']['dVol']
+                dvol_plot = self.axes2.plot(x, dvol, '-b', alpha=1, label="dVol")
+                self.axes2.set_ylabel('dVol')
+
+        # Add a legend describing the cme max tolerance boundary lines
+        plot_lines = mb_max_plot
+        labels = [l.get_label() for l in plot_lines]
+        self.axes.legend(plot_lines, labels, loc='lower right')
+
+#         axes.grid(True)
+        self.fig.tight_layout()
+        self.canvas.draw()
+            
+            
 class MbCheckIndividualGraphicsView(QGraphicsView):
     """GraphicsView to display the Individual MB Check tab graphs.
     """

@@ -18,6 +18,91 @@ from pprint import pprint
 
 from . import toolinterface as ti
 
+def getMbHeaders(mb_path):
+    """Get the column headers to load for a specific MB file type.
+    
+    Args:
+        mb_path(str): the file path of the MB file being loaded.
+        
+    Return:
+        tuple(list, str, str) - (column headers, MB file type, filename)
+            where the MB file type is either MB, MB1D, MB2D.
+    """
+    mb_type = ''
+    headers = []
+    filename = os.path.split(mb_path)[1]
+    if filename.endswith('_MB.csv'):
+        headers = [
+            'Q Vol In', 'Q Vol Out', 'Tot Vol In', 'Tot Vol Out', 'Vol I-O', 
+            'dVol', 'Vol Err', 'Q ME (%)', 'Vol I+O', 'Tot Vol', 'Cum Vol I+O',
+            'Cum Vol Err', 'Cum ME (%)', 'Cum Q ME (%)',
+        ]
+        mb_type = 'MB'
+    elif filename.endswith('_MB2D.csv'):
+        headers = [
+            'V In-Out', 'dVol', 'V Err', 'Q ME (%)', 'Total V', 'Cum V In+Out',
+            'Cum V Error', 'Cum ME (%)', 'Cum Q ME (%)',
+        ]
+        mb_type = 'MB2D'
+    elif filename.endswith('_MB1D.csv'):
+        headers = [
+            'Vol In-Out', 'dVol', 'Vol Err', 'Q ME (%)', 'Total Vol', 'Cum Vol I+O',
+            'Cum Vol Err', 'Cum ME (%)', 'Cum Q ME (%)',
+        ]
+        mb_type = 'MB1D'
+    else:
+        mb_type = None
+
+    return headers, mb_type, filename
+
+
+def getIndividualMbSeriesPresets(series_type, mb_type):
+    """Get preset graph series configurations.
+    
+    Args:
+        series_type(str): the type of preset graph to show.
+        mb_type(str): the type of MB file (MB, MB1D, MB2D)
+        
+    Return:
+        graph_series(list) - containing two elements, both lists, the first
+            contains the series headers for the primary axis and the second
+            contains the series headers for the secondary axis.
+    """
+    graph_series = []
+    if series_type == 'mb_and_dvol':
+        if mb_type == 'MB':
+            graph_series = [['Cum ME (%)'], ['dVol']]
+        elif mb_type == 'MB1D':
+            graph_series = [['Cum ME (%)'], ['dVol']]
+        elif mb_type == 'MB2D':
+            graph_series = [['Cum ME (%)'], ['dVol']]
+
+    elif series_type == 'volumes':
+        if mb_type == 'MB':
+            graph_series = [['Q Vol In', 'Q Vol Out'], ['Tot Vol In', 'Tot Vol Out']]
+        elif mb_type == 'MB1D':
+            graph_series = [['Vol In-Out'],['Cum Vol I+O']]
+        elif mb_type == 'MB2D':
+            graph_series = [['V In-Out'],['Cum V In+Out']]
+
+    elif series_type == 'mass_errors':
+        if mb_type == 'MB':
+            graph_series = [['Q ME (%)', 'Cum ME (%)', 'Cum Q ME (%)'],[]]
+        elif mb_type == 'MB1D':
+            graph_series = [['Q ME (%)', 'Cum ME (%)', 'Cum Q ME (%)'],[]]
+        elif mb_type == 'MB2D':
+            graph_series = [['Q ME (%)', 'Cum ME (%)', 'Cum Q ME (%)'],[]]
+
+    elif series_type == 'volume_errors':
+        if mb_type == 'MB':
+            graph_series = [['Vol Err'], ['Cum Vol Err']]
+        elif mb_type == 'MB1D':
+            graph_series = [['Vol Err'], ['Cum Vol Err']]
+        elif mb_type == 'MB2D':
+            graph_series = [['V Err'], ['Cum V Error']]
+            
+    return graph_series
+
 
 class TuflowStabilityCheck(ti.ToolInterface):
     
@@ -100,41 +185,5 @@ class TuflowStabilityCheck(ti.ToolInterface):
         else:
             return results
         
-#     def loadMbCsv(self, mb_path, include_dvol=True):
-#         """Load the contents of TUFLOW MB/MB1D/MB2D.csv file.
-#         
-#         Need to be a bit careful about how we load this because the exact string used
-#         as the header changes between MB file types and I'm not sure that the columns
-#         always occur in the same place. So we search the headers for what we want and
-#         then grab the data from the columns that we identify.
-#         
-#         Return:
-#             Dict containing {time, dvol, cme} for the loaded file.
-#         """
-#         TIME = -1
-#         DVOL = -1
-#         CME = -1
-#         if include_dvol:
-#             results = {'time': [], 'dvol': [], 'cme': []}
-#         else:
-#             results = {'time': [], 'cme': []}
-# 
-#         with open(mb_path, 'r') as mb_file:
-#             reader = csv.reader(mb_file, delimiter=',')
-#             count = 0
-#             for r in reader:
-#                 if count == 0:
-#                     for i, col in enumerate(r):
-#                         if 'Time (h)' in col: TIME = i
-#                         if 'dVol' in col and include_dvol: DVOL = i
-#                         if 'Cum ME (%)' in col: CME = i
-#                     count += 1
-#                 else:
-#                     results['time'].append(float(r[TIME]))
-#                     if include_dvol:
-#                         results['dvol'].append(float(r[DVOL]))
-#                     results['cme'].append(float(r[CME]))
-#         return results
-    
-    
+
     

@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1111</width>
-    <height>661</height>
+    <height>731</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -23,7 +23,7 @@
       <attribute name="title">
        <string>Summary</string>
       </attribute>
-      <layout class="QVBoxLayout" name="verticalLayout_4" stretch="0,0">
+      <layout class="QVBoxLayout" name="verticalLayout_3" stretch="1,120">
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout">
          <item>
@@ -43,8 +43,17 @@
         </layout>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="4,6">
-         <item>
+        <widget class="QSplitter" name="splitter">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="handleWidth">
+          <number>5</number>
+         </property>
+         <property name="childrenCollapsible">
+          <bool>false</bool>
+         </property>
+         <widget class="QWidget" name="">
           <layout class="QVBoxLayout" name="verticalLayout_2">
            <item>
             <layout class="QHBoxLayout" name="horizontalLayout_4">
@@ -95,11 +104,42 @@
             </layout>
            </item>
            <item>
-            <widget class="QCheckBox" name="showDvolCheckbox">
-             <property name="text">
-              <string>Show dVol</string>
-             </property>
-            </widget>
+            <layout class="QHBoxLayout" name="horizontalLayout_7">
+             <item>
+              <widget class="QCheckBox" name="showDvolCheckbox">
+               <property name="text">
+                <string>Show dVol</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QCheckBox" name="summarySelectAllCheckbox">
+               <property name="text">
+                <string>Toggle Select All</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="summaryResetGraphBtn">
+               <property name="text">
+                <string>Reset Graph</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="horizontalSpacer_3">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
            </item>
            <item>
             <widget class="QTableWidget" name="summaryTable">
@@ -119,7 +159,7 @@
              </column>
              <column>
               <property name="text">
-               <string>Failed</string>
+               <string>Run Name</string>
               </property>
              </column>
              <column>
@@ -129,7 +169,7 @@
              </column>
              <column>
               <property name="text">
-               <string>Run Name</string>
+               <string>Failed</string>
               </property>
              </column>
              <column>
@@ -140,11 +180,11 @@
             </widget>
            </item>
           </layout>
-         </item>
-         <item>
-          <widget class="QGraphicsView" name="summaryGraphicsView"/>
-         </item>
-        </layout>
+         </widget>
+         <widget class="QWidget" name="verticalLayoutWidget">
+          <layout class="QVBoxLayout" name="summaryGraphLayout"/>
+         </widget>
+        </widget>
        </item>
       </layout>
      </widget>
