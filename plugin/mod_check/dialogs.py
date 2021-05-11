@@ -1859,6 +1859,8 @@ class FileCheckDialog(DialogBase, filecheck_ui.Ui_CheckFilesDialog):
         
     @pyqtSlot(str)
     def updateStatus(self, status):
+        if len(status) > 150:
+            status = status[:150] + ' ...'
         self.statusLabel.setText(status)
         QApplication.processEvents()
         

@@ -1289,8 +1289,8 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
 
     @pyqtSlot(str)
     def _updateStatus(self, status):
-        if len(status) > 150:
-            status = status[:150] + ' ...'
+        if len(status) > 120:
+            status = status[:120] + ' ...'
         self.statusLabel.setText(status)
         QApplication.processEvents()
             
@@ -1859,6 +1859,8 @@ class FileCheckDialog(DialogBase, filecheck_ui.Ui_CheckFilesDialog):
         
     @pyqtSlot(str)
     def updateStatus(self, status):
+        if len(status) > 120:
+            status = status[:120] + ' ...'
         self.statusLabel.setText(status)
         QApplication.processEvents()
         

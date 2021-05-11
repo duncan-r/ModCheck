@@ -16,6 +16,8 @@ import csv
 from pprint import pprint
 from PyQt5 import QtCore
 
+from . import globaltools as gt
+
 class FileChecker(QtCore.QObject):
     status_signal = QtCore.pyqtSignal(str)
     
@@ -38,9 +40,10 @@ class FileChecker(QtCore.QObject):
         
         self.status_signal.emit('Checking paths ...')
         for f in audit.getModelFiles():
+            fpath = f.getFilePath()
+            self.status_signal.emit('Checking paths for file: {0}'.format(fpath))
             errorlist = []
             
-            fpath = f.getFilePath()
             if fpath in result_holder.seen_parents: continue
 
             result_holder.parent = fpath
@@ -82,10 +85,12 @@ class FileChecker(QtCore.QObject):
             # walk the model folder structure categorising ignore, model and other (eg GIS, csv) files
             root_count = 1
             for root, dirs, files in os.walk(model_root):
-                self.status_signal.emit('Walking folder structure: Folder [{0}]'.format(root_count))
+                self.status_signal.emit('Searching folder {0} ...'.format(root))
+#                 self.status_signal.emit('Walking folder structure: Folder [{0}]'.format(root_count))
                 
                 for f in files:
                     filepath = os.path.join(root,f)
+                    filepath, _ = gt.longPathCheck(filepath)
                     query = SomeFile(filepath)
                     if query.isIgnoreFile():
                         ignore_files.append(query)
@@ -316,7 +321,7 @@ class ModelFile(SomeFile):
         SomeFile.__init__(self, filepath)
         self.filepath = filepath
         self.path, self.name = os.path.split(filepath)
-        self.pathsToCheck = self.PathSearch()
+        self.pathsToCheck = None #self.PathSearch()
         
     def isModelFile(self):
         return True
@@ -439,6 +444,8 @@ class ModelFile(SomeFile):
         return results
         
     def getPathsToCheck(self):
+        if self.pathsToCheck is None:
+            self.pathsToCheck = self.PathSearch()
         return self.pathsToCheck            
                         
 

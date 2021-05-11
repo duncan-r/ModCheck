@@ -359,6 +359,12 @@ click on one of the model files in the list it will load the contents of the mod
 file into a new dialog window for you to view and highlight the section containing
 the reference to the missing/misplaced file in yellow.
 
+NOTE:
+If you see "\\?\" prepended to the start of a file path it means that the file path was
+too long to fit inside the Windows 256 character path limit and that the extended
+path length prefix was required to load the file. It won't have any impact on finding
+the file.
+
 """
 
 NRFA_STATIONS = """
