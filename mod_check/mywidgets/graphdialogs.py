@@ -34,8 +34,10 @@ class LocalHelpDialog(QDialog, text_ui.Ui_TextDialog):
         self.title = title
         self.setWindowTitle(title)
         
-    def showText(self, text):
+    def showText(self, text, wrap_text=True):
         self.textEdit.setText(text)
+        if not wrap_text:
+            self.textEdit.setLineWrapMode(QTextEdit.NoWrap)
 
 
 class ModelFileDialog(QDialog, text_ui.Ui_TextDialog):
@@ -156,7 +158,7 @@ class MbCheckMultipleGraphicsView(QGraphicsView):
         labels = [l.get_label() for l in plot_lines]
         self.axes.legend(plot_lines, labels, loc='lower right')
 
-#         axes.grid(True)
+        self.axes.grid(True)
         self.fig.tight_layout()
         self.canvas.draw()
             
@@ -213,6 +215,7 @@ class MbCheckIndividualGraphicsView(QGraphicsView):
                 if color_count > len(plot_colors):
                     color_count = 0
 
+        self.axes.grid(True)
         self.axes.legend(plot_lines, labels, loc='upper right')
         self.fig.tight_layout()
         self.canvas.draw()

@@ -15,8 +15,9 @@ import os
 import sys
 import csv
 from pprint import pprint
+from PyQt5 import QtCore
 
-from . import toolinterface as ti
+from . import globaltools as gt
 
 def getMbHeaders(mb_path):
     """Get the column headers to load for a specific MB file type.
@@ -104,7 +105,8 @@ def getIndividualMbSeriesPresets(series_type, mb_type):
     return graph_series
 
 
-class TuflowStabilityCheck(ti.ToolInterface):
+class TuflowStabilityCheck(QtCore.QObject):
+    status_signal = QtCore.pyqtSignal(str)
     
     def __init__(self):
         super().__init__()
@@ -114,6 +116,7 @@ class TuflowStabilityCheck(ti.ToolInterface):
         """
         mb_paths = []
         for root, dirs, files in os.walk(root_folder):
+            self.status_signal.emit('Searching folder {0} ...'.format(root))
             for f in files:
                 filepath = os.path.join(root,f)
                 # Skip the differently formatted files for section MB
@@ -126,20 +129,44 @@ class TuflowStabilityCheck(ti.ToolInterface):
     
     def loadMultipleFiles(self, mb_files, headers=['Cum ME (%)', 'dVol']):
         results = []
+        failed_load = {'error': [], 'empty': []}
+        total = len(mb_files)
+        count = 0
+        empty_count = 0
+        fail_count = 0
         for mb in mb_files:
-            contents = self.loadMbFile(mb, headers)
-            if contents is not None:
-                run_name = os.path.split(mb)[1]
-                run_name = os.path.splitext(run_name)[0]
-                max_mb = max(contents['Cum ME (%)'])
-                min_mb = min(contents['Cum ME (%)'])
-                big_mb = round(max_mb, 2) if max_mb > -min_mb else round(min_mb, 2)
-                fail = big_mb > 1 or big_mb < -1
-                results.append({
-                    'path': mb, 'name': run_name, 'data': contents, 'max_mb': big_mb,
-                    'fail': fail,
-                })
-        return results
+            self.status_signal.emit('Loading MB file {0} of {1}'.format(count, total))
+            try:
+                contents = self.loadMbFile(mb, headers)
+                if contents is not None:
+                    run_name = os.path.split(mb)[1]
+                    run_name = os.path.splitext(run_name)[0]
+                    max_mb = max(contents['Cum ME (%)'])
+                    min_mb = min(contents['Cum ME (%)'])
+                    big_mb = round(max_mb, 2) if max_mb > -min_mb else round(min_mb, 2)
+                    fail = big_mb > 1 or big_mb < -1
+                    results.append({
+                        'path': mb, 'name': run_name, 'data': contents, 'max_mb': big_mb,
+                        'fail': fail,
+                    })
+                    count += 1
+                else:
+                    empty_count += 1
+                    failed_load['empty'].append(mb)
+            except Exception as err:
+                fail_count += 1
+                plen = len(mb)
+                txt = '[Chars {0}] {1}'.format(plen, mb)
+                failed_load['error'].append(txt)
+        if empty_count > 0 or fail_count > 0:
+            self.status_signal.emit('Loaded {0} files out of {1} ({2} files were empty and {3} failed to load)'.format(
+                count, total, empty_count, fail_count
+            ))
+        else:
+            self.status_signal.emit('Loaded {0} files out of {1}'.format(
+                count, total
+            ))
+        return results, failed_load
 
     def loadMbFile(self, mb_path, headers=['Cum ME (%)', 'dVol']):
         """Load the contents of TUFLOW MB/MB1D/MB2D.csv file.
@@ -163,6 +190,7 @@ class TuflowStabilityCheck(ti.ToolInterface):
             results[h] = []
             col_lookup[h] = -1
 
+        mb_path, _ = gt.longPathCheck(mb_path)
         with open(mb_path, 'r') as mb_file:
             reader = csv.reader(mb_file, delimiter=',')
             count = 0

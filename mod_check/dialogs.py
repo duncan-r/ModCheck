@@ -990,7 +990,6 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
         self.bankDyToleranceSpinbox.valueChanged.connect(self._dyTolChange)
         self.negativeConveyanceTable.clicked.connect(self.conveyanceTableClicked)
         self.banktopCheckTable.clicked.connect(self.banktopTableClicked)
-#         self.resultsLayout.addWidget(self.graphics_view)
         self.graphLayout.addWidget(self.graphics_view)
         self.graphLayout.addWidget(self.graph_toolbar)
         self.splitter.setStretchFactor(0, 10)
@@ -1016,23 +1015,14 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
     def graphSection(self, node_id, caller):
         """
         """
-#         def showToolbar():
-#             if self.graph_toolbar is None:
-# #                 self.graphLayout.removeWidget(self.graph_toolbar)
-#                 self.graph_toolbar = NavigationToolbar(self.graphics_view.canvas, self)
-#                 self.graphLayout.addWidget(self.graph_toolbar)
-
         if caller == 'conveyance':
             self.graphics_view.drawConveyancePlot(
                 self.properties['negative_k'][node_id], node_id
             )
-#             showToolbar()
         elif caller == 'bad_banks':
             self.graphics_view.drawBanktopsPlot(
                 self.properties['bad_banks'][node_id], node_id
             )
-#             showToolbar()
-
         
     def showSelectedNode(self, node_id):
         self.statusLabel.setText('')
@@ -1075,7 +1065,6 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
         dat_path = mrt_settings.loadProjectSetting(
             'dat_file', self.project.readPath('./temp')
         )
-#         section_check = fmpsection_check.CheckFmpSections(working_dir, dat_path, k_tol, dy_tol)
         section_check = fmpsection_check.CheckFmpSections()
         try:
             self.statusLabel.setText("Loading FMP model river sections ...")
@@ -1297,6 +1286,13 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
             self.findMbFiles()
         elif caller == 'mb_file':
             self.loadMbFile()
+
+    @pyqtSlot(str)
+    def _updateStatus(self, status):
+        if len(status) > 150:
+            status = status[:150] + ' ...'
+        self.statusLabel.setText(status)
+        QApplication.processEvents()
             
     def _showIndividualMbPlot(self, pos):
         """Handle summary table context menu.
@@ -1345,20 +1341,32 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         self.summary_results = []
         self.summaryTable.setRowCount(0)
         mb_check = tmb_check.TuflowStabilityCheck()
+        mb_check.status_signal.connect(self._updateStatus)
+        failed_load = []
         try:
+#             self.statusLabel.setText('Searching for MB files under: {0}'.format(mb_path))
+            self._updateStatus('Searching for MB files under: {0}'.format(mb_path))
             mb_files = mb_check.findMbFiles(mb_path, self.summary_mboptions)
-            self.summary_results = mb_check.loadMultipleFiles(mb_files)
+            self.summary_results, failed_load = mb_check.loadMultipleFiles(mb_files)
         except:
             self.summary_results = []
             QMessageBox.warning(
                 self, "MB files load error", 
                 "Failed to load mass balance files"
             )
+            return
         if self.summary_results:
             self.summaryTable.blockSignals(True)
             self.updateSummaryTable()
             self.summaryTable.blockSignals(False)
             self.graphMultipleResults()
+            if failed_load['error'] or failed_load['empty']:
+                dlg = graphs.LocalHelpDialog(title='MB file load errors')
+                txt = ['Some MB files failed to load or contained no data:\n']
+                txt += ['\n\nFailed to load:\n'] + failed_load['error']
+                txt += ['\n\nNo data:\n'] + failed_load['empty']
+                dlg.showText('\n'.join(txt), wrap_text=False)
+                dlg.exec_()
         else:
             QMessageBox.warning(
                 self, "MB files not found", 
@@ -1459,8 +1467,14 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         
         headers, self.current_mb_filetype, self.current_mb_filename = tmb_check.getMbHeaders(mb_path)
         mb_check = tmb_check.TuflowStabilityCheck()
-        self.file_results = mb_check.loadMbFile(mb_path, headers)
-        self.updateIndividualGraph()
+        self._updateStatus('Loading file: {0}'.format(mb_path))
+        try:
+            self.file_results = mb_check.loadMbFile(mb_path, headers)
+            self.updateIndividualGraph()
+        except Exception as err:
+            self._updateStatus('File load error: {0}'.format(mb_path))
+            QMessageBox.warning(self, "MB file load error", err.args[0])
+        self._updateStatus('Loaded file: {0}'.format(mb_path))
 
     def updateIndividualGraph(self):
         if self.file_results is None:
