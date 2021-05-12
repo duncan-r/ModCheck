@@ -32,7 +32,7 @@ class FileChecker(QtCore.QObject):
         search_successes = 0
         
         self.status_signal.emit('Searching folders ...')
-        model_files, other_files, ignore_files = self.categorise(model_root)
+        model_files, other_files, ignore_files, file_tree = self.categorise(model_root)
         audit = AuditFiles(model_root, model_files, other_files, ignore_files)
         self.status_signal.emit('Categorising results ...')
         result_holder = ResultHolder()
@@ -70,6 +70,7 @@ class FileChecker(QtCore.QObject):
         result_holder.model_root = model_root
         result_holder.summary = audit.getFileCounts()
         result_holder.processResults()
+        result_holder.file_tree = file_tree
         self.status_signal.emit('Check complete')
         return result_holder
 
@@ -81,19 +82,32 @@ class FileChecker(QtCore.QObject):
         model_files = []
         other_files = []
         ignore_files = []
+        file_tree = []
         try:
             # walk the model folder structure categorising ignore, model and other (eg GIS, csv) files
             root_count = 1
             for root, dirs, files in os.walk(model_root):
                 self.status_signal.emit('Searching folder {0} ...'.format(root))
-#                 self.status_signal.emit('Walking folder structure: Folder [{0}]'.format(root_count))
+                tree_level = root.replace(model_root, '', 1).count(os.sep)
+                tree_indent = '|    ' * (tree_level - 1) + '+---'
+                if root_count > 1:
+                    file_tree.append({
+                        'indent': tree_indent, 'path': os.path.basename(root), 'is_folder': True, 
+                        'level': tree_level
+                    })
+                tree_subindent = '|    ' * (tree_level) + '-   '
                 
                 for f in files:
+                    file_tree.append({
+                        'indent': tree_subindent, 'path': f, 'is_folder': False, 'level': tree_level,
+                        'fullpath': os.path.join(root, f)
+                    })
                     filepath = os.path.join(root,f)
                     filepath, _ = gt.longPathCheck(filepath)
                     query = SomeFile(filepath)
                     if query.isIgnoreFile():
                         ignore_files.append(query)
+
                     # model files each have there own class describing their expected format
                     elif query.isModelFile():
                         model_files.append(model_file_exts[query.getFileExt()](filepath))
@@ -105,7 +119,7 @@ class FileChecker(QtCore.QObject):
         except Exception as err:
             raise
         
-        return model_files, other_files, ignore_files
+        return model_files, other_files, ignore_files, file_tree
         
 
 class ResultHolder():    
@@ -118,6 +132,7 @@ class ResultHolder():
         self.seen_parents = []
         self.missing = {}
         self.ignored_files = []
+        self.file_tree = []
 #         self.found = {}
 
         self._summary = {'model_files': 0, 'other_files': 0, 'ignored_files': 0, 'total_files': 0}
@@ -132,6 +147,40 @@ class ResultHolder():
     def summary(self, summary):
         self._summary = summary
         self._summary['total_files'] = self.getFileTotal()
+        
+    def formatFileTree(self, include_files=True, format_as_text=True, include_full_paths=False):
+        output_list = []
+        fullpath_list = []
+        for f in self.file_tree:
+            if not f['is_folder']:
+                if include_files:
+                    output_list.append('{}{}\n'.format(f['indent'], f['path']))
+                    fullpath_list.append(f['fullpath'])
+                else:
+                    fullpath_list.append('')
+            else:
+                if include_files:
+                    output_list.append('{}\n'.format(f['indent'][:-4]))
+                    fullpath_list.append('')
+                output_list.append('{}{}/\n'.format(f['indent'], f['path']))
+                fullpath_list.append('')
+                
+        output = None
+        fullpaths = None
+        if format_as_text:
+            output = ''.join(output_list)
+            fullpaths = '\n'.join(fullpath_list)
+
+        if include_full_paths:
+            return output, fullpaths
+        else:
+            del fullpath_list
+            return output
+
+    def saveFileTree(self, save_path, include_files=True):
+        output = self.formatFileTree(include_files=include_files)
+        with open(save_path, 'w', newline='\n') as outfile:
+            outfile.write(output)
     
     def addMissing(self, path, line, found=''):
         if path in self.missing:

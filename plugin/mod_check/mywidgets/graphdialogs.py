@@ -47,6 +47,7 @@ class ModelFileDialog(QDialog, text_ui.Ui_TextDialog):
         self.setupUi(self)
         self.title = title
         self.setWindowTitle(title)
+        self.textEdit.setLineWrapMode(QTextEdit.NoWrap)
         
     def showText(self, text, pattern):
         self.title = pattern

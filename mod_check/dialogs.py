@@ -1842,13 +1842,32 @@ class FileCheckDialog(DialogBase, filecheck_ui.Ui_CheckFilesDialog):
         self.modelFolderFileWidget.fileChanged.connect(self.updateModelRoot)
         self.reloadBtn.clicked.connect(self.checkFiles)
         self.exportResultsBtn.clicked.connect(self.exportResults)
+        self.saveFileTreeBtn.clicked.connect(self.saveFileTree)
         self.elsewhereFilesTable.clicked.connect(lambda i: self.showParents(i, 'elsewhere'))
         self.iefElsewhereFilesTable.clicked.connect(lambda i: self.showParents(i, 'ief'))
         self.missingFilesTable.clicked.connect(lambda i: self.showParents(i, 'missing'))
         self.elsewhereParentList.currentRowChanged.connect(lambda i: self.showParentFile(i, 'elsewhere'))
         self.iefElsewhereParentList.currentRowChanged.connect(lambda i: self.showParentFile(i, 'ief'))
         self.missingParentList.currentRowChanged.connect(lambda i: self.showParentFile(i, 'missing'))
+        self.fileTreeFoldersOnlyCheckbox.stateChanged.connect(self.updateFileTree)
+        self.searchFileTreeTextbox.returnPressed.connect(lambda: self.searchFileTree(False))
+        self.fileTreeSearchBtn.clicked.connect(lambda: self.searchFileTree(False))
+        self.fileTreeSearchFromTopBtn.clicked.connect(lambda: self.searchFileTree(True))
+        self.showFullPathsBtn.clicked.connect(self.showFullPaths)
+#         self.fileTreeTextEdit.verticalScrollbar().sliderMoved.connect(lambda i: self.treeSliderMoved(i, 'main'))
+        self.fileTreeTextEdit.verticalScrollBar().valueChanged.connect(
+            self.fileTreePathTextEdit.verticalScrollBar().setValue
+        )
+#             lambda i: self.treeSliderMoved(i, 'main'))
+        self.fileTreePathTextEdit.verticalScrollBar().valueChanged.connect(
+            self.fileTreeTextEdit.verticalScrollBar().setValue
+        )
 
+#         self.splitter.setCollapsable(0, False)
+#         self.splitter.setCollapsable(1, True)
+        self.splitter.setStretchFactor(0, 9)
+        self.splitter.setStretchFactor(1, 1)
+        self.splitter.setSizes([self.splitter.sizes()[0], 0])
         self.search_results = None
         self.file_check = filecheck.FileChecker()
         self.file_check.status_signal.connect(self.updateStatus)
@@ -1864,7 +1883,41 @@ class FileCheckDialog(DialogBase, filecheck_ui.Ui_CheckFilesDialog):
         self.statusLabel.setText(status)
         QApplication.processEvents()
         
+    def treeSliderMoved(self, val, caller):
+        self.fileTreePathTextEdit.verticalScrollbar().setSliderPosition(
+            self.fileTreeTextEdit.verticalScrollbar().sliderPosition()
+        )
+        
+    def showFullPaths(self):
+        width = QApplication.primaryScreen().size().width()
+        if self.splitter.sizes()[1] > 0:
+            self.splitter.setSizes([width, 0])
+        else:
+            self.splitter.setSizes([width, width])
+        
+    def searchFileTree(self, from_start):
+        """Search for text in the file tree text edit.
+        
+        Args:
+            from_start(bool): if True the search will start from the file start.
+        """
+        def moveCursorToStart():
+            cursor = self.fileTreeTextEdit.textCursor()
+            cursor.movePosition(QTextCursor.Start) 
+            self.fileTreeTextEdit.setTextCursor(cursor)
+
+        if from_start:
+            moveCursorToStart()
+        search_text = self.searchFileTreeTextbox.text()
+        found = self.fileTreeTextEdit.find(search_text)
+
+        # If it isn't found try from the start
+        if not found and not from_start:
+            moveCursorToStart()
+            found = self.fileTreeTextEdit.find(search_text)
+        
     def checkFiles(self):
+        """Search folders, load data and update dialog data."""
         self.search_results = None
         self.missingParentList.clear()
         self.elsewhereParentList.clear()
@@ -1876,6 +1929,21 @@ class FileCheckDialog(DialogBase, filecheck_ui.Ui_CheckFilesDialog):
         self.updateElsewhereTable(self.elsewhereFilesTable, self.search_results.results['found'])
         self.updateElsewhereTable(self.iefElsewhereFilesTable, self.search_results.results['found_ief'])
         self.updateMissingTable(self.search_results.results['missing'])
+        self.updateFileTree()
+        
+    def updateFileTree(self):
+        include_files = not self.fileTreeFoldersOnlyCheckbox.isChecked()
+        if self.search_results:
+            output, fullpaths = self.search_results.formatFileTree(
+                include_files=include_files, include_full_paths=True
+            )
+            self.fileTreeTextEdit.setPlainText(output)
+            self.fileTreePathTextEdit.setPlainText(fullpaths)
+        if include_files:
+            self.showFullPathsBtn.setEnabled(True)
+        else:
+            self.splitter.setSizes([50, 0])
+            self.showFullPathsBtn.setEnabled(False)
         
     def updateSummaryTab(self):
         output = ['File search summary\n'.upper()]
@@ -1961,6 +2029,30 @@ class FileCheckDialog(DialogBase, filecheck_ui.Ui_CheckFilesDialog):
         dlg = graphs.ModelFileDialog(filename)
         dlg.showText(''.join(contents), filename)
         dlg.exec_()
+        
+    def saveFileTree(self):
+        if self.search_results is None:
+            QMessageBox.warning(
+                self, "No results loaded", "There are no results loaded. Please run the check first."
+            )
+            return
+        save_folder = mrt_settings.loadProjectSetting(
+            'file_check_tree', mrt_settings.loadProjectSetting('model_root', './temp')
+        )
+        default_path = os.path.join(save_folder, 'file_tree.txt')
+        filepath = QFileDialog(self).getSaveFileName(
+            self, 'Export File Tree', default_path, "TXT File (*.txt)"
+        )[0]
+        if filepath:
+            mrt_settings.saveProjectSetting('file_check_tree', os.path.split(filepath)[0])
+            include_files = not self.fileTreeFoldersOnlyCheckbox.isChecked()
+            try:
+                self.search_results.saveFileTree(filepath, include_files=include_files)
+            except OSError as err:
+                QMessageBox.warning(
+                    self, "File tree save failed", err.args[0] 
+                )
+                return
     
     def exportResults(self):
         if self.search_results is None:
@@ -1968,13 +2060,15 @@ class FileCheckDialog(DialogBase, filecheck_ui.Ui_CheckFilesDialog):
                 self, "No results loaded", "There are no results loaded. Please run the check first."
             )
             return
-        save_folder = mrt_settings.loadProjectSetting('model_root', './temp')
+        save_folder = mrt_settings.loadProjectSetting(
+            'file_check_results', mrt_settings.loadProjectSetting('model_root', './temp')
+        )
         default_path = os.path.join(save_folder, 'filecheck_results.txt')
         filepath = QFileDialog(self).getSaveFileName(
             self, 'Export Results', default_path, "TXT File (*.txt)"
         )[0]
         if filepath:
-            mrt_settings.saveProjectSetting('file_check_results', filepath)
+            mrt_settings.saveProjectSetting('file_check_results', os.path.split(filepath)[0])
             try:
                 self.search_results.exportResults(filepath)
             except OSError as err:

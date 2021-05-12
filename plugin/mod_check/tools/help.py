@@ -326,6 +326,9 @@ be shown with:
 - List of model files reviewed giving a list of all of the model files that were
   parsed to check for references to other files. These are the .ief, .tcf, .tgc etc
   files.
+  
+- File Tree summary of all of the folders and files found under the model root folder.
+  These are formatted to quickly review the contents of the model delivery.
 
   
 The other tabs contain list of files that failed the check:
@@ -358,6 +361,34 @@ model files that reference this missing/misplaced file, in the list below. If yo
 click on one of the model files in the list it will load the contents of the model
 file into a new dialog window for you to view and highlight the section containing
 the reference to the missing/misplaced file in yellow.
+
+
+File Tree:
+
+By default the File Tree tab will display all of the files and folders found while
+searching under the model root folder. These are formatted to display in a similar
+way to the windows "tree" command, with each level indented from the parent.
+
+By selecting the Show folders only checkbox you can view the folder structure alone,
+without the files.
+
+Clicking the Save file tree button will let you save the contents of the file tree 
+to disk. The formatting of the saved file is dependent on the status of the
+Show folders only checkbox, i.e. it will save only the folder structure is the 
+checkbox is selected.
+
+You can search for a particular file in the file tree by typing the search term in
+the textbox and clicking the Search button. This will find the next location of the
+search term from the current cursor position, show it and highlight it yellow. If it
+reaches the bottom of the text window it will start searching again from the top. To
+always search from the start of the file click Search from top.
+When viewing files in the file tree you can also show the full paths for the files
+alongside. Click the Show / Hide full paths button (or drag the split window from 
+the right of the dialog) to show the full path to the file alongside its position
+in the file tree. Both windows will scroll together when searching and you can 
+adjust the position of the divider - change the width of the two windows - by dragging
+the divider bar. Full paths are not available for the Show folders only option.
+
 
 NOTE:
 If you see "\\?\" prepended to the start of a file path it means that the file path was
