@@ -26,23 +26,8 @@ from ship.utils.tools import openchannel
 
 class CheckFmpSections(ti.ToolInterface):
     
-#     def __init__(self, working_dir, dat_file, k_tol, dy_tol):
     def __init__(self):
         super().__init__()
-#         self.working_dir = working_dir
-#         self.dat_file = dat_file
-#         self.k_tol = k_tol
-#         self.dy_tol = dy_tol
-    
-#     def run_tool(self):
-#         model = self.load_fmp_model(self.dat_file)
-#         river_sections = model.unitsByType('river')
-#         negative_k, n_zero = self.calculate_conveyance(river_sections)
-#         bad_banks = self.checkBankLocations(river_sections)
-#         return {
-#             'negative_k': negative_k, 'n_zero': n_zero, 
-#             'bad_banks': bad_banks
-#         }
     
     def _getActiveSectionData(self, section):
         xvals = section.row_data['main'].dataObjectAsList(rdt.CHAINAGE)
@@ -135,14 +120,12 @@ class CheckFmpSections(ti.ToolInterface):
             left_drop = 0
             for i in range(maxy_left_idx, -1, -1):
                 drop = maxy_left - active['elevation'][i]
-#                 if (active['elevation'][i] - bank_tol) > maxy_left:
                 if (drop > dy_tol) and (drop > left_drop):
                     left_drop = drop
                 
             right_drop = 0
             for i in range(maxy_right_idx, len(active['elevation']), 1):
                 drop = maxy_right - active['elevation'][i]
-#                 if (active['elevation'][i] - bank_tol) > maxy_right:
                 if (drop > dy_tol) and (drop > right_drop):
                     right_drop = drop
                 

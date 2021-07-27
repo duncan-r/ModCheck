@@ -77,6 +77,7 @@ class Menu:
             'View_NRFA_Station': {'dialog': None, 'class': NrfaStationViewerDialog},
             'FMP_REFH_Check': {'dialog': None, 'class': FmpRefhCheckDialog},
             'TUFLOW_Stability_Check': {'dialog': None, 'class': TuflowStabilityCheckDialog},
+            'FMP_Stability_Check': {'dialog': None, 'class': FmpStabilityCheckDialog},
             'Model_File_Audit': {'dialog': None, 'class': FileCheckDialog},
             'Model_Variables_Check': {'dialog': None, 'class': FmpTuflowVariablesCheckDialog},
         }
@@ -125,6 +126,11 @@ class Menu:
         self.check_tuflowstability_action.triggered.connect(self.check_tuflow_stability)
         self.iface.addPluginToMenu("&ModCheck", self.check_tuflowstability_action)
 
+        # FMP stability outputs viewer (Stage and Flow oscillations)
+        self.check_fmpstability_action = QAction(icon, "Check FMP Stability Plots", self.iface.mainWindow())
+        self.check_fmpstability_action.triggered.connect(self.check_fmp_stability)
+        self.iface.addPluginToMenu("&ModCheck", self.check_fmpstability_action)
+
         # TUFLOW stability outputs viewer (MB, Dvol, etc)
         self.filecheck_action = QAction(icon, "Audit Model Files", self.iface.mainWindow())
         self.filecheck_action.triggered.connect(self.check_files)
@@ -143,6 +149,7 @@ class Menu:
         self.iface.removePluginMenu("&ModCheck", self.check_fmpsections_action)
         self.iface.removePluginMenu("&ModCheck", self.check_fmprefh_action)
         self.iface.removePluginMenu("&ModCheck", self.check_tuflowstability_action)
+        self.iface.removePluginMenu("&ModCheck", self.check_fmpstability_action)
         self.iface.removePluginMenu("&ModCheck", self.nrfa_stationviewer_action)
         self.iface.removePluginMenu("&ModCheck", self.filecheck_action)
         
@@ -177,6 +184,9 @@ class Menu:
 
     def check_tuflow_stability(self): 
         self.launchDialog('TUFLOW_Stability_Check')
+
+    def check_fmp_stability(self): 
+        self.launchDialog('FMP_Stability_Check')
 
     def check_files(self):
         self.launchDialog('Model_File_Audit')

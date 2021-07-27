@@ -298,7 +298,10 @@ includes additional comparison lines (CME max recommended) to indicate the locat
 of +-1%; the recommended tolerance for CME.
 
 The rate of change in volume (dVol) is graphed on the secondary (right) y axis.
+"""
 
+CHECK_FMP_STABILITY = """
+    Partial testing build. Not currently usable.
 """
 
 FILE_AUDIT = """
@@ -457,6 +460,7 @@ HELP_LOOKUP = {
     'Check FMP Sections': FMP_SECTIONS,
     'ReFH Check': REFH_CHECK,
     'Check TUFLOW MB': CHECK_TUFLOW_MB,
+    'Check FMP Stability': CHECK_FMP_STABILITY,
     'Model File Audit': FILE_AUDIT,
     'NRFA Station Viewer': NRFA_STATIONS,
 }
