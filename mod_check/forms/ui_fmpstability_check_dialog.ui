@@ -17,7 +17,7 @@
    <item>
     <widget class="QTabWidget" name="fileSelectionTabWidget">
      <property name="currentIndex">
-      <number>1</number>
+      <number>0</number>
      </property>
      <widget class="QWidget" name="datAndResultsTab">
       <attribute name="title">
@@ -175,30 +175,104 @@
        </property>
       </spacer>
      </item>
+     <item>
+      <widget class="QLabel" name="label_10">
+       <property name="text">
+        <string>Timestep</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="timestepValueLabel">
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QSlider" name="timestepSlider">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+      </widget>
+     </item>
     </layout>
    </item>
    <item>
-    <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="2,2,8">
+    <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="1,4,4">
      <item>
-      <widget class="QListWidget" name="failedSeriesList"/>
-     </item>
-     <item>
-      <widget class="QListWidget" name="allSeriesList"/>
+      <layout class="QVBoxLayout" name="verticalLayout_2">
+       <item>
+        <widget class="QLabel" name="label_11">
+         <property name="text">
+          <string>Selected Node:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="nodeNameLabel">
+         <property name="text">
+          <string>None</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="Line" name="line">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="label_8">
+         <property name="text">
+          <string>Failed Sections</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QListWidget" name="failedSeriesList"/>
+       </item>
+       <item>
+        <widget class="QLabel" name="label_9">
+         <property name="text">
+          <string>All Sections</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QListWidget" name="allSeriesList"/>
+       </item>
+      </layout>
      </item>
      <item>
       <layout class="QVBoxLayout" name="graphLayout"/>
      </item>
+     <item>
+      <layout class="QVBoxLayout" name="geomGraphLayout"/>
+     </item>
     </layout>
    </item>
    <item>
-    <widget class="QDialogButtonBox" name="buttonBox">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-     <property name="standardButtons">
-      <set>QDialogButtonBox::Close|QDialogButtonBox::Help</set>
-     </property>
-    </widget>
+    <layout class="QHBoxLayout" name="horizontalLayout_3">
+     <item>
+      <widget class="QLabel" name="statusLabel">
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QDialogButtonBox" name="buttonBox">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="standardButtons">
+        <set>QDialogButtonBox::Close|QDialogButtonBox::Help</set>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
   </layout>
  </widget>

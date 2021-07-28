@@ -201,6 +201,19 @@ class FmpStabilityCheck(QtCore.QObject):
 #             logger.error('Unable to read csv results at: ' + result_path)
         
         return results, times
+    
+
+def loadGeometry(node_name, sections):
+    def loadRiver(section):
+        chain = section.row_data['main'].dataObjectAsList(rdt.CHAINAGE)
+        elev = section.row_data['main'].dataObjectAsList(rdt.ELEVATION)
+        return (chain, elev)
+        
+    geom = None
+    for s in sections:
+        if s.name == node_name:
+            geom = loadRiver(s)
+    return geom
         
 
 def loadExistingResults(results_path):

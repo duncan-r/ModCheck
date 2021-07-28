@@ -38,6 +38,7 @@ from .tools import settings as mrt_settings
 from .mywidgets import graphdialogs as graphs
 from PyQt5.pyrcc_main import showHelp
 from mod_check.tools import fmpstabilitycheck
+from ogrmerge import process
 
 DATA_DIR = './data'
 TEMP_DIR = './temp'
@@ -1524,8 +1525,12 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
         self.flow_data = None
         self.times = None
         self.nodes = None
+        self.sections = None
+        self.timestep_press_active = False
         self.graph_view = graphs.FmpStabilityGraphicsView()
         self.graph_toolbar = NavigationToolbar(self.graph_view.canvas, self)
+        self.geom_graph_view = graphs.FmpStabilityGeometryGraphicsView()
+        self.geom_graph_toolbar = NavigationToolbar(self.geom_graph_view.canvas, self)
         
         self.setDefaultSettings()
         self.datFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'dat_file'))
@@ -1539,9 +1544,14 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
         self.loadExistingResultsBtn.clicked.connect(self.loadExistingResults)
         self.allSeriesList.currentRowChanged.connect(lambda i: self.updateGraph(i, 'all'))
         self.failedSeriesList.currentRowChanged.connect(lambda i: self.updateGraph(i, 'fail'))
+        self.timestepSlider.valueChanged.connect(self.updateTimestepSlider)
+        self.timestepSlider.sliderPressed.connect(self.timestepSliderPressed)
+        self.timestepSlider.sliderReleased.connect(self.timestepSliderReleased)
 
         self.graphLayout.addWidget(self.graph_view)
         self.graphLayout.addWidget(self.graph_toolbar)
+        self.geomGraphLayout.addWidget(self.geom_graph_view)
+        self.geomGraphLayout.addWidget(self.geom_graph_toolbar)
         
     def setDefaultSettings(self):
         self.datFileWidget.setFilePath(mrt_settings.loadProjectSetting(
@@ -1565,11 +1575,30 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
         if os.path.exists(tabset):
             self.datTabularCsvFileWidget.setFilePath(tabset)
             mrt_settings.saveProjectSetting('tabcsv_file', tabset)
+            
+    def timestepSliderPressed(self):
+        self.timestep_press_active = True
+
+    def timestepSliderReleased(self):
+        self.timestep_press_active = False
+        self.updateTimestepSlider(self.timestepSlider.value())
 
     def fileChanged(self, path, caller):
         if caller == 'results_file':
             path = os.path.splitext(path)[0]
         mrt_settings.saveProjectSetting(caller, path)
+        
+    def loadDatFile(self, dat_path, stab_check):
+        if dat_path is None or not os.path.exists(dat_path):
+            raise AttributeError
+#             QMessageBox.warning(
+#                 self, "Required file path missing", 
+#                 "Please set .dat, results and TabularCsv paths first."
+#             )
+            return
+        
+        sections, nodes = self.stab_check.loadDatFile(dat_path) 
+        return sections, nodes
         
     def loadDatResults(self):
         dat_path = mrt_settings.loadProjectSetting('dat_file', None)
@@ -1594,7 +1623,8 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
             return
         
         self.stab_check = fmps_check.FmpStabilityCheck()
-        rivers, self.nodes = self.stab_check.loadDatFile(dat_path) 
+        self.sections, self.nodes = self.loadDatFile(dat_path, self.stab_check)
+#         rivers, self.nodes = self.stab_check.loadDatFile(dat_path) 
         tcs_stage, tcs_flow, save_paths = self.stab_check.createTcsFile(
             self.nodes, results_path
         )
@@ -1624,6 +1654,9 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
 
         self.setupNodeLists(self.failed_nodes)
         self.updateGraph(0, 'all')
+        self.stageResultsFileWidget.setFilePath(stage_path)
+        self.flowResultsFileWidget.setFilePath(flow_path)
+        self.fileSelectionTabWidget.setCurrentIndex(1)
         
     def loadExistingResults(self):
         dat_path = mrt_settings.loadProjectSetting('dat_file', None)
@@ -1641,6 +1674,8 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
 #         stage_path = results_path + "Stage_10000Yrs.csv"
         
         self.stab_check = fmps_check.FmpStabilityCheck()
+        if os.path.exists(dat_path):
+            self.sections, nodes = self.stab_check.loadDatFile(dat_path)
         self.flow_data, self.times, self.nodes, result_type = fmps_check.loadExistingResults(flow_path)
         self.stage_data, self.times, self.nodes, result_type = fmps_check.loadExistingResults(stage_path)
 
@@ -1656,17 +1691,50 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
         self.allSeriesList.addItems(self.nodes)
         for f in failed_nodes:
             self.failedSeriesList.addItem(f[0])
+        self.timestepSlider.setMaximum(len(self.times))
+        
+    def updateTimestepSlider(self, val):
+        if self.timestep_press_active:
+            return
+        node_index = self.allSeriesList.currentRow()
+        self.updateGraph(node_index, 'all')
         
     def updateGraph(self, node_index, caller):
         if caller == 'fail':
             node_index = self.failed_nodes[node_index][1]
+            self.allSeriesList.blockSignals(True)
+            self.allSeriesList.setCurrentRow(node_index)
+            self.allSeriesList.blockSignals(False)
+
         series_check_type = self.validationSeriesCbox.currentText()
         node_name = self.nodes[node_index]
+        self.nodeNameLabel.setText(node_name)
+        
+        timestep_idx = self.timestepSlider.value()
+        timestep = self.times[timestep_idx]
+        time_stage = self.stage_data[timestep_idx,node_index]
+        self.timestepValueLabel.setText(str(timestep))
+#         geom = None
+#         if self.sections is not None:
+#             geom = fmpstabilitycheck.loadGeometry(node_name, self.sections)
+        
         self.graph_view.drawPlot(
             self.times, [self.stage_data[:,node_index], self.flow_data[:,node_index]], 
-            self.derivs[node_index], series_type=series_check_type, node_name=node_name
+            self.derivs[node_index], timestep, series_type=series_check_type, 
+            node_name=node_name,
         )
-
+        self.updateGeomGraph(node_name, time_stage)
+    
+    def updateGeomGraph(self, node_name, time_stage):
+        geom = None
+        if self.sections is not None:
+            geom = fmpstabilitycheck.loadGeometry(node_name, self.sections)
+        
+        if geom is None:
+            self.geom_graph_view.clearPlot()
+        else:
+            self.geom_graph_view.drawPlot(geom, node_name, time_stage)
+        
     def checkStability(self, series_type):
         """Stability analysis of time series.
         
