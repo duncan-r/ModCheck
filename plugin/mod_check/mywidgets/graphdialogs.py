@@ -221,6 +221,101 @@ class MbCheckIndividualGraphicsView(QGraphicsView):
         self.fig.tight_layout()
         self.canvas.draw()
         
+
+class FmpStabilityGeometryGraphicsView(QGraphicsView):
+    """GraphicsView to display the flow/stage for the Fmp stability check.
+    """
+    
+    def __init__(self):
+        QGraphicsView.__init__(self)
+
+        scene = QGraphicsScene()
+        self.setScene(scene)
+        self.fig = Figure()
+        self.axes = self.fig.gca()
+#         self.axes2 = self.axes.twinx()
+        self.fig.tight_layout()
+        self.canvas = FigureCanvas(self.fig)
+        proxy_widget = scene.addWidget(self.canvas)
+        
+    def clearPlot(self, redraw=True):
+        self.axes.clear()
+        self.fig.clear()
+        if redraw:
+            self.canvas.draw()
+        
+    def drawPlot(self, geom_data, node_name, stage):
+        self.clearPlot(redraw=False)
+        self.axes = self.fig.gca()
+    
+        x = geom_data[0]
+        s = [stage for i in x]
+        self.axes.set_xlabel('Chainage (m)')
+        self.axes.set_ylabel('Elevation (mAOD)')
+
+        chain_plot = self.axes.plot(x, geom_data[1], '-k')
+        stage_plot = self.axes.plot(x, s, '-b')
+
+        self.fig.tight_layout()
+        self.canvas.draw()
+        
+class FmpStabilityGraphicsView(QGraphicsView):
+    """GraphicsView to display the flow/stage for the Fmp stability check.
+    """
+    
+    def __init__(self):
+        QGraphicsView.__init__(self)
+
+        scene = QGraphicsScene()
+        self.setScene(scene)
+        self.fig = Figure()
+        self.axes = self.fig.gca()
+        self.axes2 = self.axes.twinx()
+        self.fig.tight_layout()
+        self.canvas = FigureCanvas(self.fig)
+        proxy_widget = scene.addWidget(self.canvas)
+        
+    def drawPlot(self, time_data, results, derivs, timestep, series_type, 
+                 node_name, show_derivs=False):
+        labels = []
+        plot_lines = []
+        self.axes2.clear()
+        self.axes.clear()
+        self.fig.clear()
+        self.axes = self.fig.gca()
+        self.axes2 = self.axes.twinx()
+    
+        x = time_data
+        self.axes.set_xlabel('Time (h)')
+        fail_times = ''
+        if derivs['status'] == 'Failed':
+            fail_times = '(First fail: {} - Last Fail: {})'.format(derivs['fail_times'][0], derivs['fail_times'][-1])
+        status_text = '{} {}'.format(node_name, fail_times) #'Dy2 Fail = {}   :   {}'.format(derivs['status'], fail_times)
+        self.axes.set_title(status_text)
+        self.axes.set_ylabel('Stage (mAOD)')
+        self.axes2.set_ylabel('Flow (m3/s)')
+        
+        if series_type == 'Stage':
+            s1_plot = self.axes.plot(x, results[0], '-b')
+            s2_plot = self.axes2.plot(x, derivs['f'], '-r')
+        else:
+            s1_plot = self.axes2.plot(x, derivs['f'], '-r')
+            s2_plot = self.axes.plot(x, results[0], '-b')
+        
+        time_x = [timestep, timestep]
+        time_y = [min(results[0]), max(results[0])]
+        time_plot = self.axes.plot(time_x, time_y, '-k')
+
+        # User doesn't need derivative graphs, just for debugging
+        if show_derivs:
+            x2 = x[:-1]
+            right_plot = self.axes2.plot(x2, derivs['dy'], '-g', alpha=0.5)
+            x3 = x2[:-1]
+            right_plot2 = self.axes2.plot(x3, derivs['dy2'], '-k', alpha=0.5)
+
+        self.fig.tight_layout()
+        self.canvas.draw()
+        
         
 class SectionPropertiesGraphicsView(QGraphicsView):
     """GraphicsView to display section properties graphs.
