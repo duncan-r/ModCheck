@@ -197,7 +197,7 @@ class FmpStabilityCheck(QtCore.QObject):
                     count += 1
 
         except OSError as err:
-            raise ('Failed to read csv results at: {}'.format(results_path))
+            raise OSError('Failed to read csv results at: {}'.format(results_path))
 #             logger.error('Unable to read csv results at: ' + result_path)
         
         return results, times

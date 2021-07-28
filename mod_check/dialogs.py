@@ -1518,9 +1518,9 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
         self.default_tabcsv_path = "C:/Program Files/Flood Modeller/bin/TabularCSV.exe"
         
         self.tab_csv_path = "C:/Program Files/Flood Modeller/bin/TabularCSV.exe"
-        self.working_dir = "C:/Users/ermev/Documents/Programming/Test_Data/QGIS_Plugin/FMP_Stability"
-        self.dat_path = "C:/Users/ermev/OneDrive/Documents/Main/Company/1_Projects/2_Open/P2009001_CherwellThame_ModelReview/Technical/Hydraulics/Models/River_Cherwell/FMP/DAT/108500_FMP_BAS_DES_001.dat"
-        self.results_path = "C:/Users/ermev/OneDrive/Documents/Main/Company/1_Projects/2_Open/P2009001_CherwellThame_ModelReview/Technical/Hydraulics/Models/River_Cherwell/FMP/RESULTS/001/BAS/1000/108500_IST_BAS_DES_1000_001"
+        self.working_dir = ""#"C:/Users/ermev/Documents/Programming/Test_Data/QGIS_Plugin/FMP_Stability"
+        self.dat_path = ""#"C:/Users/ermev/OneDrive/Documents/Main/Company/1_Projects/2_Open/P2009001_CherwellThame_ModelReview/Technical/Hydraulics/Models/River_Cherwell/FMP/DAT/108500_FMP_BAS_DES_001.dat"
+        self.results_path = ""#"C:/Users/ermev/OneDrive/Documents/Main/Company/1_Projects/2_Open/P2009001_CherwellThame_ModelReview/Technical/Hydraulics/Models/River_Cherwell/FMP/RESULTS/001/BAS/1000/108500_IST_BAS_DES_1000_001"
         self.stab_check = None
         self.flow_data = None
         self.times = None
@@ -1636,7 +1636,7 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
             tabcsv_path, tcs_flow, results_path + '.zzn'
         )
         
-        flow_path = self.results_path + '_modcheck_Flow.csv'
+        flow_path = results_path + '_modcheck_Flow.csv'
 #         stage_path = self.results_path + '_Stage.csv'
         stage_path = results_path + '_modcheck_Stage.csv'
 

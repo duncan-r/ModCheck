@@ -17,7 +17,7 @@
    <item>
     <widget class="QTabWidget" name="fileSelectionTabWidget">
      <property name="currentIndex">
-      <number>0</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="datAndResultsTab">
       <attribute name="title">
@@ -83,7 +83,7 @@
        <item row="0" column="0">
         <widget class="QLabel" name="label_7">
          <property name="enabled">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
          <property name="text">
           <string>FMP .dat file (optional)</string>
@@ -93,7 +93,7 @@
        <item row="0" column="1">
         <widget class="QgsFileWidget" name="existingResultsDatFileWidget">
          <property name="enabled">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
          <property name="filter">
           <string>*.dat</string>
