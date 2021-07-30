@@ -1552,6 +1552,7 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
         self.graphLayout.addWidget(self.graph_toolbar)
         self.geomGraphLayout.addWidget(self.geom_graph_view)
         self.geomGraphLayout.addWidget(self.geom_graph_toolbar)
+        self.splitter.setStretchFactor(5, 10)
         
     def setDefaultSettings(self):
         self.datFileWidget.setFilePath(mrt_settings.loadProjectSetting(
@@ -1588,18 +1589,6 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
             path = os.path.splitext(path)[0]
         mrt_settings.saveProjectSetting(caller, path)
         
-    def loadDatFile(self, dat_path, stab_check):
-        if dat_path is None or not os.path.exists(dat_path):
-            raise AttributeError
-#             QMessageBox.warning(
-#                 self, "Required file path missing", 
-#                 "Please set .dat, results and TabularCsv paths first."
-#             )
-            return
-        
-        sections, nodes = self.stab_check.loadDatFile(dat_path) 
-        return sections, nodes
-        
     def loadDatResults(self):
         dat_path = mrt_settings.loadProjectSetting('dat_file', None)
         results_path = mrt_settings.loadProjectSetting('results_file', None)
@@ -1622,13 +1611,23 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
             QMessageBox.warning(self, "File path does not exist", msg)
             return
         
+        self.statusLabel.setText('Loading FMP .dat file...')
+        QApplication.processEvents()
         self.stab_check = fmps_check.FmpStabilityCheck()
-        self.sections, self.nodes = self.loadDatFile(dat_path, self.stab_check)
-#         rivers, self.nodes = self.stab_check.loadDatFile(dat_path) 
+        try:
+            self.sections, self.nodes = self.stab_check.loadDatFile(dat_path)
+        except Exception as err:
+            QMessageBox.warning(self, "File Load Error", "Failed to load .dat file")
+            return
+
+        self.statusLabel.setText('Creating TabularCSV .tcf files...')
+        QApplication.processEvents()
         tcs_stage, tcs_flow, save_paths = self.stab_check.createTcsFile(
             self.nodes, results_path
         )
  
+        self.statusLabel.setText('Converting results with TabularCSV...')
+        QApplication.processEvents()
         stdout, return_code = self.stab_check.convertResults(
             tabcsv_path, tcs_stage, results_path
         )
@@ -1640,16 +1639,22 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
 #         stage_path = self.results_path + '_Stage.csv'
         stage_path = results_path + '_modcheck_Stage.csv'
 
+        self.statusLabel.setText('Loading flow series results...')
+        QApplication.processEvents()
         self.flow_data, self.times = self.stab_check.loadResults(
 #             len(self.nodes), save_paths['flow']
             len(self.nodes), flow_path
         )
+        self.statusLabel.setText('Loading stage series results...')
+        QApplication.processEvents()
         self.stage_data, self.times = self.stab_check.loadResults(
 #             len(self.nodes), save_paths['stage']
             len(self.nodes), stage_path
         )
         
         series_check_type = self.validationSeriesCbox.currentText()
+        self.statusLabel.setText('Running stability check...')
+        QApplication.processEvents()
         status = self.checkStability(series_check_type)
 
         self.setupNodeLists(self.failed_nodes)
@@ -1657,6 +1662,7 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
         self.stageResultsFileWidget.setFilePath(stage_path)
         self.flowResultsFileWidget.setFilePath(flow_path)
         self.fileSelectionTabWidget.setCurrentIndex(1)
+        self.statusLabel.setText('Results load complete')
         
     def loadExistingResults(self):
         dat_path = mrt_settings.loadProjectSetting('dat_file', None)
@@ -1675,16 +1681,26 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
         
         self.stab_check = fmps_check.FmpStabilityCheck()
         if os.path.exists(dat_path):
+            self.statusLabel.setText('Loading FMP .dat file...')
+            QApplication.processEvents()
             self.sections, nodes = self.stab_check.loadDatFile(dat_path)
+
+        self.statusLabel.setText('Loading Flow results...')
+        QApplication.processEvents()
         self.flow_data, self.times, self.nodes, result_type = fmps_check.loadExistingResults(flow_path)
+        self.statusLabel.setText('Loading Stage results...')
+        QApplication.processEvents()
         self.stage_data, self.times, self.nodes, result_type = fmps_check.loadExistingResults(stage_path)
 
         series_check_type = self.validationSeriesCbox.currentText()
+        self.statusLabel.setText('Running stability check...')
+        QApplication.processEvents()
         status = self.checkStability(series_check_type)
 
         self.setupNodeLists(self.failed_nodes)
         self.updateGraph(0, 'all')
-        
+        self.statusLabel.setText('Results load complete')
+
     def setupNodeLists(self, failed_nodes):
         self.allSeriesList.clear()
         self.failedSeriesList.clear()

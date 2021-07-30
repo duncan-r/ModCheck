@@ -249,12 +249,15 @@ class FmpStabilityGeometryGraphicsView(QGraphicsView):
         self.axes = self.fig.gca()
     
         x = geom_data[0]
+        y = geom_data[1]
         s = [stage for i in x]
+
         self.axes.set_xlabel('Chainage (m)')
         self.axes.set_ylabel('Elevation (mAOD)')
 
-        chain_plot = self.axes.plot(x, geom_data[1], '-k')
+        bed_plot = self.axes.plot(x, geom_data[1], '-k')
         stage_plot = self.axes.plot(x, s, '-b')
+        self.axes.fill_between(x, y, s, where=y<=stage, interpolate=True, alpha=0.5, color='b')
 
         self.fig.tight_layout()
         self.canvas.draw()

@@ -43,7 +43,7 @@ class FmpStabilityCheck(QtCore.QObject):
         try:
             model = file_loader.loadFile(dat_path)
         except Exception as err:
-            pass
+            raise Exception('Failed to load FMP .dat file')
         rivers = model.unitsByType('river')
         nodes = []
         for r in rivers:

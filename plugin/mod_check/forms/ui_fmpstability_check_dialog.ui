@@ -11,9 +11,9 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Dialog</string>
+   <string>FMP Stability Check</string>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout" stretch="0,0,10,0">
+  <layout class="QVBoxLayout" name="verticalLayout" stretch="0,0,8,0">
    <item>
     <widget class="QTabWidget" name="fileSelectionTabWidget">
      <property name="currentIndex">
@@ -199,7 +199,7 @@
     </layout>
    </item>
    <item>
-    <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="1,4,4">
+    <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="1,9">
      <item>
       <layout class="QVBoxLayout" name="verticalLayout_2">
        <item>
@@ -246,10 +246,23 @@
       </layout>
      </item>
      <item>
-      <layout class="QVBoxLayout" name="graphLayout"/>
-     </item>
-     <item>
-      <layout class="QVBoxLayout" name="geomGraphLayout"/>
+      <widget class="QWidget" name="widget" native="true">
+       <layout class="QVBoxLayout" name="verticalLayout_3">
+        <item>
+         <widget class="QSplitter" name="splitter">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <widget class="QWidget" name="">
+           <layout class="QVBoxLayout" name="graphLayout" stretch=""/>
+          </widget>
+          <widget class="QWidget" name="">
+           <layout class="QVBoxLayout" name="geomGraphLayout" stretch=""/>
+          </widget>
+         </widget>
+        </item>
+       </layout>
+      </widget>
      </item>
     </layout>
    </item>
