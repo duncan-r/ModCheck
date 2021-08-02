@@ -254,6 +254,7 @@ class FmpStabilityGeometryGraphicsView(QGraphicsView):
 
         self.axes.set_xlabel('Chainage (m)')
         self.axes.set_ylabel('Elevation (mAOD)')
+        self.axes.set_title(node_name)
 
         bed_plot = self.axes.plot(x, geom_data[1], '-k')
         stage_plot = self.axes.plot(x, s, '-b')
