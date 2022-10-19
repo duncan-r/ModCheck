@@ -38,7 +38,7 @@ from .tools import settings as mrt_settings
 from .mywidgets import graphdialogs as graphs
 from PyQt5.pyrcc_main import showHelp
 from mod_check.tools import fmpstabilitycheck
-from ogrmerge import process
+# from ogrmerge import process
 
 DATA_DIR = './data'
 TEMP_DIR = './temp'
@@ -1521,7 +1521,7 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
         self.working_dir = ""#"C:/Users/ermev/Documents/Programming/Test_Data/QGIS_Plugin/FMP_Stability"
         self.dat_path = ""#"C:/Users/ermev/OneDrive/Documents/Main/Company/1_Projects/2_Open/P2009001_CherwellThame_ModelReview/Technical/Hydraulics/Models/River_Cherwell/FMP/DAT/108500_FMP_BAS_DES_001.dat"
         self.results_path = ""#"C:/Users/ermev/OneDrive/Documents/Main/Company/1_Projects/2_Open/P2009001_CherwellThame_ModelReview/Technical/Hydraulics/Models/River_Cherwell/FMP/RESULTS/001/BAS/1000/108500_IST_BAS_DES_1000_001"
-        self.stab_check = None
+#         self.stab_check = None
         self.flow_data = None
         self.times = None
         self.nodes = None
@@ -1613,25 +1613,25 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
         
         self.statusLabel.setText('Loading FMP .dat file...')
         QApplication.processEvents()
-        self.stab_check = fmps_check.FmpStabilityCheck()
+#         self.stab_check = fmps_check.FmpStabilityCheck()
         try:
-            self.sections, self.nodes = self.stab_check.loadDatFile(dat_path)
+            self.sections, self.nodes = fmps_check.loadDatFile(dat_path)
         except Exception as err:
             QMessageBox.warning(self, "File Load Error", "Failed to load .dat file")
             return
 
         self.statusLabel.setText('Creating TabularCSV .tcf files...')
         QApplication.processEvents()
-        tcs_stage, tcs_flow, save_paths = self.stab_check.createTcsFile(
+        tcs_stage, tcs_flow, save_paths = fmps_check.createTcsFile(
             self.nodes, results_path
         )
  
         self.statusLabel.setText('Converting results with TabularCSV...')
         QApplication.processEvents()
-        stdout, return_code = self.stab_check.convertResults(
+        stdout, return_code = fmps_check.convertResults(
             tabcsv_path, tcs_stage, results_path
         )
-        stdout, return_code = self.stab_check.convertResults(
+        stdout, return_code = fmps_check.convertResults(
             tabcsv_path, tcs_flow, results_path + '.zzn'
         )
         
@@ -1641,13 +1641,13 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
 
         self.statusLabel.setText('Loading flow series results...')
         QApplication.processEvents()
-        self.flow_data, self.times = self.stab_check.loadResults(
+        self.flow_data, self.times = fmps_check.loadResults(
 #             len(self.nodes), save_paths['flow']
             len(self.nodes), flow_path
         )
         self.statusLabel.setText('Loading stage series results...')
         QApplication.processEvents()
-        self.stage_data, self.times = self.stab_check.loadResults(
+        self.stage_data, self.times = fmps_check.loadResults(
 #             len(self.nodes), save_paths['stage']
             len(self.nodes), stage_path
         )
@@ -1679,11 +1679,12 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
 #         flow_path = results_path + "Flow_10000Yrs.csv"
 #         stage_path = results_path + "Stage_10000Yrs.csv"
         
-        self.stab_check = fmps_check.FmpStabilityCheck()
+
+#         self.stab_check = fmps_check.FmpStabilityCheck()
         if os.path.exists(dat_path):
             self.statusLabel.setText('Loading FMP .dat file...')
             QApplication.processEvents()
-            self.sections, nodes = self.stab_check.loadDatFile(dat_path)
+            self.sections, nodes = fmps_check.loadDatFile(dat_path)
 
         self.statusLabel.setText('Loading Flow results...')
         QApplication.processEvents()
@@ -1840,6 +1841,9 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
             fail_times = []
             newhour_length = hour_length #int(hour_length / 2)
             
+            # Loop the 2nd derivative series and scan the window
+            # for variations in 1st/2nd derivative change in relation
+            # to the tolerances devined above
             for j, val in enumerate(dy2):
                 if j > hour_length:
 
