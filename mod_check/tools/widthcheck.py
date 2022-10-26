@@ -48,7 +48,7 @@ class SectionWidthCheck(ti.ToolInterface):
         self.failed = {}
         
         self.cn_fields = [
-            "Type", "Flags", "Name", "f", "d", "td", "a", "b", 
+            "type", "flags", "name", "f", "d", "td", "a", "b", 
         ]
         
     def run_tool(self):
@@ -83,7 +83,8 @@ class SectionWidthCheck(ti.ToolInterface):
         try:
             model = file_loader.loadFile(dat_path)
         except Exception as e:
-            raise e ("Problem loading FMP .dat file at:\n{}".format(dat_path))
+            # raise Exception ("Problem loading FMP .dat file at:\n{}".format(dat_path))
+            raise Exception ("Problem loading FMP .dat file at:\n{}\n{}".format(dat_path, str(e)))
         unit_categories = ['river', 'interpolate']
         units = model.unitsByCategory(unit_categories)
         
@@ -166,7 +167,7 @@ class SectionWidthCheck(ti.ToolInterface):
         self.cn_layer = cn_layer
         
         # Check that we have the right kind of layer
-        headers = [f.name() for f in cn_layer.fields()]
+        headers = [f.name().lower() for f in cn_layer.fields()]
         for i, field in enumerate(self.cn_fields):
             if not field in headers:
                 raise AttributeError ("Selected CN layer is not a recognised 2b_bc_hx layer")
