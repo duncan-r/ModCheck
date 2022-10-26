@@ -35,7 +35,7 @@ from builtins import IOError
 ICON_NAME = 'icon.png'
 MENU_NAME = 'ModCheck'
 TR_MENU_NAME = '&ModCheck'
-SHIP_VERSION = 'ship-0.3.3.dev0-py3.8.egg'
+SHIP_VERSION = 'ship-0.3.4.dev0-py3.8.egg'
 
 # Make sure we have access to the SHIP library
 ship_path = os.path.join(os.path.dirname(__file__), 'dependencies', SHIP_VERSION)
