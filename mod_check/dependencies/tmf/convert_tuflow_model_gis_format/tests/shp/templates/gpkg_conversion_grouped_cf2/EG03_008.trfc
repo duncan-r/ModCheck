@@ -1,0 +1,9 @@
+Spatial Database == gis\EG00_001_TRFC.gpkg
+
+RF Grid Cell Size == 10                                         ! Sets the output rainfall grid cell size
+RF Grid Format == TIF                                           ! Output in netcdf format
+
+Read GIS RF Points == 2d_rf_EG03_008_P                          ! Rainfall data input locations
+
+RF Interpolation Method == IDW                                  ! Rainfall interpolation method
+IDW Exponent == 2

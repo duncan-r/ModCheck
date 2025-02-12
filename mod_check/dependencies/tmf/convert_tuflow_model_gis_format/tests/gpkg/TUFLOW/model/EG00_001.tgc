@@ -1,0 +1,7 @@
+Spatial Database == gis/EG00_001_TGC.gpkg
+Read GIS Z Shape == 2d_zsh_EG00_Rd_Crest_001_L | 2d_zsh_EG00_Rd_Crest_001_P
+
+Read GIS Z Shape == gis/M01_5m_001_TGC.gpkg >> 2d_zsh_M01_thalweg_001_L && 2d_zsh_M01_thalweg_001_P
+
+Spatial Database == TCF
+Read GRID Zpts == grid/DEM_SI_Unit_01.tif | raster_clip

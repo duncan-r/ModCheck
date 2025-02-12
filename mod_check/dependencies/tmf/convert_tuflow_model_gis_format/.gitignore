@@ -1,0 +1,10 @@
+.idea*
+venv*
+.venv*
+_test*
+*__pycache__*
+tests/**/TUFLOW/runs/*
+tests/**/*.xml
+batch_convert.bat
+_test_debug.py
+/tests/tuf_dir/TUFLOW/tuf_dir/TUFLOW/

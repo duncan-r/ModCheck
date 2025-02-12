@@ -1,0 +1,43 @@
+import re
+from typing import TYPE_CHECKING
+import pandas as pd
+
+if TYPE_CHECKING:
+    from ..dataclasses.file import PathType
+
+from ..utils import logging as tmf_logging
+logger = tmf_logging.get_tmf_logger()
+
+
+def text_to_db_parser(fpath: 'PathType') -> pd.DataFrame:
+    """
+    Parse a text file manually into a pandas DataFrame. Assume comma delimited.
+
+    Don't attempt to assume or read any headers/column names.
+    Also don't try and capture any trailing comments, too hard with TUFLOW's free form approach and this has
+    probably failed to parse in pandas if this routine is being used, so keep it simple!
+    """
+    fltregex = re.compile(r'\d+\.\d*')
+    intregex = re.compile(r'\d+')
+    rows = []
+    with open(fpath, 'r') as f:
+        for line in f:
+            if '!' in line:
+                line, _ = line.split('!', 1)
+            line = line.strip()
+            if not line:
+                continue
+            row = [x.strip() for x in line.split(',')]
+            for i, x in enumerate(row[:]):
+                if fltregex.match(x):
+                    try:
+                        row[i] = float(x)
+                    except ValueError:
+                        pass
+                elif intregex.match(x):
+                    try:
+                        row[i] = int(x)
+                    except ValueError:
+                        pass
+            rows.append(row)
+    return pd.DataFrame(rows)

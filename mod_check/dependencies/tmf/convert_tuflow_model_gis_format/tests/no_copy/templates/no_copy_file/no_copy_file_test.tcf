@@ -1,0 +1,4 @@
+Geometry Control File == ..\model\no_copy_file_test.tgc
+Read Materials File == ..\model\no_copy_file_test.csv
+BC Database == ..\bc_dbase\bc_dbase_EG00_001.csv
+Pit Inlet Database == ..\pit\pit_inlet_dbase.csv
