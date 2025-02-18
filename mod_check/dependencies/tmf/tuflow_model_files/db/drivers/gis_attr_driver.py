@@ -5,11 +5,21 @@ from ...dataclasses.file import TuflowPath
 
 from ...dataclasses.types import PathLike
 
+try:
+    from osgeo import ogr
+    has_gdal = True
+except ImportError:
+    has_gdal = False
+
 
 class GISAttributes(Iterable):
     """Utility class for iterating over a GIS layer to obtain the attributes."""
 
     def __new__(cls, fpath: PathLike) -> object:
+        if has_gdal:
+            cls = GDALGISAttributes
+            return super().__new__(cls)
+        fpath = TuflowPath(fpath)
         if '>>' in fpath:
             fpath = fpath.split(' >> ')[0]
         fpath = Path(fpath)
@@ -45,6 +55,32 @@ class GISAttributes(Iterable):
     def close(self) -> None:
         """Close the GIS file."""
         raise NotImplementedError
+
+
+class GDALGISAttributes(GISAttributes):
+
+    def __init__(self, fpath: PathLike) -> None:
+        from ...utils.gis import get_driver_name_from_extension
+        fpath = TuflowPath(fpath)
+        self._driver = get_driver_name_from_extension('vector', fpath.suffix)
+
+        super().__init__(fpath)
+
+    def __iter__(self):
+        for feat in self._lyr:
+            d = OrderedDict()
+            for i in range(feat.GetFieldCount()):
+                fld = feat.GetFieldDefnRef(i)
+                d[fld.GetName()] = feat.GetField(i)
+            yield d
+
+    def open(self) -> None:
+        self._ds = ogr.Open(str(self.fpath.dbpath))
+        self._lyr = self._ds.GetLayer(self.fpath.lyrname)
+
+    def close(self) -> None:
+        self._lyr = None
+        self._ds = None
 
 
 class DBFAttributes(GISAttributes):

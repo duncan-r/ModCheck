@@ -16,7 +16,12 @@ class TuflowBinaries:
     """Class for managing TUFLOW binary versions and paths. A single instance of this class is created and used
     globally. This instance should be used rather than manually initialising this class.
     To access the instance, import the :data:`tuflow_binaries` variable:
-    e.g. :code:`from pytuflow.utils import tuflow_binaries`.
+
+    Examples
+    --------
+    >>> from pytuflow.util import tuflow_binaries
+    >>> tuflow_binaries.get('2023-03-AE')
+    'C:/TUFLOW/releases/2023-03-AE/TUFLOW_iSP_w64.exe'
     """
 
     def __init__(self):
@@ -122,7 +127,7 @@ tuflow_binaries = TuflowBinaries()
 
 def register_tuflow_binary(version_name: str, version_path: 'PathLike') -> None:
     """Register (save) a TUFLOW binary version path. Versions saved via this method will take precedence over versions
-    found in registered folders :func:`register_tuflow_binary_folder`.
+    found in registered folders :func:`register_tuflow_binary_folder <pytuflow.util.register_tuflow_binary_folder>`.
 
     Parameters
     ----------
@@ -143,7 +148,7 @@ def register_tuflow_binary_folder(folder: 'PathLike') -> None:
     name and the available binaries are refreshed each time a TUFLOW binary is requested (i.e. a simulation is run).
 
     It is best if this directory is a local directory and not a network drive. Binaries registered via
-    :func:`register_tuflow_binary` are given priority over
+    :func:`register_tuflow_binary <pytuflow.util.register_tuflow_binary>` are given priority over
     binaries found using this method.
 
     Parameters
