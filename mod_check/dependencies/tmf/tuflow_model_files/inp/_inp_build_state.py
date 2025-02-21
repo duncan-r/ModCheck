@@ -1,3 +1,4 @@
+import typing
 from typing import TYPE_CHECKING, TextIO
 from uuid import uuid4
 
@@ -103,6 +104,34 @@ class InputBuildState(BuildState, Input):
         self.dirty = False
         self._transferable = ['trd', 'parent']
         self._searchable = ['_scope', 'trd']
+
+    @property
+    def resolved_value(self) -> typing.Any:
+        """Returns the resolved value if possible. This is useful when using variables in TUFLOW and
+        the variables are not scenario or event dependent.
+
+        If the value cannot be resolved without context, then the returned value will be the same as the
+        :attr:`value` property.
+
+        Value can be any type, and should be returned as its intended type e.g. :code:`Set Code == 0`
+        should return an integer.
+
+        Path values will return a string. Use expanded_value for the expanded path.
+        """
+        if self.raw_command_obj() is not None and isinstance(self._value_orig, str):
+            val = self.raw_command_obj().value
+            if self.raw_command_obj().is_value_a_folder() or self.raw_command_obj().is_value_a_file():
+                return val
+            elif self.raw_command_obj().is_value_a_number(val):
+                return self.raw_command_obj().return_number(val)
+            elif self.raw_command_obj().is_value_a_number_tuple(val):
+                return self.raw_command_obj().return_number_tuple(val)
+            else:
+                return val
+
+    @property
+    def resolved(self) -> bool:
+        return '<<' not in str(self.resolved_value)
 
     def update_properties(self) -> None:
         """Updates the properties of this object. E.g. if there are any missing files etc."""

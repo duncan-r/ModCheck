@@ -106,13 +106,18 @@ def globify(infile, wildcards):
 
 
 def insert_variables(line, variables):
+    from .command import Command
     if line is None:
         return line
 
     line = str(line)
     for var_name, var_val in variables.items():
         if f'<<{var_name.upper()}>>' in line.upper():
-            line = re.sub(re.escape(rf'<<{var_name}>>'), re.escape(str(var_val)), line, flags=re.IGNORECASE)
+            if Command.is_value_a_number_2(var_val, '', 0):
+                var_val_ = str(var_val)
+            else:
+                var_val_ = re.escape(str(var_val))
+            line = re.sub(re.escape(rf'<<{var_name}>>'), var_val_, line, flags=re.IGNORECASE)
 
     return line
 

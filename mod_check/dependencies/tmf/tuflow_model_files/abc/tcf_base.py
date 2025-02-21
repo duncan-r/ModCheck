@@ -165,7 +165,7 @@ class TCFBase(ControlFile):
         tef = self._find_control_file('event file', context)
         if tef is None:
             return EventDatabase()
-        return self._event_cf_to_db(tef)
+        return tef.event_database()
 
     def output_folder_1d(self, context: Context = None) -> TuflowPath:
         """Returns the 1D output folder.

@@ -6,7 +6,7 @@ from helpers.settings import ConvertSettings, FatalConvertException, PythonVersi
 from helpers.gis import init_gdal_error_handler
 
 
-__VERSION__ = '0.135'
+__VERSION__ = '0.137'
 
 
 def main():

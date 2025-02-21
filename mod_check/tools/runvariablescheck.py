@@ -212,7 +212,7 @@ class IefVariablesCheck(ti.ToolInterface):
             'Results files': getattr(ief, 'Results'),
             'Initial conditions file': getattr(ief, 'InitialConditions', ''),
         }
-        filepaths['Event data'] = [v for k, v in ief.EventData.items()]
+        filepaths['Event data'] = [{'name': k, 'file': v} for k, v in ief.EventData.items()]
         
         # Check if any key params have been changed from default
         params = {'changed': {}, 'default': {}}
@@ -451,8 +451,15 @@ class TlfDetailsCheck(ti.ToolInterface):
         self.run_summary = {}
         
     def run_tool(self):
+        
+        # def keyfunc(tup):
+        #     key, d = tup
+        #     return d["is_default"]
+        
         super()
         self.loadTlfDetails()
+        # variables = sorted(self.variables.items(), key=keyfunc)
+        # self.variables = variables
     
     def loadTlfDetails(self):
         """
@@ -573,6 +580,8 @@ class TlfDetailsCheck(ti.ToolInterface):
             'Density of Water': {'default': '1025.', 'value': '', 'options': '', 'description': ''},
             'Wind/Wave Shallow Depths': {'default': '0.2, 1.', 'value': '', 'options': '', 'description': ''},
             'Blockage Matrix': {'default': 'OFF', 'value': '', 'options': '', 'description': ''},
+            'Default': {},
+            'Non_Default': {},
         }
         
         self.run_summary = {
@@ -657,7 +666,14 @@ class TlfDetailsCheck(ti.ToolInterface):
                             for c in command_keys:
                                 if command == c:
                                     found_variable = True
-                                    self.variables[c]['value'] = value
+                                    # Create a separate default and non default dict to hold the outputs so that
+                                    # they can be ordered in the table easily
+                                    if value == self.variables[c]['default']:
+                                        self.variables['Default'][c] = self.variables[c]
+                                        self.variables['Default'][c]['value'] = value
+                                    else:
+                                        self.variables['Non_Default'][c] = self.variables[c]
+                                        self.variables['Non_Default'][c]['value'] = value
                         
                         if not found_variable:
                             split_line = line.split(':')

@@ -1,7 +1,0 @@
-Read GIS PO == ..\model\gis\2d_po_EG02_010_L.gpkg
-
-If Scenario == TEST
-	IF Scenario == TEST_2
-		Read GIS PO == ..\model\gis\2d_po_EG02_010_P.gpkg
-	End if
-End If

@@ -102,6 +102,7 @@ class ConvertSettings:
             self.copied_bndry_files = {}
             self.command = None
             self.parent_settings = None
+            self.resolve_var = False
 
             if args:
                 self._init_settings_with_args(*args)
@@ -455,13 +456,17 @@ class ConvertSettings:
         if scenarios:
             self.scenarios = scenarios[:]
 
-        if self.use_scenarios and self.scenarios:  # if scenarios are specified we want to limit what is copied - so first thing is to grab variables
+        if (self.use_scenarios and self.scenarios) or self.resolve_var:  # if scenarios are specified we want to limit what is copied - so first thing is to grab variables
             copy_ = self.copy_settings(self.control_file, self.output_folder)
             for command in get_commands(self.tcf, copy_):
                 if command.is_read_file():
                     self.read_file_for_variables((self.control_file.parent / command.value).resolve(), self)
                 elif command.is_set_variable():
                     var_name, var_val = command.parse_variable()
+                    if command.in_scenario_block() and not self.use_scenarios:  # this is for the tmf lib - if variable is in a scenario/event block then it can't be resolved straight away
+                        continue
+                    elif command.in_scenario_block() and not command.in_scenario_block(copy_.scenarios):  # don't read the variable if it's in a different scenario
+                        continue
                     self.variables[var_name] = var_val
 
             self.variables = copy_.variables

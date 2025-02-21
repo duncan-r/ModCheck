@@ -63,7 +63,7 @@ class Input:
         """Property holding the value part of :code:`Command == Value`. Value can be any type, and
         should be returned as its intended type e.g. :code:`Set Code == 0` should return an integer.
 
-        Path values will return string. Use expanded_value for the expanded path.
+        Path values will return a string. Use expanded_value for the expanded path.
 
         .. note::
 
@@ -77,10 +77,10 @@ class Input:
         if self.raw_command_obj() is not None and isinstance(self._value_orig, str):
             if self.raw_command_obj().is_value_a_folder() or self.raw_command_obj().is_value_a_file():
                 return self._value_orig
-            elif self.raw_command_obj().is_value_a_number(self._value):
-                return self.raw_command_obj().return_number(self._value)
-            elif self.raw_command_obj().is_value_a_number_tuple(self._value):
-                return self.raw_command_obj().return_number_tuple(self._value)
+            elif self.raw_command_obj().is_value_a_number(self._value_orig):
+                return self.raw_command_obj().return_number(self._value_orig)
+            elif self.raw_command_obj().is_value_a_number_tuple(self._value_orig):
+                return self.raw_command_obj().return_number_tuple(self._value_orig)
             else:
                 return self._value_orig
 

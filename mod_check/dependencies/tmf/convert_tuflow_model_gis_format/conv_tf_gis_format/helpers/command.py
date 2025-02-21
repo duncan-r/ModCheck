@@ -758,16 +758,21 @@ class Command:
         if iter_index is None:
             iter_index = self.iter_geom_index
 
+        return self.is_value_a_number_2(value, self.value_orig, iter_index)
+
+    @staticmethod
+    def is_value_a_number_2(value, value_orig, iter_index):
         try:
             if value is not None:
                 float(value)
             else:
-                float(str(self.value_orig))
+                float(str(value_orig))
             return True
         except (ValueError, TypeError):
             if iter_index == 1 and re.findall('^<<.+?>>$', value.strip()) and re.findall('<<.+?>>', value)[0] == value.strip():
                 return True
             return False
+
 
     def return_number(self, value):
         if self.is_set_code() or self.is_set_mat() or self.is_set_soil():

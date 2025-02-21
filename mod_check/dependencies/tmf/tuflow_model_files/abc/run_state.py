@@ -30,8 +30,11 @@ class RunState:
         if isinstance(build_state, ControlFile):
             from ..cf._cf_run_state import ControlFileRunState
             from ..cf.tcf_run_state import TCFRunState
+            from ..cf.tef_run_state import TEFRunState
             if build_state.TUFLOW_TYPE == 'TuflowControlFile':
                 cls = TCFRunState
+            elif build_state.TUFLOW_TYPE == 'TuflowEventFile':
+                cls = TEFRunState
             else:
                 cls = ControlFileRunState
         elif isinstance(build_state, CrossSectionDatabase):  # special case, database is too different from others and req. runstate to be overridden

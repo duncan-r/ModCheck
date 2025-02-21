@@ -175,6 +175,7 @@ class ControlFileBuildState(BuildState, ControlFile):
 
         if not settings:
             settings = Settings(*['-tcf', str(path)])
+            settings.resolve_var = True
             settings.read_tcf()
             self._settings = settings
         else:

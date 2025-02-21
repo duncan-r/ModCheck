@@ -1,3 +1,4 @@
+import typing
 from typing import Union
 
 from .gis import GisInput
@@ -24,6 +25,18 @@ class InputRunState(RunState, Input):
         elif hasattr(self, 'command'):
             return '<{0}Context> {1}'.format(self._name, self.command)
         return '<{0}Context>'.format(self._name)
+
+    @property
+    def value(self) -> typing.Any:
+        if self.raw_command_obj() is not None and isinstance(self._value_orig, str):
+            if self.raw_command_obj().is_value_a_folder() or self.raw_command_obj().is_value_a_file():
+                return self._value_orig
+            elif self.raw_command_obj().is_value_a_number(self._value):
+                return self.raw_command_obj().return_number(self._value)
+            elif self.raw_command_obj().is_value_a_number_tuple(self._value):
+                return self.raw_command_obj().return_number_tuple(self._value)
+            else:
+                return self._value_orig
 
     def _init(self) -> None:
         """Called after the generic initialisation.

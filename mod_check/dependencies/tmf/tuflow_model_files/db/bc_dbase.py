@@ -2,6 +2,9 @@ import typing
 
 import pandas as pd
 
+from ..dataclasses.event import EventDatabase
+from ..utils.context import Context
+from ..abc.run_state import RunState
 from ._db_build_state import DatabaseBuildState
 from .drivers.driver import DatabaseDriver
 from ..dataclasses.types import PathLike, is_a_number
@@ -34,7 +37,21 @@ class BCDatabase(DatabaseBuildState):
         self._source_index = SOURCE_INDEX
         self._header_index = 0
         self._index_col = 0
+        self._event_ctx = Context([])
         super().__init__(fpath, scope, var_names)
+
+    def load_events(self, event_db: EventDatabase):
+        self._event_ctx.load_events(event_db)
+
+    def context(self, *args, **kwargs) -> RunState:
+        if kwargs.get('context'):
+            ctx = kwargs['context']
+        else:
+            ctx = Context(args, kwargs)
+        if self._event_ctx.events_loaded:
+            ctx.load_events(self._event_ctx._event_db)
+        parent = kwargs['parent'] if 'parent' in kwargs else None
+        return RunState(self, ctx, parent)
 
     @staticmethod
     def get_value(db_path: PathLike, df: pd.DataFrame, index: str) -> typing.Any:

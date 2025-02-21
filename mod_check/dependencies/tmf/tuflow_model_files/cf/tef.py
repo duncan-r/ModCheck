@@ -1,4 +1,4 @@
-from ._cf_build_state import ControlFileBuildState
+from .tef_build_state import TEFBuildState
 from ._cf_load_factory import ControlFileLoadMixin
 from ..dataclasses.scope import ScopeList
 from ..dataclasses.types import PathLike
@@ -7,7 +7,7 @@ from ..abc.build_state import BuildState
 from .. import const
 
 
-class TEF(ControlFileLoadMixin, ControlFileBuildState):
+class TEF(ControlFileLoadMixin, TEFBuildState):
     """Initialises the TEF class in a build state.
 
     If the class is initialised with the :code:`fpath` parameter set to None, an empty class will be initialised.

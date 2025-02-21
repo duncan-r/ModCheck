@@ -1,5 +1,0 @@
-Read GIS Z Shape == gis\2d_zsh_EG00_Rd_Crest_001_L.shp | gis\2d_zsh_EG00_Rd_Crest_001_P.shp
-
-Read GIS Z Shape == gis\2d_zsh_M01_thalweg_001_L.shp | gis\2d_zsh_M01_thalweg_001_P.shp
-
-Read GRID Zpts == grid\DEM_SI_Unit_01.tif | gis\raster_clip.shp
