@@ -69,7 +69,7 @@
       <item>
        <widget class="QTabWidget" name="resultsTabWidget">
         <property name="currentIndex">
-         <number>0</number>
+         <number>1</number>
         </property>
         <widget class="QWidget" name="searchSummaryTab">
          <attribute name="title">
@@ -77,19 +77,76 @@
          </attribute>
          <layout class="QVBoxLayout" name="verticalLayout_4">
           <item>
-           <widget class="QTextBrowser" name="summaryTextEdit">
-            <property name="font">
-             <font>
-              <family>Courier</family>
-              <pointsize>10</pointsize>
-             </font>
+           <widget class="QComboBox" name="summaryComboBox"/>
+          </item>
+          <item>
+           <widget class="QTableWidget" name="summaryTable">
+            <property name="sortingEnabled">
+             <bool>true</bool>
             </property>
-            <property name="sizeAdjustPolicy">
-             <enum>QAbstractScrollArea::AdjustToContents</enum>
+            <attribute name="horizontalHeaderStretchLastSection">
+             <bool>true</bool>
+            </attribute>
+            <column>
+             <property name="text">
+              <string>Type</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Name</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Path</string>
+             </property>
+            </column>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="logTab">
+         <attribute name="title">
+          <string>Log Check</string>
+         </attribute>
+         <layout class="QVBoxLayout" name="verticalLayout_15">
+          <item>
+           <widget class="QComboBox" name="logComboBox"/>
+          </item>
+          <item>
+           <widget class="QTableWidget" name="logTable">
+            <property name="sortingEnabled">
+             <bool>true</bool>
             </property>
-            <property name="lineWrapMode">
-             <enum>QTextEdit::NoWrap</enum>
-            </property>
+            <attribute name="horizontalHeaderStretchLastSection">
+             <bool>true</bool>
+            </attribute>
+            <column>
+             <property name="text">
+              <string>Missing</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Type</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Name</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>Log Path</string>
+             </property>
+            </column>
+            <column>
+             <property name="text">
+              <string>New Path</string>
+             </property>
+            </column>
            </widget>
           </item>
          </layout>
@@ -455,7 +512,6 @@
  <tabstops>
   <tabstop>reloadBtn</tabstop>
   <tabstop>resultsTabWidget</tabstop>
-  <tabstop>summaryTextEdit</tabstop>
   <tabstop>missingFilesTable</tabstop>
   <tabstop>missingParentList</tabstop>
   <tabstop>elsewhereFilesTable</tabstop>

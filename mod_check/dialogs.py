@@ -543,6 +543,11 @@ class FileCheckDialog(DialogBase, filecheck_ui.Ui_CheckFilesDialog):
         self.fileTreePathTextEdit.verticalScrollBar().valueChanged.connect(
             self.fileTreeTextEdit.verticalScrollBar().setValue
         )
+        
+        self.summaryLookup = []
+        self.summaryComboBox.currentIndexChanged.connect(lambda i: self.showSummaryFiles(i))
+        self.workspaceLookup = []
+        self.logComboBox.currentIndexChanged.connect(lambda i: self.showWorkspaceFiles(i))
 
 #         self.splitter.setCollapsable(0, False)
 #         self.splitter.setCollapsable(1, True)
@@ -599,25 +604,28 @@ class FileCheckDialog(DialogBase, filecheck_ui.Ui_CheckFilesDialog):
 
     def checkFiles(self):
         """Search folders, load data and update dialog data."""
-        self.search_results = None
+        self.search_results = []
+        self.iefs = []
+        self.workspace_files = {}
+        self.workspaceLookup = []
+        self.summaryLookup = None
+        self.logComboBox.clear()
+        self.summaryComboBox.clear()
+        self.summaryTable.setRowCount(0)
+        self.logTable.setRowCount(0)
         self.missingParentList.clear()
         self.elsewhereParentList.clear()
         self.iefElsewhereParentList.clear()
         model_root = mrt_settings.loadProjectSetting('model_root', './temp')
-        self.search_results = self.file_check.auditModelFiles(model_root)
-        
-        output = [
-            "Model files\n-----------\n" + '\n'.join([f"({f.fileExt}) {f.name}" for f in self.search_results['model']]),
-            "\nGIS files\n-----------\n" + '\n'.join([f"({f.fileExt}) {f.name}" for f in self.search_results['gis']]),
-            "\nResult files\n-----------\n" + '\n'.join([f"({f.fileExt}) {f.name}" for f in self.search_results['result']]),
-            "\nLog files\n-----------\n" + '\n'.join([f"({f.fileExt}) {f.name}" for f in self.search_results['log']]),
-            "\nCSV files\n-----------\n" + '\n'.join([f"({f.fileExt}) {f.name}" for f in self.search_results['csv']]),
-            "\nWorkspace files\n-----------\n" + '\n'.join([f"({f.fileExt}) {f.name}" for f in self.search_results['workspace']]),
-            "\nOther files\n-----------\n" + '\n'.join([f"({f.fileExt}) {f.name}" for f in self.search_results['other']]),
-        ]
+        self.iefs, self.search_results = self.file_check.auditModelFiles(model_root)
 
-        self.summaryTextEdit.clear()
-        self.summaryTextEdit.setText('\n'.join(output))
+        self.summaryLookup = [
+            'tuflow_model', 'fm_model', 'gis', 'result', 'workspace', 'log', 'csv', 'other'
+        ]
+        self.summaryComboBox.addItems(['Tuflow Model', 'FM Model', 'GIS', 'Results', 'Workspaces', 'Logs', 'CSVs', 'Other'])        
+        self.loadWorkspaceFiles()
+        self.workspaceLookup = list(self.workspace_files.keys())
+        self.logComboBox.addItems(self.workspaceLookup)
 
         # self.resultsTabWidget.setCurrentIndex(0)
         # self.updateSummaryTab()
@@ -625,6 +633,62 @@ class FileCheckDialog(DialogBase, filecheck_ui.Ui_CheckFilesDialog):
         # self.updateElsewhereTable(self.iefElsewhereFilesTable, self.search_results.results['found_ief'])
         # self.updateMissingTable(self.search_results.results['missing'])
         # self.updateFileTree()
+        
+    def showSummaryFiles(self, i):
+        try:
+            contents = self.search_results[self.summaryLookup[i]]
+        except KeyError:
+            return
+        except IndexError:
+            return
+
+        self.summaryTable.setSortingEnabled(False)
+        row_position = 0
+        self.summaryTable.setRowCount(row_position)
+        for content in contents:
+            self.summaryTable.insertRow(row_position)
+            self.summaryTable.setItem(row_position, 0, QTableWidgetItem(content.fileExt))
+            self.summaryTable.setItem(row_position, 1, QTableWidgetItem(content.name))
+            self.summaryTable.setItem(row_position, 2, QTableWidgetItem(content.filepath))
+            row_position += 1
+        self.summaryTable.setSortingEnabled(True)
+
+    def loadWorkspaceFiles(self):
+        self.workspace_files = filecheck.loadWorkspaceFiles(self.search_results['workspace'])
+        all_files = {}
+        for fname, ftype in self.search_results.items():
+            if fname in ['tree', 'log', 'workspace']: continue
+            for f in ftype:
+                all_files[f.name.lower()] = f.filepath
+
+        for workspace, wfiles in self.workspace_files.items():
+            for i, w in enumerate(wfiles):
+                missing = 'No'
+                newpath = 'Missing'
+                try:
+                    newpath = all_files[w.name.lower()]
+                except KeyError:
+                    missing = 'Yes'
+                self.workspace_files[workspace][i].missing = missing
+                self.workspace_files[workspace][i].newpath = newpath
+
+    def showWorkspaceFiles(self, i):
+        if len(self.workspaceLookup) < 1: return
+        workspace = self.workspace_files[self.workspaceLookup[i]]
+
+        self.logTable.setSortingEnabled(False)
+        row_position = 0
+        self.logTable.setRowCount(row_position)
+        for w in workspace:
+            self.logTable.insertRow(row_position)
+            self.logTable.setItem(row_position, 0, QTableWidgetItem(w.missing))
+            self.logTable.setItem(row_position, 1, QTableWidgetItem(w.extension))
+            self.logTable.setItem(row_position, 2, QTableWidgetItem(w.name))
+            self.logTable.setItem(row_position, 3, QTableWidgetItem(w.rawpath))
+            self.logTable.setItem(row_position, 4, QTableWidgetItem(w.newpath))
+            row_position += 1
+        self.logTable.setSortingEnabled(True)
+        
 
     def updateFileTree(self):
         include_files = not self.fileTreeFoldersOnlyCheckbox.isChecked()
@@ -639,17 +703,18 @@ class FileCheckDialog(DialogBase, filecheck_ui.Ui_CheckFilesDialog):
         else:
             self.splitter.setSizes([50, 0])
             self.showFullPathsBtn.setEnabled(False)
+            
 
-    def updateSummaryTab(self):
-        output = ['File search summary\n'.upper()]
-        output.append(self.search_results.summaryText())
-        output.append('\n\nFiles that were ignored\n'.upper())
-        output += [f.filepath for f in self.search_results.results_meta['ignored']]
-        output.append('\n\nModel files reviewed\n'.upper())
-        output += self.search_results.results_meta['checked']
-        output = '\n'.join(output)
-        self.summaryTextEdit.clear()
-        self.summaryTextEdit.setText(output)
+    # def updateSummaryTab(self):
+    #     output = ['File search summary\n'.upper()]
+    #     output.append(self.search_results.summaryText())
+    #     output.append('\n\nFiles that were ignored\n'.upper())
+    #     output += [f.filepath for f in self.search_results.results_meta['ignored']]
+    #     output.append('\n\nModel files reviewed\n'.upper())
+    #     output += self.search_results.results_meta['checked']
+    #     output = '\n'.join(output)
+    #     self.summaryTextEdit.clear()
+    #     self.summaryTextEdit.setText(output)
 
     def updateMissingTable(self, missing_files):
         row_position = 0

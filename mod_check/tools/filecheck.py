@@ -16,13 +16,69 @@ import csv
 from pprint import pprint
 from PyQt5 import QtCore
 import re
+from pathlib import Path
+from lxml import etree
 
 from . import globaltools as gt
+from floodmodeller_api import IEF
 from tmf.tuflow_model_files import TCF
 from tmf.tuflow_model_files.inp.file import FileInput
 from tmf.tuflow_model_files.inp.gis import GisInput
 from tmf.tuflow_model_files.inp.setting import SettingInput
 
+class WorkspaceFile():
+    
+    def __init__(self, path):
+        self.rawpath = path
+        self.path = Path(path)
+        self.missing = 'Yes'
+        
+    @property
+    def fullpath(self):
+        return self.path.absolute()
+
+    @property
+    def name(self):
+        return self.path.name
+
+    @property
+    def extension(self):
+        return self.path.suffix
+
+
+class Workspace():
+    
+    def __init__(self, workspace):
+        self.workspace = workspace
+        
+    def readWorkspaceFile(self):
+        wpath = self.workspace.filepath
+        
+        with open(wpath) as infile:
+            xml = infile.read()
+
+        files = [] 
+
+        root = etree.fromstring(xml)
+        for primaries in root.getchildren():
+            if primaries.tag == "projectlayers":
+                for maplayers in primaries.getchildren():
+                    for maptags in maplayers.getchildren():
+                        if maptags.tag == 'datasource':
+                            text = maptags.text
+                            files.append(WorkspaceFile(text))
+                    
+        return files
+        
+
+def loadWorkspaceFiles(workspaces):
+    workspace_files = {}
+    for workspace in workspaces:
+        w = Workspace(workspace)
+        files = w.readWorkspaceFile()
+        workspace_files[workspace.name] = files
+    return workspace_files
+    
 
 class FileChecker(QtCore.QObject):
     status_signal = QtCore.pyqtSignal(str)
@@ -38,13 +94,17 @@ class FileChecker(QtCore.QObject):
         search_successes = 0
         
         self.status_signal.emit('Searching folders ...')
-        model_files, gis_files, log_files, result_files, csv_files, workspace_files, other_files, ignore_files, file_tree = self.categorise(model_root)
+        iefs, (
+            tuflow_model_files, fm_model_files, gis_files, log_files, result_files, csv_files, 
+            workspace_files, other_files, ignore_files, file_tree
+        ) = self.categorise(model_root)
         # audit = AuditFiles(model_root, model_files, other_files, ignore_files)
         # self.status_signal.emit('Categorising results ...')
         # result_holder = ResultHolder()
         # result_holder.ignored_files = ignore_files
-        return {
-            'model': model_files, 'gis': gis_files, 'log': log_files, 'csv': csv_files, 'result': result_files, 
+        return iefs, {
+            'tuflow_model': tuflow_model_files, 'fm_model': fm_model_files, 'gis': gis_files, 
+            'log': log_files, 'csv': csv_files, 'result': result_files, 
             'workspace': workspace_files, 'other': other_files, 'ignore': ignore_files, 
             'tree': file_tree
         }
@@ -97,7 +157,8 @@ class FileChecker(QtCore.QObject):
             Method for categorising the model passed to the audit tool
             Return: tuple contain list of ModelFile and list of SomeFile instances
         '''
-        model_files = []
+        tuflow_model_files = []
+        fm_model_files = []
         gis_files = []
         log_files = []
         result_files = []
@@ -127,12 +188,19 @@ class FileChecker(QtCore.QObject):
                     })
                     filepath = os.path.join(root,f)
                     filepath = gt.longPathCheck(filepath)
+                    
+                    # IMPORTANT: The order of these checks is important
+                    # Some file types have the same extension and other checks may be required.
+                    # We need the order, in some cases, to make sure they're identified correctly
                     query = SomeFile(filepath)
                     if query.isIgnoreFile():
                         ignore_files.append(query)
 
-                    elif query.isModelFile():
-                        model_files.append(query)
+                    elif query.isTuflowModelFile():
+                        tuflow_model_files.append(query)
+
+                    elif query.isFmModelFile():
+                        fm_model_files.append(query)
 
                     elif query.isGisFile():
                         gis_files.append(query)
@@ -155,13 +223,40 @@ class FileChecker(QtCore.QObject):
                     #
                     else:
                         other_files.append(query)
-                    # other_files.append(query)
                 root_count += 1
 
         except Exception as err:
             raise
         
-        return model_files, gis_files, log_files, result_files, csv_files, workspace_files, other_files, ignore_files, file_tree
+        # Load IEFs and remove any FM .dat files for the results files (based on being in an IEF)
+        iefs, fm_model_files, result_files = self.findFmFiles(fm_model_files, result_files)
+        
+        return iefs, (
+            tuflow_model_files, fm_model_files, gis_files, log_files, result_files, csv_files, 
+            workspace_files, other_files, ignore_files, file_tree
+        )
+    
+
+    def findFmFiles(self, fm_files, result_files):
+        iefs = []
+        dat_names = []
+        new_result_files = []
+        
+        for f in fm_files:
+            if f.fileExt.lower() == 'ief':
+                ief = IEF(f.filepath)
+                iefs.append(ief)
+                dat_name = Path(ief.datafile).name
+                dat_names.append(dat_name)
+                
+        for r in result_files:
+            if not r.name in dat_names: 
+                new_result_files.append(r)
+            else:
+                fm_files.append(r)
+
+        return iefs, fm_files, new_result_files
+
         
 
 class ResultHolder():    
@@ -649,12 +744,14 @@ class ResultHolder():
 #         }
 #
 #
+
 ignore_file_exts = ['log', 'doc', 'xlsx', 'pdf', 'xf4', 'txt', 'dbf', 'shx', 'prj']
-model_file_exts = ['tcf', 'tgc', 'tbc', 'tef', 'ecf', 'trd', 'tsoil', 'tmf']
+tuflow_model_file_exts = ['tcf', 'tgc', 'tbc', 'tef', 'ecf', 'trd', 'tsoil', 'tmf']
+fm_model_file_exts = ['ief', 'ied', 'iic']
 gis_file_exts = ['shp', 'mif', 'mid', 'asc', 'flt', 'tif', 'tiff', 'xml', 'sqlite']
 log_file_exts = ['tlf', 'tsf']
-result_file_exts = ['xmdf', 'sup', '2dm', 'eof', 'dat']
-workspace_file_exts = ['qgs', 'wor']
+result_file_exts = ['xmdf', 'sup', '2dm', 'eof', 'dat', 'zzd']
+workspace_file_exts = ['qgs']#, 'wor']
 class SomeFile(object):
     '''
         Class for any file found in the model structure
@@ -669,12 +766,15 @@ class SomeFile(object):
         self.fileExt = self.name.rsplit('.',1)[-1].lower()
         
         # Regular expressions
-        self.empty_re = re.compile('._empty_[LPRlpr]\.shp$')
-        self.messages_re = re.compile('.messages_[LPRlpr]\.(shp|mif|mid|sql|sqlite)$')
+        self.empty_re = re.compile('._empty_[LPRlpr]\.(shp|mif|mid|sql|sqlite)$')
+        self.messages_re = re.compile('.messages_?[LPRlpr]?\.(shp|mif|mid|sql|sqlite)$')
+        self.check_re = re.compile('.(check|DEM_M|DEM_Z)_?[LPRlpr]?\.(shp|mif|mid|flt|asc|tiff{0,1}|sql|sqlite)$')
+        self.result_re = re.compile('_(ccA|mmH|mmQ|mmV|PLOT_[LPRlpr]|TS|[dhvDHV]_Max|T(Dur|Exc)|ZUK|input_layers).*\.(shp|mif|mid|sql|sqlite|flt|xml)$')
         
         # File classification
         self.ignoreFile = self.fileExt in ignore_file_exts
-        self.modelFile = self.fileExt in model_file_exts
+        self.tuflow_modelFile = self.fileExt in tuflow_model_file_exts
+        self.fm_modelFile = self.fileExt in fm_model_file_exts
         self.gisFile = self.fileExt in gis_file_exts
         self.resultFile = self.fileExt in result_file_exts
         self.logFile = self.fileExt in log_file_exts
@@ -693,14 +793,21 @@ class SomeFile(object):
     def getFileExt(self):
         return self.fileExt
 
-    def isModelFile(self):
-        return self.modelFile
+    def isTuflowModelFile(self):
+        return self.tuflow_modelFile
+
+    def isFmModelFile(self):
+        return self.fm_modelFile
 
     def isGisFile(self):
         if self.gisFile:
             if re.search(self.empty_re, self.name):
                 return False
             if re.search(self.messages_re, self.name):
+                return False
+            if re.search(self.check_re, self.name):
+                return False
+            if re.search(self.result_re, self.name):
                 return False
             return True
         return False
