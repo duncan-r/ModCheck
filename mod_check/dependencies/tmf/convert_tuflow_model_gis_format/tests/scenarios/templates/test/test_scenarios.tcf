@@ -1,0 +1,9 @@
+Read GIS PO == ..\model\gis\2d_po_EG02_010_L.gpkg
+
+If Scenario == TEST
+    Read GIS PO == ..\model\gis\2d_po_EG02_010_P.gpkg
+End If
+
+If Scenario == TEST
+	Read GIS Reporting Location == ..\model\gis\0d_rl_EG02_013_L.gpkg
+End if

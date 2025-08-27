@@ -1,45 +1,37 @@
-import re
 import typing
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 from uuid import UUID
 
-from ..dataclasses.event import Event, EventDatabase
-from ..dataclasses.scope import Scope
-from ..dataclasses.types import SearchTagLike
-from ..utils.commands import EventCommand
-from ..utils.context import Context
-from ..dataclasses.file import TuflowPath
-from ..dataclasses.inputs import Inputs
+from ..scope import Scope
+from ..tmf_types import SearchTagLike
+from ..inp.inputs import Inputs
+from ..context import Context
+from .input import T_Input
+from ..settings import TCFConfig
+from .t_cf import ControlBase, T_ControlFile
+
+from .. import const
 
 if TYPE_CHECKING:
-    from ..dataclasses.inputs import Inputs
     from ..abc.input import Input
-    from ..abc.db import Database
-    from ..cf._cf_build_state import ControlFileBuildState
 
 
-class ControlFile:
+class ControlFile(ControlBase):
     """Abstract base class for all control file classes."""
+    TUFLOW_TYPE = 'ControlFile'
 
-    def __setattr__(self, key, value, private: bool = False, gate: int = 0):
-        """Override this method to prevent users from changing property values.
-        This is required as control file inputs are assigned as properties to the control file class, and
-        we don't want users thinking that modifying these will change the control file inputs. Methods such as
-        "update_value", "append_input", "insert_input", "remove_input" - should be used instead.
-
-        This only prevents users from changing properties of the control file class if the property has already
-        been set by the load method and added to the "_priv_prop" dictionary. If the property needs to actually be
-        updated, just pass in a secret 'gate' value that is not equal to zero.
-        """
-        if hasattr(self, '_priv_prop') and key in self._priv_prop and not gate:
-            raise AttributeError(f'Cannot set attribute {key} on {self.__class__.__name__}')
-        super().__setattr__(key, value)
-        if private and hasattr(self, '_priv_prop'):
-            self._priv_prop[key] = True
+    def __init__(self, *args, **kwargs):
+        self._fpath = None
+        #: ControlFile: The parent control file
+        self.parent = None
+        #: TCFConfig: the configuration settings for the model.
+        self.config = TCFConfig()
+        #: Inputs: The list of inputs and comments in the control file
+        self.inputs = Inputs()
 
     @property
     def tcf(self):
-        #: ControlFile: The parent TCF control file object
+        """ControlFile: The parent TCF control file object"""
         if not self.parent:
             return self
         else:
@@ -48,421 +40,168 @@ class ControlFile:
                 tcf = tcf.parent
             return tcf
 
-    def commands(self) -> list[str]:
-        """Returns a list of all the commands in the current control file.
-
-        .. note::
-            ES Note - Will probably remove in a future release, not sure what it offers
-            over just looking at the list of inputs.
-
-        Returns
-        -------
-        list[str]
-            A list of all the commands in the current control file.
-        """
-        return [input.command for input in self.inputs if input]
-
-    def input(self, uuid: Union[str, UUID]) -> 'Input':
+    def input(self, uuid: str | UUID) -> T_Input:
         """Returns the input with the given UUID. UUIDs remain constant across build and run state conversions.
+        If the input is not found in the control file, it will search through any child control files.
 
         Parameters
         ----------
-        uuid : Union[str, UUID]
-            The UUID of the input to return either as a string or UUID object.
+        uuid : str | UUID
+            The UUID of the input to retrieve.
 
         Returns
         -------
         Input
             The input with the given UUID.
+
+        Raises
+        ------
+        KeyError
+            If no input with the given UUID is found in the control file or its child control files.
+
+        Examples
+        --------
+        The example below finds an input and then checks if the input is still present after
+        creating a run state instance of the control file.
+
+        >>> control_file = ... # Assume the control file has been loaded
+        >>> code_inp = control_file.find_input('2d_code')[0]
+        >>> run_control_file = control_file.context('-s1 EXG -s2 5m')
+        >>> try:
+        ...     run_inp = run_control_file.input(code_inp.uuid)
+        ...     print(f'Input found: {run_inp}')
+        ... except KeyError:
+        ...     print('Input not found in run state control file.')
         """
         if isinstance(uuid, str):
             uuid = UUID(uuid)
-        for inp in self.inputs._inputs:
+
+        for inp in self.inputs.inputs(include_hidden=True):
             if inp.uuid == uuid:
                 return inp
-            if 'ControlFileInput' in repr(inp):
-                loaded_value = self.input_to_loaded_value(inp)
-                if loaded_value is None:
-                    continue
-                if isinstance(loaded_value, Inputs):
-                    for inp_ in loaded_value:
-                        inp2 = inp_.input(uuid)
-                        if inp2:
-                            return inp2
-                else:
-                    inp_ = loaded_value.input(uuid)
-                    if inp_:
-                        return inp_
+            if self.TUFLOW_TYPE == const.CONTROLFILE.TCF and inp.TUFLOW_TYPE == const.INPUT.CF and inp.cf:
+                for cf in inp.cf:
+                    try:
+                        inp1 = cf.input(uuid)
+                        return inp1
+                    except KeyError:
+                        continue
+        raise KeyError(f'Input with UUID {uuid} not found.')
 
-    def find_input(self, filter: str = None, command: str = None,
-                   value: str = None, recursive: bool = True, regex: bool = False, regex_flags: int = 0,
-                   tags: SearchTagLike = (), callback: typing.Callable = None, comments: bool = False) -> 'Inputs':
-        """Find a particular input(s) by using a filter (:code:`filter=`). The filter can be for the entire input,
-        or localised to the command or value side of the input (:code:`command=` and :code:`value=` respectively).
-        The filter can be a string or a regular expression depending on the :code:`regex` parameter with regex flags
-        passed in using the :code:`regex_flags` parameter.
+    def find_input(self,
+                   filter_by: str = None,
+                   lhs: str = None,
+                   rhs: str = None,
+                   recursive: bool = True,
+                   regex: bool = False,
+                   regex_flags: int = 0,
+                   attrs: SearchTagLike = (),
+                   callback: typing.Callable[[T_Input], bool] = None,
+                   comments: bool = False) -> list[T_Input]:
+        """Find a particular input(s) using a search filter. The filter can be for the entire command,
+        or specifically to the left-hand side ``lhs`` or right-hand side ``rhs`` of the command.
 
-        The parameters are not mutually exclusive, so if a filter can be provided for the command and the
-        value parameters. By default (when not using regex), the filter is not case sensitive.
+        The filter can be a basic search string, or it can be switched to
+        be a regular expression depending on the ``regex`` parameter with regex flags
+        passed in using the ``regex_flags`` parameter. If ``regex`` is set to ``False``, the filter strings will
+        be case-insensitive. If ``regex`` is set to ``True``, the filter strings will be treated as
+        regular expressions and the ``regex_flags`` will be used to control the matching behaviour.
 
-        ::
+        More complex rules / filtering can be done by using the ``attrs`` or ``callback`` parameters. Comments can also
+        be searched through by setting the ``comments`` parameter to ``True``.
 
-
-            # Find all inputs that contain the string 'read gis' on the command side
-            inps = control_file.find_input(command='read gis')
-
-            # Find all inputs that reference a shape file
-            inps = control_file.find_input(value='.shp')
-
-            # Find all inputs that reference a shape file or mif file using regular expressions
-            inps = control_file.find_input(value=r'\.shp|\.mif', regex=True, regex_flags=re.IGNORECASE)
-
-        More complex filtering can be done by using the :code:`tags` parameter. Tags can be used to filter the input
-        by its property e.g. :code:`files` or :code:`multi_layer`. A tag can be passed in as a single value or as a
-        tuple with the property name and the value to compare against e.g. :code:`('multi_layer', True)` will find
-        inputs that contain multiple layers (i.e. GIS inputs that have multiple layers). If a value is not provided, it
-        is assumed to be :code:`True` so :code:`('multi_layer')` is equivalent to :code:`('multi_layer', True)`.
-        Multiple tags can be provided to assess multiple properties. If multiple tags are provided, the format must
-        be a list of tuples e.g. :code:`[('multi_layer'), ('has_vector', True)]`. A callback can be provided as the
-        tag value to filter the input by a custom function. The callback should take one argument which will be
-        the property value associated with the tag and return a :code:`bool`.
-        If the callback returns :code:`True`, the input will be included in the return list.
-
-        ::
-
-
-            # Find all inputs that are missing files (one or more referenced files do not exist)
-            inps = control_file.find_input(tags='missing_files')
-
-            # Find all GIS inputs that are referencing point layers
-            inps = control_file.find_input(tags=('geoms', lambda x: ogr.wkbPoint in x))
-
-        A callback can be passed outside the :code:`tag` parameter if the assessment doesn't relate to a property.
-        The callback should take one argument which is :code:`Input` and return a boolean.
-        If the callback returns :code:`True`, the input will be included in the
-        return list.
-
-        ::
-
-
-            # Find all GIS inputs that contain a given scope
-            inps = control_file.find_input(callback=lambda x: Scope('Scenario', 'DEV01') in x.scope())
-
-        If :code:`comments` is set to :code:`True`, the search will also search through comments in the input, and inputs
-        that are only comments. This can be useful for finding commands that have been commented out and re-adding
-        them with :meth:`uncomment`. It can also be useful if you want to add keywords to the comments for a given
-        input to make it easier to find.
+        If no filtering parameters are provided, all inputs will be returned.
 
         Parameters
         ----------
-        filter : str, optional
+        filter_by : str, optional
             A string or regular expression to filter the input by.
             This will search through the entire input string (not comments).
-        command : str, optional
+        lhs : str, optional
             A string or regular expression to filter the input by.
-            This will search through the command side of the input (i.e. LHS).
-        value : str, optional
+            This will search through the left-hand side of the input.
+        rhs : str, optional
             A string or regular expression to filter the input by.
-            This will search through the value side of the input (i.e. RHS).
+            This will search through the right-hand side of the input.
         recursive : bool, optional
             If set to True, will also search through any child control files.
         regex : bool, optional
-            If set to True, the filter, command, and value parameters will be treated as regular expressions.
+            If set to True, the filter, lhs, and rhs parameters will be treated as regular expressions.
         regex_flags : int, optional
-            The regular expression flags to use when filtering by regular expressions.
-        tags : SearchTagLike, optional
-            A list of tags to filter the input by. This can be a string (single tag)
-            or list/tuple of strings that will be used to filter the input by tag keys which
-            correspond to properties contained in the input. Tags themselves can be tuples with a
-            value to compare against (key, value) otherwise the value will be assumed as True.
-        callback : typing.Callable, optional
-            A function that will be called with the input as an argument.
+            The regular expression flags to use when using regular expressions.
+        attrs : SearchTagLike, optional
+            A list of tags to filter the input by. The tags represent properties of the input, such as ``dirty`` or
+            ``has_missing_files``. The tag can be a tuple of (tag_name, tag_value) or just a tag name where the tag
+            value is assumed to be evaluated as ``True``. A single tag (tag_name, tag_value) or a list of tags
+            can be provided.
+        callback : Callable, optional
+            A function that will be called with the input as an argument. The callback should take an
+            ``T_Input`` argument and return a boolean indicating whether the input matches the filter.
         comments : bool, optional
             If set to True, will also search through the comments of the input, including lines that only contain
-            comments.
+            comments. Note that commented out inputs are not separated into left-hand side and right-hand side,
+            and the ``lhs`` and ``rhs`` parameters will not work on commented out inputs.
 
         Returns
         -------
-        Inputs
+        list[T_Input]
             A list of inputs that match the filter.
+
+        Examples
+        --------
+        An example of a simple search to find all GIS material inputs in the model:
+
+        >>> control_file = ... # Assume the control file has been loaded
+        >>> control_file.find_input(lhs='read gis mat')
+        [<GisInput> Read GIS Mat == gis\2d_mat_Roads_001_R.shp, <GisInput> Read GIS Mat == gis\2d_mat_Grass_001_R.shp]
+
+        Extending the example above to find all material inputs using a regular expression. A regular expression needs
+        to be used in the case since using the filter ``"mat"`` will return false positives. For example, it will
+        return instances if the word "format" appears in the command
+        (e.g. "GIS Format == ..." or "Map Output Format == ..."). It will also return the material file if
+        searching from the TCF.
+
+        >>> import re
+        >>> control_file.find_input(lhs=r'(set|read gis|read grid) mat', regex=True, regex_flags=re.IGNORECASE)
+        [<SettingInput> Set Mat == 1,
+         <GisInput> Read GIS Mat == gis\2d_mat_Roads_001_R.shp, <GisInput> Read GIS Mat == gis\2d_mat_Grass_001_R.shp]
+
+        An example using the ``tags`` parameter is to find all inputs that have missing files. This can be useful
+        when performing any integrity or pre-modelling checks on the model inputs:
+
+        >>> control_file.find_input(attrs=('has_missing_files', True))
+        [<GisInput> Read GIS Code == gis\2d_code_EG00_001.shp]
+
+        An example of using the ``callback`` parameter to find all inputs that use GIS polygon geometry:
+
+        >>> from osgeo import ogr # this example requires GDAL/OGR to be installed
+        >>> from pytuflow import const
+        >>> control_file.find_input(callback=lambda x: x.TUFLOW_TYPE == const.INPUT.GIS and ogr.wkbPolygon in x.geoms)
         """
-        from ..dataclasses.inputs import Inputs
+        inputs = self.inputs.inputs(include_hidden=comments)
+        ret_inputs = []
+        for inp in inputs:
+            if inp.is_match(filter_by, lhs, rhs, regex, regex_flags, attrs, callback, comments):
+                ret_inputs.append(inp)
+            if recursive and inp.TUFLOW_TYPE == const.INPUT.CF and inp.cf:
+                for cf in inp.cf:
+                    ret_inputs.extend(cf.find_input(filter_by, lhs, rhs, recursive, regex, regex_flags, attrs,
+                                                    callback, comments))
+        return ret_inputs
 
-        if comments:
-            inputs_ = self.inputs._inputs
-        else:
-            inputs_ = self.inputs
-
-        inputs = Inputs(show_comment_lines=comments)
-        for input_ in inputs_:
-            if input_.is_match(filter, command, value, regex, regex_flags, tags, callback, comments):
-                inputs.append(input_)
-            if recursive and 'ControlFileInput' in repr(input_):
-                loaded_value = self.input_to_loaded_value(input_)
-                if loaded_value is None:
-                    continue
-                if isinstance(loaded_value, Inputs):
-                    for inp in loaded_value:
-                        inputs.extend(inp.find_input(filter, command, value, recursive, regex, regex_flags, tags,
-                                                     callback, comments))
-                else:
-                    inputs.extend(loaded_value.find_input(filter, command, value, recursive, regex, regex_flags, tags,
-                                                          callback, comments))
-
-        return inputs
-
-    def gis_inputs(self, recursive: bool = True) -> 'Inputs':
-        """Returns all GIS inputs in the control file. If recursive is set to True, will also search through any
-        child control files.
-
-        Parameters
-        ----------
-        recursive : bool, optional
-            If set to True, will also search through any child control files.
-
-        Returns
-        -------
-        Inputs
-            A list of GIS inputs in the control file.
-        """
-        from ..dataclasses.inputs import Inputs
-        inputs = Inputs()
-        for input_ in self.inputs:
-            if input_.raw_command_obj().is_read_gis() or input_.raw_command_obj().is_read_projection():
-                inputs.append(input_)
-            loaded_value = self.input_to_loaded_value(input_)
-            if loaded_value and recursive:
-                if isinstance(loaded_value, Inputs):
-                    for inp in loaded_value:
-                        inputs.extend(inp.gis_inputs(recursive))
-                else:
-                    inputs.extend(loaded_value.gis_inputs(recursive))
-
-        return inputs
-
-    def grid_inputs(self, recursive: bool = True) -> 'Inputs':
-        """Returns all grid inputs in the control file. If recursive is set to True, will also search through any
-        child control files.
-
-
-        Parameters
-        ----------
-        recursive : bool, optional
-            If set to True, will also search through any child control files.
-
-        Returns
-        -------
-        Inputs
-            A list of Grid inputs in the control file.
-        """
-        from ..dataclasses.inputs import Inputs, ComplexInputs
-        inputs = Inputs()
-        for input_ in self.inputs:
-            if input_.raw_command_obj().is_read_grid():
-                inputs.append(input_)
-            loaded_value = self.input_to_loaded_value(input_)
-            if loaded_value and recursive:
-                if isinstance(loaded_value, Inputs):
-                    for inp in loaded_value:
-                        inputs.extend(inp.grid_inputs(recursive))
-                else:
-                    inputs.extend(loaded_value.grid_inputs(recursive))
-
-        return inputs
-
-    def tin_inputs(self, recursive: bool = True) -> 'Inputs':
-        """Returns all TIN inputs in the control file. If recursive is set to True, will also search through any
-        child control files.
-
-        Parameters
-        ----------
-        recursive : bool, optional
-            If set to True, will also search through any child control files.
-
-        Returns
-        -------
-        Inputs
-            A list of TIN inputs in the control file.
-        """
-        from ..dataclasses.inputs import Inputs, ComplexInputs
-        inputs = Inputs()
-        for input_ in self.inputs:
-            if input_.raw_command_obj().is_read_tin():
-                inputs.append(input_)
-            loaded_value = self.input_to_loaded_value(input_)
-            if loaded_value and recursive:
-                if isinstance(loaded_value, Inputs):
-                    for inp in loaded_value:
-                        inputs.extend(inp.tin_inputs(recursive))
-                else:
-                    inputs.extend(loaded_value.tin_inputs(recursive))
-
-        return inputs
-
-    def get_inputs(self, recursive: bool = True) -> 'Inputs':
-        """Returns all inputs in the control file. If recursive is set to True, will also search through any
-        child control files.
-
-        Parameters
-        ----------
-        recursive : bool, optional
-            If set to True, will also search through any child control files.
-
-        Returns
-        -------
-        Inputs
-            A list of all inputs in the control file.
-        """
-        from ..dataclasses.inputs import Inputs, ComplexInputs
-        inputs = Inputs()
-        for input_ in self.inputs:
-            if input_ not in inputs:
-                inputs.append(input_)
-            loaded_value = self.input_to_loaded_value(input_)
-            if loaded_value and recursive:
-                if isinstance(loaded_value, Inputs):
-                    for inp in loaded_value:
-                        inputs.extend(inp.get_inputs(recursive))
-                else:
-                    inputs.extend(loaded_value.get_inputs(recursive))
-
-        return inputs
-
-    def input_to_loaded_value(self, inp: 'Input') -> any:
-        """Returns the loaded class object for a given input.
-
-        e.g. Given the input specifying the geometry control file, this method will return the TGC class object
-        loaded from that given input.
-
-        Currently only applicable for ControlFile objects and Database objects, otherwise will return None.
-
-        .. note::
-
-            ES Note - Will most likely remove this class in the future and simply attach the loaded class object to the
-            input as a property.
-
-        Parameters
-        ----------
-        inp : Input
-            The input to get the loaded class object for.
-
-        Returns
-        -------
-        typing.Any
-            The loaded class object for the given input. Either a ControlFile or Database object.
-        """
-        return self._input_to_loaded_value.get(inp)
-
-    def _input_as_attr(self, inp: 'Input') -> None:
-        if not inp:
-            return
-        attr = re.sub(r'\s+', '_', inp.command.lower())
-        attr = re.sub(r'\(.*\)', '', attr)
-        attr = attr.rstrip('_')
-        if hasattr(self, attr) and not isinstance(getattr(self, attr), Inputs):
-            value = Inputs()
-            value.append(getattr(self, attr))
-            if inp.raw_command_obj().is_control_file() or inp.raw_command_obj().is_read_database():
-                value.extend(self.input_to_loaded_value(inp))
-            else:
-                value.append(inp.value)
-            self.__setattr__(attr, value, True, 1)
-        elif not hasattr(self, attr):
-            if inp.raw_command_obj().is_control_file() or inp.raw_command_obj().is_read_database():
-                loaded_value = self.input_to_loaded_value(inp)
-                if hasattr(loaded_value, '__len__') and len(loaded_value) == 1:
-                    loaded_value = loaded_value[0]
-                self.__setattr__(attr, loaded_value, True, 1)
-            else:
-                self.__setattr__(attr, inp.value, True, 1)
-        else:
-            if inp.raw_command_obj().is_control_file() or inp.raw_command_obj().is_read_database():
-                getattr(self, attr).extend(self.input_to_loaded_value(inp))
-            else:
-                getattr(self, attr).append(inp.value)
-
-    def _replace_attr(self, inp: 'Input', old_value: any) -> None:
-        if not inp:
-            return
-        attr = re.sub(r'\s+', '_', inp.command.lower())
-        attr = re.sub(r'\(.*\)', '', attr)
-        attr = attr.rstrip('_')
-        has_attr = hasattr(self, attr)
-        if has_attr and isinstance(getattr(self, attr), Inputs):
-            values = getattr(self, attr)
-            if old_value in values:
-                i = values.index(old_value)
-                if inp.raw_command_obj().is_control_file() or inp.raw_command_obj().is_read_database():
-                    values[i] = self.input_to_loaded_value(inp)
-                else:
-                    values[i] = inp.value
-        else:
-            if inp.raw_command_obj().is_control_file() or inp.raw_command_obj().is_read_database():
-                self.__setattr__(attr, self.input_to_loaded_value(inp), True, 1)
-            else:
-                self.__setattr__(attr, inp.value, True, 1)
-
-    def _remove_attr(self, inp: 'Input', old_value: any) -> None:
-        if not inp:
-            return
-        attr = re.sub(r'\s+', '_', inp.command.lower())
-        attr = re.sub(r'\(.*\)', '', attr)
-        attr = attr.rstrip('_')
-        has_attr = hasattr(self, attr)
-        if has_attr and isinstance(getattr(self, attr), Inputs):
-            values = getattr(self, attr)
-            if old_value in values:
-                values.remove(old_value)
-                if len(values) == 1:
-                    self.__setattr__(attr, values[0], True, 1)
-        elif has_attr:
-            delattr(self, attr)
-
-    def _event_cf_to_db(self, event_cf: 'ControlFileBuildState') -> EventDatabase:
-        events = EventDatabase()
-        if event_cf is None:
-            return events
-
-        # inputs are only collected for commands so empty scope blocks will be missing, but for events we need
-        # to consider all events, even blank ones (rare, but I've seen "Define Event" blocks with nothing in them)
-        events_ = []
-        if event_cf.path.exists():
-            with event_cf.path.open() as f:
-                for line in f:
-                    a = line.split('!')[0].split('#')[0].strip()
-                    if '==' in a and 'Define Event' in a:
-                        events_.append(a.split('==')[1].strip())
-
-        for event in events_:
-            input_ = event_cf.find_input(tags=('_scope', lambda x: Scope('EVENT VARIABLE', event) in x))
-            if input_:
-                input_ = input_[0]
-                cmd = EventCommand(input_.raw_command_obj().original_text, input_.raw_command_obj().settings)
-                if not cmd.is_event_source():
-                    continue
-                var, val = cmd.get_event_source()
-                name_ = [x for x in input_._scope if x == Scope('EVENT VARIABLE')][0].name
-                if isinstance(name_, list):
-                    name_ = name_[0]
-            else:  # blank event
-                name_ = event
-                var = ''
-                val = ''
-            events[name_] = Event(name_, var, val)
-
-        return events
-
-    def _find_control_file(self, command: str, context: Context = None, regex: bool = False) -> Union['ControlFile', 'Database']:
-        if command.lower() != 'read file' and 'TuflowControlFile' not in repr(self) and 'TCF' not in repr(self):
-            raise NotImplementedError('Control file command only possible from TCF class')
-        inputs = self.find_input(command=command, regex=regex)
-        if len(inputs) > 1 or (hasattr(self, '_scope') and inputs and Scope('GLOBAL') not in inputs[0]._scope):
+    def _find_control_file(self,
+                           lhs: str,
+                           context: Context = None,
+                           regex: bool = False,
+                           regex_flags: int = 0) -> T_ControlFile:
+        inputs = self.find_input(lhs=lhs, regex=regex, regex_flags=regex_flags)
+        if len(inputs) > 1 or (hasattr(self, '_scope') and inputs and Scope('GLOBAL') not in inputs[0].scope):
             if context is None:
-                raise ValueError('{0} requires context to resolve'.format(command))
+                raise ValueError('{0} requires context to resolve'.format(lhs))
             else:
                 input_ = None
                 for inp in inputs:
-                    if context.in_context_by_scope(inp._scope):
+                    if context.in_context_by_scope(inp.scope):
                         if input_ is not None:
                             raise ValueError('Multiple commands found in context')
                         input_ = inp
@@ -472,21 +211,22 @@ class ControlFile:
             input_ = None
 
         if input_ is None:
-            return input_
+            raise KeyError('No Control File/Database found for {0}'.format(lhs))
 
-        loaded_value = self.input_to_loaded_value(input_)
-        if isinstance(loaded_value, Inputs):
+        loaded_value = input_.cf
+        if isinstance(loaded_value, list) and loaded_value:
             if len(loaded_value) > 1:
                 if context is None:
-                    raise ValueError('{0} requires context to resolve'.format(command))
-                value_tr = context.translate(input_.expanded_value)
-                if value_tr in [x.path for x in loaded_value]:
-                    value = loaded_value[[x.path for x in loaded_value].index(value_tr)]
+                    raise ValueError('{0} requires context to resolve'.format(lhs))
+                value_tr = context.translate(input_.value)
+                if value_tr in [x.fpath for x in loaded_value]:
+                    value = loaded_value[[x.fpath for x in loaded_value].index(value_tr)]
                 else:
-                    value = None
-            value = loaded_value[0]
+                    raise ValueError('No Control File/Database found for {0} with the provided context'.format(lhs))
+            else:
+                value = loaded_value[0]
         elif not loaded_value:
-            value = None
+            raise ValueError('No Control File/Database has been loaded for {0}'.format(lhs))
         else:
             value = loaded_value
 

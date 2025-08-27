@@ -7,8 +7,8 @@ from collections import OrderedDict
 import pandas as pd
 
 from .fm_unit_handler import Handler
-from ...dataclasses.types import PathLike
 from ...utils.unpack_fixed_field import unpack_fixed_field
+from ...tmf_types import PathLike
 
 
 ALL_UNITS = json.loads((Path(__file__).parent.parent.parent.parent / 'data' / 'fm_units.json').open().read())
@@ -25,10 +25,11 @@ class Link:
         return f'<Link {self.id} {self.ups_unit.uid} -> {self.dns_unit.uid}>'
 
 
+# noinspection DuplicatedCode
 class Dat:
 
-    def __init__(self, fpath: PathLike) -> None:
-        self.fpath = Path(fpath)
+    def __init__(self) -> None:
+        self.fpath = None
         self._units_id = OrderedDict()
         self._units_uid = OrderedDict()
         self._units_order = OrderedDict()
@@ -64,17 +65,17 @@ class Dat:
             pass
         except ValueError:
             pass
-        except Exception:
+        except AttributeError:
             pass
 
         return fixed_field_length
 
-    def add_handler(self, handler: Handler.__class__) -> None:
+    def add_handler(self, handler: type[Handler]):
         h = handler()
         self.handlers.append(h)
         self.handler2loaded[handler] = []
 
-    def add_unit(self, unit: Handler) -> None:
+    def add_unit(self, unit: Handler | None):
         self._ind += 1
         if not unit:
             return
@@ -89,11 +90,12 @@ class Dat:
             self._units_id[unit.id] = [unit]
         self._units_order[self._ind] = unit
 
-    def unit(self, id_: str) -> Handler:
+    def unit(self, id_: str) -> list[Handler]:
         if id_ in self._units_id:
             return self._units_id[id_]
         if id_ in self._units_uid:
             return self._units_uid[id_]
+        raise KeyError(f'Unit with id {id_} not found in the model.')
 
     def unit_ids(self, valid_only: bool = True) -> list[str]:
         if valid_only:
@@ -105,30 +107,34 @@ class Dat:
             return [k for k, v in self._units_uid.items() if v.valid]
         return list(self._units_uid.keys())
 
-    def units(self, handler: Handler.__class__ = None) -> list[Handler]:
+    def units(self, handler: type[Handler] = None) -> list[Handler]:
         if not handler:
             return list(self._units_uid.values())
         return self.handler2loaded[handler]
 
-    def is_unit(self, line: str) -> str:
+    @staticmethod
+    def is_unit(line: str) -> str:
         for unit in ALL_UNITS:
             if line.startswith(unit):
                 return unit
         return ''
 
-    def is_recognised_handler(self, line: str) -> Handler:
+    def is_recognised_handler(self, line: str) -> Handler | None:
         for handler in self.handlers:
             if handler.valid:
                 if line.startswith(handler.keyword):
                     return handler.__class__()
+        return None
 
-    def handler_from_name(self, name: str) -> Handler:
+    def handler_from_name(self, name: str) -> type[Handler] | None:
         for handler in self.handlers:
             if handler.__class__.__name__.lower() == name.lower():
                 return handler.__class__
+        return None
 
-    def load(self) -> None:
+    def load(self, fpath: PathLike) -> None:
         # load units into data structure
+        self.fpath = Path(fpath)
         with self.fpath.open() as f:
             while not self._started:
                 self._load_header(f)
@@ -155,7 +161,7 @@ class Dat:
                 inds.append(ind)
         return inds
 
-    def _link_unit(self, ups_unit: Handler, dns_unit: Handler) -> bool:
+    def _link_unit(self, ups_unit: Handler, dns_unit: Handler):
         self._link_id += 1
         link = Link(self._link_id, ups_unit, dns_unit)
         self.links.append(link)

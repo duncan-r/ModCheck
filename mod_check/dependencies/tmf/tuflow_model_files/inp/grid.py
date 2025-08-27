@@ -1,15 +1,18 @@
-from .file import FileInput
-from .gis import GisInput_
-from ..dataclasses.scope import Scope, ScopeList
-from ..dataclasses.file import TuflowPath
-from ..dataclasses.types import is_a_number_or_var
-from .. import const
+import typing
 
-from ..utils import logging as tmf_logging
+from .gis import GisInputBase
+from ..file import TuflowPath
+from .. import const, logging_ as tmf_logging
+from ..parsers.command import Command
+
+if typing.TYPE_CHECKING:
+    # noinspection PyUnusedImports
+    from ..cf.cf_build_state import ControlFileBuildState
+
 logger = tmf_logging.get_tmf_logger()
 
 
-class GridInput(GisInput_):
+class GridInput(GisInputBase):
     """Class for handling GRID inputs.
 
     This class can handle the following scenarios:
@@ -19,33 +22,35 @@ class GridInput(GisInput_):
     """
     TUFLOW_TYPE = const.INPUT.GRID
 
-    def _get_files(self) -> None:
-        """Overrides the _get_files method called in the initialisation of the FileInput class
-        to handle specific GRID input requirements.
-        """
+    def __init__(self, parent: 'ControlFileBuildState', command: Command):
+        self.multiplier = 1.
+        self.clip_layer = None
+        super().__init__(parent, command)
 
-        for i, type_ in enumerate(self._input.iter_grid(self._input.settings)):
-            self._gather_attributes(i, type_)
-        if not self.files:
-            self.files = [TuflowPath(x.strip()) for x in self._expanded_value.split('|') if not is_a_number_or_var(x)]
+    def _load_files(self):
+        for cmd in self._command.parts():
+            if cmd.is_value_a_file():
+                self._rhs.append(TuflowPath(cmd.value_expanded_path) if cmd.value_expanded_path else TuflowPath(cmd.value))
+                at_least_once = False
+                for file in cmd.iter_files():
+                    at_least_once = True
+                    file = TuflowPath(file)
+                    self._files.append(file)
+                    self._file_to_original[file] = cmd.value_expanded_path
+                    if cmd.is_vector_file():
+                        if self.clip_layer:
+                            self.clip_layer = [self.clip_layer, file] if not isinstance(self.clip_layer, list) else self.clip_layer + [file]
+                        else:
+                            self.clip_layer = file
+                if not at_least_once:
+                    self._has_missing_files = True
+                    file = TuflowPath(cmd.value_expanded_path) if cmd.config.control_file != TuflowPath() else TuflowPath(cmd.value)
+                    self._files.append(file)
+                    self._file_to_original[file] = file
+            elif cmd.is_value_a_number_3():
+                self._rhs.append(cmd.return_number())
+                self.multiplier = cmd.return_number()
 
-    def _file_scopes(self) -> None:
-        """Overrides the _file_scopes method called in the initialisation of the FileInput class
-        to handle specific GRID input requirements.
-        """
-
-        if not self.multi_layer or self._input.settings.control_file is None:
-            FileInput._file_scopes(self)
-            return
-        for _ in self._input.iter_grid(self._input.settings):
-            for file in self._input.iter_files(self._input.settings):
-                self._file_to_scope[str(file)] = Scope.from_string(str(self._input.value), str(file))
-
-    def figure_out_file_scopes(self, scope_list: ScopeList) -> None:
-        # docstring inherited
-        if not self.multi_layer or self._input.settings.control_file is None:
-            FileInput.figure_out_file_scopes(self, scope_list)
-            return
-        for _ in self._input.iter_grid(self._input.settings):
-            for file in self._input.iter_files(self._input.settings):
-                Scope.resolve_scope(self.file_scope(file), str(self._input.value), str(file), scope_list)
+        self._rhs_files = self._files
+        self._file_scopes()
+        self._files_loaded = True

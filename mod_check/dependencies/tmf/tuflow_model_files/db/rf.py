@@ -1,13 +1,11 @@
-import typing
+from pathlib import Path
 
 import pandas as pd
 
-from ._db_build_state import DatabaseBuildState
-from ..dataclasses.types import PathLike
-from ..dataclasses.scope import ScopeList
-from .. import const
+from .db_build_state import DatabaseBuildState
+from ..misc.dataframe_wrapper import DataFrameWrapper
+from .. import const, logging_ as tmf_logging
 
-from ..utils import logging as tmf_logging
 logger = tmf_logging.get_tmf_logger()
 
 
@@ -19,17 +17,18 @@ class RainfallDatabase(DatabaseBuildState):
     """
 
     TUFLOW_TYPE = const.DB.RAINFALL
-    __slots__ = ('_source_index', '_header_index', '_index_col')
 
-    def __init__(self, path: PathLike = None, scope: ScopeList = None, var_names: list[str] = ()):
-        # docstring inherited
-        self._source_index = 0
-        self._header_index = 0
-        self._index_col = 0
-        super().__init__(path, scope, var_names)
+    INDEX_NAME = 'Time'
+    COLUMN_NAMES = ['Rainfall_File']
 
-    @staticmethod
-    def get_value(db_path: PathLike, df: pd.DataFrame, index: str) -> typing.Any:
-        # docstring inherited
-        logger.error('Rainfall database value method not implemented yet')
-        NotImplementedError('Rainfall database value method not implemented yet')
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.loaded:
+            self._df = pd.DataFrame(columns=self.COLUMN_NAMES)
+        else:
+            self._df.columns = self.COLUMN_NAMES[:len(self._df.columns)]
+        self._df.index.name = self.INDEX_NAME
+        self._df_wrapped = DataFrameWrapper(on_change=self.record_change, data=self._df.copy())
+
+    def _find_header_row_end(self, fpath: Path) -> dict:
+        return {'header': None}

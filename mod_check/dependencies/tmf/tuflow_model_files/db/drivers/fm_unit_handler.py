@@ -35,6 +35,8 @@ class Handler:
         self.dns_junc = None
         self.valid = False
         self.type = 'unknown'
+        self.connections = []
+        self.dz = np.nan
         self._sub_obj = None
 
     def __repr__(self) -> str:
@@ -50,7 +52,7 @@ class Handler:
         return io.StringIO()
 
     def post_load(self, df: pd.DataFrame) -> 'Handler':
-        """Can be overriden by subclass to perform any post-load operations on the dataframe. Must return self."""
+        """Can be overridden by subclass to perform any post-load operations on the dataframe. Must return self."""
         self.df = df
         return self
 

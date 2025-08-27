@@ -1,10 +1,46 @@
 import pandas as pd
 
 from .driver import DatabaseDriver
-from ...dataclasses.case_insensitive_dict import CaseInsDict
+from ...misc.case_insensitive_dict import CaseInsDict
 
 
-class CrossSection:
+class CrossSectionMixin:
+
+    def __init__(self, *args, **kwargs):
+        self._args = args
+        self._kwargs = kwargs
+        super().__init__(*args, **kwargs)
+
+    def copy(self) -> 'CrossSectionMixin':
+        """Create a deep copy of the cross-section. This is so that when a RunState class is created, any changes
+        to the cross-section do not affect the original.
+
+        Returns
+        -------
+        CrossSection
+            A deep copy of the cross-section.
+        """
+        xs = self.__class__(*self._args, **self._kwargs)
+        for attr in dir(self):
+            if attr.startswith('__'):
+                val = getattr(self, attr)
+                if callable(val):
+                    continue
+                if isinstance(val, list):
+                    try:
+                        val = [x.copy() for x in val]
+                    except AttributeError:
+                        val = val.copy()
+                else:
+                    try:
+                        val = val.copy()
+                    except AttributeError:
+                        pass
+                setattr(xs, attr, val)
+        return xs
+
+
+class CrossSection(CrossSectionMixin):
     """Abstract base class for storing individual cross-section data."""
 
     __slots__ = ('_args', '_kwargs', 'fpath', 'name', 'df', 'col_name_x', 'col_name_z', 'col_name_n', 'errors', 'id')
@@ -40,18 +76,21 @@ class CrossSection:
         #: list[float]: The x values of the cross-section.
         if self.col_name_x is not None and self.col_name_x in self.df.columns:
             return self.df[self.col_name_x].tolist()
+        return []
 
     @property
     def z(self) -> list[float]:
         #: list[float]: The z values of the cross-section.
         if self.col_name_z is not None and self.col_name_z in self.df.columns:
             return self.df[self.col_name_z].tolist()
+        return []
 
     @property
     def n(self) -> list[float]:
         #: list[float]: The mannings n values of the cross-section.
         if self.col_name_n is not None and self.col_name_n in self.df.columns:
             return self.df[self.col_name_n].tolist()
+        return []
 
     def load(self, *args, **kwargs) -> None:
         """Load the cross-section data."""
@@ -61,45 +100,12 @@ class CrossSection:
         """Write the cross-section data."""
         raise NotImplementedError('Must be overriden by subclass')
 
-    def copy(self) -> 'CrossSection':
-        """Create a deep copy of the cross-section. This is so that when a RunState class is created, any changes
-        to the cross-section do not affect the original.
 
-        Returns
-        -------
-        CrossSection
-            A deep copy of the cross-section.
-        """
-        xs = self.__class__(*self._args, **self._kwargs)
-        for attr in dir(self):
-            if attr.startswith('__'):
-                val = getattr(self, attr)
-                if callable(val):
-                    continue
-                if isinstance(val, list):
-                    try:
-                        val = [x.copy() for x in val]
-                    except AttributeError:
-                        val = val.copy()
-                else:
-                    try:
-                        val = val.copy()
-                    except AttributeError:
-                        pass
-                setattr(xs, attr, val)
-        return xs
-
-
-class CrossSectionDatabaseDriver(DatabaseDriver):
+class CrossSectionDatabaseDriver(CrossSectionMixin, DatabaseDriver):
     """Abstract base class for handling TUFLOW supported cross-section database formats."""
 
-    __slots__ = ('_args', '_kwargs', 'cross_sections', 'supports_separate_files', 'unresolved_xs')
-
-    def __new__(cls, *args, **kwargs) -> object:
-        """Override base class so that __new__ is called correctly for this class."""
-        return object.__new__(cls)
-
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args, **kwargs):
+        super(CrossSectionDatabaseDriver, self).__init__()
         self._args = args
         self._kwargs = kwargs
         #: dict[int, CrossSection]: A dictionary of cross-sections.
@@ -114,34 +120,7 @@ class CrossSectionDatabaseDriver(DatabaseDriver):
     def __repr__(self) -> str:
         return '<CrossSectionDatabaseDriver>'
 
-    def copy(self) -> 'CrossSectionDatabaseDriver':
-        """Create a deep copy of the driver. This is so that when a RunState class is created, any changes
-        to the driver do not affect the original.
-
-        Returns
-        -------
-        CrossSectionDatabaseDriver
-            A deep copy of the driver.
-        """
-        xs_driver = self.__class__(*self._args, **self._kwargs)
-        for attr in dir(self):
-            if not attr.startswith('__'):
-                val = getattr(self, attr)
-                if callable(val):
-                    continue
-                if isinstance(val, list):
-                    try:
-                        val = [x.copy() for x in val]
-                    except AttributeError:
-                        val = val.copy()
-                else:
-                    try:
-                        val = val.copy()
-                    except AttributeError:
-                        pass
-                setattr(xs_driver, attr, val)
-        return xs_driver
-
+    # noinspection PyMethodMayBeStatic,PyUnusedLocal
     def xs_is_valid(self, xsid: int) -> bool:
         """Returns whether a given cross-section is valid.
 

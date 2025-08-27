@@ -1,8 +1,7 @@
 from pathlib import Path
-from typing import Union
 
 from .xsdb import XsDatabaseDriver
-from ...dataclasses.types import PathLike
+from ...tmf_types import PathLike
 
 
 class ProCrossSectionDatabaseDriver(XsDatabaseDriver):

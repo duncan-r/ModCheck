@@ -1,38 +1,66 @@
-from ..dataclasses.event import Event, EventDatabase
-from ..dataclasses.scope import Scope
+from pathlib import Path
+
 from .cf import ControlFile
-from ...convert_tuflow_model_gis_format.conv_tf_gis_format.helpers.command import EventCommand
+from ..cf.cf_run_state import ControlFileRunState
+from ..settings import TCFConfig
+from ..event import EventDatabase
+from ..parsers.non_recursive_basic_parser import get_event_commands
 
 
 class TEFBase(ControlFile):
 
+    @staticmethod
+    def parse_event_file(fpath: str | Path, config: TCFConfig = None, parent: 'ControlFile' = None) -> EventDatabase:
+        """Static method to parse the event file and return an EventDatabase.
+
+        Parameters
+        ----------
+        fpath : str | Path
+            The path to the event file (``.tef``)
+        config : TCFConfig, optional
+            The configuration settings for the TCF.
+        parent : ControlFile, optional
+            The parent control file.
+
+        Returns
+        -------
+        EventDatabase
+            An instance of EventDatabase containing parsed events.
+
+        Examples
+        --------
+        >>> from pytuflow import TEF
+        >>> TEF.parse_event_file('path/to/event_file.tef')
+        {'Q100': {'_event_': '100yr2hr'}, 'QPMF': {'_event_': 'PMFyr2hr'}}
+        """
+        from ..inp.event import EventInput
+        config = TCFConfig() if config is None else config
+        event_db = EventDatabase()
+        for event_command in get_event_commands(Path(fpath), config):
+            if event_command.is_event_source():
+                parent_ = parent.bs if isinstance(parent, ControlFileRunState) else parent
+                inp = EventInput(parent_, event_command)
+                if inp.event_name:
+                    event_db[inp.event_name] = {inp.event_var: inp.event_value}
+                event_db.inputs.append(inp)
+            elif event_command.is_start_define():
+                event_db[event_command.value] = {}
+        return event_db
+
     def event_database(self) -> EventDatabase:
-        events = EventDatabase()
-        # inputs are only collected for commands so empty scope blocks will be missing, but for events we need
-        # to consider all events, even blank ones (rare, but I've seen "Define Event" blocks with nothing in them)
-        events_ = []
-        if self.path.exists():
-            with self.path.open() as f:
-                for line in f:
-                    a = line.split('!')[0].split('#')[0].strip()
-                    if '==' in a and 'Define Event' in a:
-                        events_.append(a.split('==')[1].strip())
+        """Returns the EventDatabase for this TEF instance.
 
-        for event in events_:
-            input_ = self.find_input(tags=('_scope', lambda x: Scope('EVENT VARIABLE', event) in x))
-            if input_:
-                input_ = input_[0]
-                cmd = EventCommand(input_.raw_command_obj().original_text, input_.raw_command_obj().settings)
-                if not cmd.is_event_source():
-                    continue
-                var, val = cmd.get_event_source()
-                name_ = [x for x in input_._scope if x == Scope('EVENT VARIABLE')][0].name
-                if isinstance(name_, list):
-                    name_ = name_[0]
-            else:  # blank event
-                name_ = event
-                var = ''
-                val = ''
-            events[name_] = Event(name_, var, val)
+        Returns
+        -------
+        EventDatabase
+            An instance of EventDatabase containing parsed events from the TEF file.
 
-        return events
+        Examples
+        --------
+        >>> tcf = ... # Assume this is an instance of TCF
+        >>> tcf.tef().event_database()
+        {'Q100': {'_event_': '100yr2hr'}, 'QPMF': {'_event_': 'PMFyr2hr'}}
+        """
+        if not self._fpath:
+            raise ValueError("TEF file path is not set.")
+        return self.parse_event_file(self._fpath, self.config)

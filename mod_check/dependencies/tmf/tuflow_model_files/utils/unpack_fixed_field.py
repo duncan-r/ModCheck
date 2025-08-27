@@ -1,6 +1,7 @@
 import struct
 
 
+# noinspection DuplicatedCode
 def unpack_fixed_field(input_string, col_widths):
     """Unpacks input string based on fixed field lengths described in col_widths.
     The function will return a list of the split columns.
@@ -12,7 +13,7 @@ def unpack_fixed_field(input_string, col_widths):
     ----------
     input_string : str
         The string to be split.
-    col_widths : tuple[int]
+    col_widths : tuple[int] | list[int]
         list of column widths
 
     Returns

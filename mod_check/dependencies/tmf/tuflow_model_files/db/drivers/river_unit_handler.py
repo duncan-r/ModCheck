@@ -66,6 +66,7 @@ class RiverUnit(Handler):
                 setattr(self, attr, labels[j])
 
 
+# noinspection DuplicatedCode
 class RiverSection(RiverUnit):
 
     def __init__(self, *args, **kwargs) -> None:
@@ -96,6 +97,7 @@ class RiverCES(RiverUnit):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        self.nrz = 0
         self.headers = ['x', 'y', 'bank_marker', 'sinuosity', 'chan_marker', 'easting', 'northing']
         self.ncol = len(self.headers)
         self.df_roughness_zone = pd.DataFrame()

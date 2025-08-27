@@ -1,7 +1,10 @@
 
 # Import package constants
+# noinspection PyPep8Naming
 from . import cf as CONTROLFILE
+# noinspection PyPep8Naming, PyUnusedImports
 from . import inp as INPUT
+# noinspection PyPep8Naming, PyUnusedImports
 from . import db as DB
 
 # Global library constants
@@ -35,4 +38,4 @@ def short_tuflow_type(tuflow_type: str) -> str:
     try:
         return CONTROLFILE.SHORT_TYPES[tuflow_type]
     except KeyError:
-        raise (f'Tuflow type "{tuflow_type}" does not exist')
+        raise f'Tuflow type "{tuflow_type}" does not exist'

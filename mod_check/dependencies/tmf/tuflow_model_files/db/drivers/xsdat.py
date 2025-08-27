@@ -1,12 +1,13 @@
+from collections import OrderedDict
 from pathlib import Path
 
 import pandas as pd
 
 from .xs import CrossSection
-from .xsdb import XsDatabaseDriver
+from .driver import DatabaseDriver
 from .river_unit_handler import RiverUnit
 from .dat import Dat
-from ...dataclasses.types import PathLike
+from ...tmf_types import PathLike
 
 
 class FmCrossSection(RiverUnit, CrossSection):
@@ -32,28 +33,33 @@ class FmCrossSection(RiverUnit, CrossSection):
         self.id = value
 
 
-class FmCrossSectionDatabaseDriver(XsDatabaseDriver):
+class FmCrossSectionDatabaseDriver(DatabaseDriver):
     """Flood Modeller DAT cross-section database driver."""
 
-    def __init__(self, fpath: PathLike) -> None:
-        """
-        Parameters
-        ----------
-        fpath : PathLike
-            The file path to the DAT file.
-        """
-        super().__init__(fpath)
-        self.dat = Dat(fpath)
+    def __init__(self) -> None:
+        super().__init__()
+        self.dat = Dat()
         self.dat.add_handler(FmCrossSection)
 
     def __repr__(self):
-        if self.path:
-            return f'<FmCrossSectionDatabaseDriver {self.path.stem}>'
+        if self.fpath:
+            return f'<FmCrossSectionDatabaseDriver {self.fpath.stem}>'
         return '<FmCrossSectionDatabaseDriver>'
 
-    def test_is_self(self, path: PathLike) -> bool:
+    @staticmethod
+    def test_is_dat(path: PathLike) -> bool:
         # docstring inherited
-        return Path(path).suffix.lower() == '.dat'
+        if Path(path).suffix.lower() == '.dat':
+            try:
+                with open(path, 'r') as f:
+                    for i, line in enumerate(f):
+                        if line.startswith('#REVISION#'):
+                            return True
+                        if i > 10:
+                            break
+            except IOError:
+                pass
+        return False
 
     def name(self) -> str:
         # docstring inherited
@@ -72,8 +78,17 @@ class FmCrossSectionDatabaseDriver(XsDatabaseDriver):
         pd.DataFrame
             The cross-section data as a DataFrame.
         """
-        self.dat.load()
+        d = OrderedDict({
+            'ID': [],
+            'Name': [],
+            'Type': []
+        })
+        self.fpath = Path(path)
+        self.dat.load(self.fpath)
         for xs in self.dat.units(FmCrossSection):
-            self.cross_sections[xs.id] = xs
-            self.name2id[xs.id] = xs.id
-        return self.generate_df()
+            d['ID'].append(xs.uid)
+            d['Name'].append(xs.id)
+            d['Type'].append(xs.type)
+        df = pd.DataFrame(d)
+        df.set_index('ID', inplace=True)
+        return df

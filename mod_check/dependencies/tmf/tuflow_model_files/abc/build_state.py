@@ -1,10 +1,9 @@
-import io
-from abc import abstractmethod
-
 from .run_state import RunState
-from ..utils.context import Context
-from ..dataclasses.types import PathLike
-from ..dataclasses.scope import ScopeList, Scope
+from .cf import ControlFile
+from ..cf.cf_run_state import ControlFileRunState
+from ..settings import TCFConfig
+from ..context import Context
+from ..scope import ScopeList, Scope
 
 
 class BuildState:
@@ -13,62 +12,56 @@ class BuildState:
     i.e. inputs from all scenarios/events are included and variable names haven't been resolved yet.
     """
 
-    def scope(self, else_: bool = True) -> ScopeList:
-        """Returns a list of scopes.
+    #: str: A string identifying the PyTUFLOW object type.
+    TUFLOW_TYPE: str = 'TuflowBuildState'
 
-        If else\_ is set to True, removes negative scopes and adds anything
-        in an ELSE statement with scope name 'ELSE'. This essentially presents it as the user would
-        see it in a text editor.
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        self._scope: ScopeList = ScopeList()
+        self._dirty: bool = False
+        #: BuildState | None: Parent object, if any.
+        self.parent: BuildState | None = None
+        #: TCFConfig: Configuration settings for the TUFLOW model.
+        self.config = TCFConfig()
 
-        e.g.
+    @property
+    def scope(self) -> ScopeList:
+        """ScopeList: List of scopes associated with the object."""
+        return self._scope
 
-        In control file
+    @scope.setter
+    def scope(self,
+              value: ScopeList | list[Scope] | tuple[Scope, ...] | list[tuple[str, str]] | tuple[tuple[str, str], ...]):
+        if isinstance(value, ScopeList):
+            self._scope = value
+            return
+        # noinspection PyUnreachableCode
+        if not isinstance(value, (list, tuple)):
+            raise TypeError(f'Scope must be a ScopeList, list, or tuple, not {type(value)}')
+        if value and isinstance(value[0], Scope):
+            self._scope = ScopeList(value)
+            return
+        self._scope = ScopeList([Scope(*x) for x in value])
 
-        ::
+    @property
+    def dirty(self) -> bool:
+        """bool: Whether the object has been changed since it was last written to file."""
+        return self._dirty
 
-            If Scenario == D01
-                <input 1>
-            else
-                <input 2>
-            end if
+    @dirty.setter
+    def dirty(self, value: bool):
+        self._dirty = value
+        if self.parent:
+            if value:  # is True
+                self.parent.dirty = value
+            elif isinstance(self.parent, ControlFile):  # other inputs might be dirty, so need to check before setting it to clean
+                if not self.parent.find_input(attrs='dirty'):
+                    self.parent.dirty = value
 
-        | input 1 would be stored with scope [Scope(Scenario, 'D01')]
-        | input 2 would be stored with scope [Scope(Scenario, '!D01')]
-        | input 2 with "else\_" set to True would be returned as [Scope(Scenario, 'ELSE')]
-
-        Parameters
-        ----------
-        else\_ : bool
-            if set to True, negative scopes are removed and ELSE scopes are added. If set to False, the
-            scope list is returned as it is stored internally.
-
-        Returns
-        -------
-        ScopeList
-            List of scopes in the object.
-        """
-        if not hasattr(self, '_scope') or self._scope is None:
-            return ScopeList()
-
-        if not else_:
-            return self._scope
-
-        # highlight where else block is used - this is not how it is stored internally but may be nice for the user
-        scope_list = ScopeList()
-        for s in self._scope:
-            if not s.is_neg():
-                if s not in scope_list:
-                    scope_list.append(s)
-            elif s.is_else():
-                s2 = Scope(s._type, 'ELSE')
-                if s2 not in scope_list:
-                    scope_list.append(s2)
-
-        return scope_list
-
-    @abstractmethod
     def figure_out_file_scopes(self, scope_list: ScopeList) -> None:
-        """Resolve unknown scopes by passing in a list of known scopes.
+        """no-doc
+
+        Resolve unknown scopes by passing in a list of known scopes.
 
         Unknown scopes are when <<~s~>>, <<~e~>>, <<variable>>, or ~event~ are encountered in file names and they
         cannot be resolved due to ambiguity, missing files, or missing information.
@@ -83,43 +76,55 @@ class BuildState:
         """
         pass
 
-    @abstractmethod
-    def get_files(self, *args, **kwargs) -> list[PathLike]:
-        """Get a list of files referenced in this object. Files should be absolute paths
-        and can return multiple files even if only one input is referenced.
+    def add_variable(self, variable_name: str, variable_value: str):
+        """no-doc
 
-        At least one file per file reference should be returned even if the file does not exist.
-
-        Returns
-        -------
-        list[PathLike]
-            List of files referenced in the object.
+        Adds a variable to the TCFConfig settings object. This change is propagated to children.
         """
-        pass
+        self.config.variables[variable_name] = variable_value
 
-    @abstractmethod
+    def remove_variable(self, variable_name: str):
+        """no-doc
+
+        Removes a variable from the TCFConfig settings object. This change is propagated to children.
+        """
+        if variable_name in self.config.variables:
+            del self.config.variables[variable_name]
+
     def write(self, *args, **kwargs) -> str:
         """Write the object to file."""
         pass
 
-    def context(self, *args, **kwargs) -> RunState:
-        """Create a RunState version of this object.
+    def context(self,
+                run_context: str | dict[str, str] = '',
+                context: Context | None = None,
+                parent: ControlFileRunState | None = None) -> RunState:
+        """Create a :class:`RunState` version of this object. The context will also be propagated to all
+        child objects.
 
-        When called, expects a ContextLike argument to be passed in. Generally from a user point of view, this
-        is a list of batch file run arguments as either a string or list object. A dictionary object can also be used in
-        the form of {'s1': 'value', 's2': 'value'}, however an OrderedDict is preferred to maintain the order of the
-        input arguments as this can be important for output naming in TUFLOW.
+        The RunState instance will resolve all scenario and event scopes to a single event.
+        For example, a command encompassed in "If Scenario" / "End if", will be either included
+        or removed based on the context provided.
 
-        A Context object, that has already been initialised, can also be passed using the 'context' keyword argument.
+        Parameters
+        ----------
+        run_context : str | dict[str, str], optional
+            A string in the format of the TUFLOW command line argument ``"-s1 EXG -e1 100yr"``, or a dictionary
+            with the same information using keys ``{'e1': '100yr', 's1': 'EXG'}``.
+        context : Context, optional
+            A Context instance to use instead of creating a new one. If not provided, a new Context will be created
+            using the `run_context` string or dictionary.
+        parent : ControlFileRunState, optional
+            The parent RunState instance. This will be passed to the created RunState instance.
 
         Returns
         -------
         RunState
-            RunState object with the context passed in.
+            Object with the context passed in.
+
+        Examples
+        --------
+        >>> cf = ... # Assume cf is an instance of a ControlFileBuildState or similar
+        >>> run_state = cf.context('-s1 EXG -e1 100yr')
         """
-        if kwargs.get('context'):
-            ctx = kwargs['context']
-        else:
-            ctx = Context(args, kwargs)
-        parent = kwargs['parent'] if 'parent' in kwargs else None
-        return RunState(self, ctx, parent)
+        raise NotImplementedError

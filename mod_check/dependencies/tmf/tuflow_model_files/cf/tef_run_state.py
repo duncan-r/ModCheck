@@ -1,4 +1,4 @@
-from ._cf_run_state import ControlFileRunState
+from .cf_run_state import ControlFileRunState
 from ..abc.tef_base import TEFBase
 
 

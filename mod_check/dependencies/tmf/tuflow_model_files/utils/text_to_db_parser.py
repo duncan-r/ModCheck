@@ -1,15 +1,13 @@
 import re
-from typing import TYPE_CHECKING
 import pandas as pd
+from ..tmf_types import PathLike
 
-if TYPE_CHECKING:
-    from ..dataclasses.file import PathType
+from .. import logging_ as tmf_logging
 
-from ..utils import logging as tmf_logging
 logger = tmf_logging.get_tmf_logger()
 
 
-def text_to_db_parser(fpath: 'PathType') -> pd.DataFrame:
+def text_to_db_parser(fpath: PathLike) -> pd.DataFrame:
     """
     Parse a text file manually into a pandas DataFrame. Assume comma delimited.
 
@@ -31,13 +29,16 @@ def text_to_db_parser(fpath: 'PathType') -> pd.DataFrame:
             for i, x in enumerate(row[:]):
                 if fltregex.match(x):
                     try:
+                        # noinspection PyTypeChecker
                         row[i] = float(x)
                     except ValueError:
                         pass
                 elif intregex.match(x):
                     try:
+                        # noinspection PyTypeChecker
                         row[i] = int(x)
                     except ValueError:
                         pass
             rows.append(row)
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    return df.set_index(df.columns[0])

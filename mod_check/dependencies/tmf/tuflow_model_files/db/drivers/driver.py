@@ -1,9 +1,9 @@
-from pathlib import Path
-from typing import Union
+import pandas as pd
 
-from ...dataclasses.types import PathLike
+from ...tmf_types import PathLike
 
-from ...utils import logging as tmf_logging
+from ... import logging_ as tmf_logging
+
 logger = tmf_logging.get_tmf_logger()
 
 
@@ -11,33 +11,12 @@ class DatabaseDriver:
     """Base class for database format drivers. This class is responsible for parsing different database formats
     e.g. CSV files.
     """
+    def __init__(self):
+        self.fpath = None
 
-    __slots__ = ('path')
-
-    def __new__(cls, fpath: PathLike) -> object:
-        from .csv import CsvDatabaseDriver
-
-        if not fpath:
-            logger.error('DatabaseDriver must be initialised with a str or Path object')
-            raise ValueError('DatabaseDriver must be initialised with a str or Path object')
-
-        # csv database
-        self = object.__new__(CsvDatabaseDriver)
-        if self.test_is_self(fpath):
-            return self
-
-        logger.error('Drive initialisation failed: could not determine database type')
-        raise ValueError('Could not determine database type')
-
-    def __init__(self, fpath: PathLike) -> None:
-        """Initialise the database driver with the file path.
-
-        Parameters
-        ----------
-        fpath : PathLike
-            The file path to the database file.
-        """
-        pass
+    def __repr__(self) -> str:
+        """Return a string representation of the driver."""
+        return f'<{self.__class__.__name__} {self.fpath}>'
 
     def test_is_self(self, path: PathLike) -> bool:
         """Test if the database driver looks like the correct driver for the file.
@@ -63,19 +42,18 @@ class DatabaseDriver:
         str
             The name of the driver.
         """
-        logger.error('name method must be implemented by driver class')
-        raise NotImplementedError
+        return ''
 
-    def load(self, path: PathLike, header: int, index_col: Union[int, bool]) -> None:
+    def load(self, path: PathLike, header_kwargs: dict, index_col: int | bool) -> pd.DataFrame:
         """Load the database file.
 
         Parameters
         ----------
         path : PathLike
             The file path to the database file.
-        header : int
-            The row number to use as the column names.
-        index_col : Union[int, bool]
+        header_kwargs : dict
+            **kwargs for DataFrame header that can be passed into pd.load_csv().
+        index_col : int | bool
             The column to use as the row labels. If False, nothing is used.
         """
         logger.error('load method must be implemented by driver class')

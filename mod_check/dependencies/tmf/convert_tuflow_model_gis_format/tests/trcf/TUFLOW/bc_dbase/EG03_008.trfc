@@ -1,0 +1,5 @@
+RF Grid Cell Size == 10 										! Sets the output rainfall grid cell size
+RF Grid Format == nc 											! Output in netcdf format
+
+RF Interpolation Method == IDW									! Rainfall interpolation method
+IDW Exponent == 2

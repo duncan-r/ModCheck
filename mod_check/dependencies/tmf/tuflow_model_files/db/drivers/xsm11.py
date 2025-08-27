@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from .xsdb import XsDatabaseDriver
-from ...dataclasses.types import PathLike
+from ...tmf_types import PathLike
 
 
 class MikeCrossSectionDatabaseDriver(XsDatabaseDriver):

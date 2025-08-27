@@ -1,4 +1,4 @@
-from ._inp_build_state import InputBuildState
+from .inp_build_state import InputBuildState
 from .. import const
 
 
@@ -12,7 +12,7 @@ class CommentInput(InputBuildState):
     TUFLOW_TYPE = const.INPUT.COMMENT
 
     def __str__(self):
-        return self._input.original_text
+        return self._command.original_text
 
     def __bool__(self):
         return False

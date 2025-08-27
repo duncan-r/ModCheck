@@ -2,23 +2,18 @@ import typing
 
 import pandas as pd
 
-from ..dataclasses.event import EventDatabase
-from ..utils.context import Context
-from ..abc.run_state import RunState
-from ._db_build_state import DatabaseBuildState
-from .drivers.driver import DatabaseDriver
-from ..dataclasses.types import PathLike, is_a_number
-from ..dataclasses.file import TuflowPath
-from ..dataclasses.scope import ScopeList
-from .. import const
+from .db_build_state import DatabaseBuildState
+from .bc_dbase_entry import BCDatabaseEntry
+from ..misc.dataframe_wrapper import DataFrameWrapper
+from ..context import Context
+from .. import const, logging_ as tmf_logging
 
-from ..utils import logging as tmf_logging
+if typing.TYPE_CHECKING:
+    from .bc_dbase_run_state import BCDatabaseRunState
+    # noinspection PyUnusedImports
+    from ..cf.cf_run_state import ControlFileRunState
+
 logger = tmf_logging.get_tmf_logger()
-
-
-SOURCE_INDEX = 0
-TIME_INDEX = 1
-VALUE_INDEX = 2
 
 
 class BCDatabase(DatabaseBuildState):
@@ -27,55 +22,47 @@ class BCDatabase(DatabaseBuildState):
     Currently, the Database class has not implemented the :meth:`write() <pytuflow.tmf.DatabaseBuildState.write>`
     method, so it should be initialised with a :code:`fpath` to an existing database file as it can't be edited.
     """
+    SOURCE_INDEX = 1
+    TIME_INDEX = 2
+    VALUE_INDEX = 3
+    TIME_ADD_INDEX = 4
+    VALUE_FACTOR_INDEX = 5
+    VALUE_ADD_INDEX = 6
 
     TUFLOW_TYPE = const.DB.BC_DBASE
-    __slots__ = ('_source_index', '_header_index', '_index_col')
 
-    def __init__(self, fpath: PathLike = None, scope: ScopeList = None, var_names: list[str] = (),
-                 driver: DatabaseDriver = None) -> None:
-        # docstring inherited
-        self._source_index = SOURCE_INDEX
-        self._header_index = 0
-        self._index_col = 0
-        self._event_ctx = Context([])
-        super().__init__(fpath, scope, var_names)
+    INDEX_NAME = 'Name'
+    COLUMN_NAMES = ['Source', 'Column 1', 'Column 2', 'Add Col 1',
+                    'Mult Col 2', 'Add Col 2', 'Column 3', 'Column 4']
 
-    def load_events(self, event_db: EventDatabase):
-        self._event_ctx.load_events(event_db)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.loaded:
+            # initialise an empty dataframe with the expected columns
+            self._df = pd.DataFrame(columns=self.COLUMN_NAMES)
+            self._df.index.name = self.INDEX_NAME
+            self._df_wrapped = DataFrameWrapper(on_change=self.record_change, data=self._df.copy())
 
-    def context(self, *args, **kwargs) -> RunState:
-        if kwargs.get('context'):
-            ctx = kwargs['context']
-        else:
-            ctx = Context(args, kwargs)
-        if self._event_ctx.events_loaded:
-            ctx.load_events(self._event_ctx._event_db)
-        parent = kwargs['parent'] if 'parent' in kwargs else None
-        return RunState(self, ctx, parent)
-
-    @staticmethod
-    def get_value(db_path: PathLike, df: pd.DataFrame, index: str) -> typing.Any:
-        # docstring inherited
+    def value(self, item: str | int) -> typing.Any:
+        # docstring inherited - override method to handle group syntax ("N1|Group")
+        group = item if '|' not in item else item.split('|')[1].strip()
+        if group not in self:
+            logger.error(f'Item {group} not found in database')
+            raise KeyError(f'Item {group} not found in database')
         try:
-            i = [x.lower() for x in df.index].index(index.lower())
-        except Exception:
-            i = -1
-        if i == -1:
-            logger.error('Item {0} was not found in bc database'.format(index))
-            raise KeyError('Item {0} was not found in database'.format(index))
-        row = df.iloc[i]
-        if is_a_number(row.iloc[VALUE_INDEX]):
-            return float(row.iloc[VALUE_INDEX])
+            db_ctx = self.context()
+        except Exception as e:
+            raise ValueError('Database requires a context to resolve value.') from e
+        return db_ctx.value(item)
 
-        db_path = TuflowPath(db_path)
-        source = db_path.parent / row.iloc[SOURCE_INDEX]
-        if not source.exists():
-            logger.error('Source file referenced by bcdatabase could not be found at: {}'.format(source))
-            raise FileNotFoundError(f'Could not find source file {source}')
+    def context(self,
+                run_context: str | dict[str, str] = '',
+                context: Context | None = None,
+                parent: 'ControlFileRunState | None' = None) -> 'BCDatabaseRunState':
+        # docstring inherited
+        from .bc_dbase_run_state import BCDatabaseRunState
+        ctx = context if context else Context(run_context, config=self.config)
+        return BCDatabaseRunState(self, ctx, parent)
 
-        driver = DatabaseDriver(source)
-        if driver is None:
-            logger.error('File format not implemented yet: {0}'.format(source.name))
-            raise NotImplementedError('File format not implemented yet: {0}'.format(source.name))
-        source_df = driver.load(source, header=row[1:3].tolist(), index_col=False)
-        return source_df[row[1:3]]
+    def entry_class(self) -> type[BCDatabaseEntry]:
+        return BCDatabaseEntry

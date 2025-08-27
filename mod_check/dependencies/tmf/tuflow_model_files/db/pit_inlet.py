@@ -1,35 +1,29 @@
-import typing
-
-import pandas as pd
-
-from ._db_build_state import DatabaseBuildState
-from ..dataclasses.types import PathLike
-from ..dataclasses.scope import ScopeList
+from .bc_dbase import BCDatabase
+from .bc_dbase_run_state import BCDatabaseRunState
+from ..context import Context
+from ..cf.cf_run_state import ControlFileRunState
 from .. import const
 
-from ..utils import logging as tmf_logging
-logger = tmf_logging.get_tmf_logger()
+
+class PitInletDatabaseRunState(BCDatabaseRunState):
+    pass
 
 
-class PitInletDatabase(DatabaseBuildState):
+class PitInletDatabase(BCDatabase):
     """Database class for pit inlet properties.
 
     Currently, the Database class has not implemented the :meth:`write() <pytuflow.tmf.DatabaseBuildState.write>`
     method, so it should be initialised with a :code:`fpath` to an existing database file as it can't be edited.
     """
-
     TUFLOW_TYPE = const.DB.PIT
-    __slots__ = ('_source_index', '_header_index', '_index_col')
 
-    def __init__(self, path: PathLike = None, scope: ScopeList = None, var_names: list[str] = ()) -> None:
-        # docstring inherited
-        self._source_index = 0
-        self._header_index = 0
-        self._index_col = 0
-        super().__init__(path, scope, var_names)
+    INDEX_NAME = 'Name'
+    COLUMN_NAMES = ['Source', 'Depth_Col', 'Flow_Col', 'Area', 'Width']
 
-    @staticmethod
-    def get_value(db_path: PathLike, df: pd.DataFrame, index: str) -> typing.Any:
+    def context(self,
+                run_context: str | dict[str, str] = '',
+                context: Context | None = None,
+                parent: ControlFileRunState | None = None) -> PitInletDatabaseRunState:
         # docstring inherited
-        logger.error('Pit inlet database value method not implemented yet')
-        NotImplementedError('Pit inlet database value method not implemented yet')
+        ctx = context if context else Context(run_context, config=self.config)
+        return PitInletDatabaseRunState(self, ctx, parent)

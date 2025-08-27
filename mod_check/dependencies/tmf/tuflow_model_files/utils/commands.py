@@ -4,15 +4,25 @@ import re
 import typing
 from pathlib import Path
 
-from ...convert_tuflow_model_gis_format.conv_tf_gis_format.helpers.command import Command, EventCommand
-from ...convert_tuflow_model_gis_format.conv_tf_gis_format.helpers.parser import get_commands
-from .gis import ogr_format, get_database_name, ogr_iter_geom, gdal_format
-from .settings import MinorConvertException
-from ..dataclasses.file import TuflowPath
-from .settings import Settings
+from ..parsers.command import Command
+from ..gis import ogr_format, get_database_name, gdal_format, GisFormat
+from ..file import TuflowPath
 
-from ..utils import logging as tmf_logging
+from .. import logging_ as tmf_logging
+
 logger = tmf_logging.get_tmf_logger()
+
+
+def _command_type(fpath: str | Path) -> str:
+    type_ = 'setting'
+    if re.findall('^[012]d_', TuflowPath(fpath).lyrname, re.IGNORECASE):
+        type_ = 'gis'
+    elif TuflowPath(fpath).suffix.lower() in ['.asc', '.flt', '.tif', '.gpkg' '.nc', '.txt', '.tiff', '.gtif',
+                                              '.gtiff', '.tif8', '.tiff8', '.bigtif', '.bigtiff']:
+        type_ = 'grid'
+    elif TuflowPath(fpath).suffix.lower() in ['.12da', '.xml']:
+        type_ = 'tin'
+    return type_
 
 
 def build_gis_commands_from_file(fpaths: list[str], ref_cf: Path = None, spatial_db: Path = None) -> list[str]:
@@ -47,16 +57,9 @@ def build_gis_commands_from_file(fpaths: list[str], ref_cf: Path = None, spatial
             continue
         i += 1
 
-        left = ''
-        cf = 'TCF'
-        type_ = ''
-        if re.findall('^[012]d_', TuflowPath(fpath).lyrname, re.IGNORECASE):
-            type_ = 'gis'
-        elif TuflowPath(fpath).suffix.lower() in ['.asc', '.flt', '.tif', '.gpkg' '.nc', '.txt', '.tiff', '.gtif',
-                                                 '.gtiff', '.tif8', '.tiff8', '.bigtif', '.bigtiff']:
-            type_ = 'grid'
-        elif TuflowPath(fpath).suffix.lower() in ['.12da', '.xml']:
-            type_ = 'tin'
+        type_ = _command_type(fpath)
+        if type_ == 'setting':
+            raise ValueError('Cannot build GIS commands from a setting command: {0}'.format(fpath))
         left, cf = guess_command_from_text(TuflowPath(fpath).lyrname, type_)
         if not left:
             logger.error('Could not guess command from text: {}'.format(fpath))
@@ -83,7 +86,7 @@ def build_gis_commands_from_file(fpaths: list[str], ref_cf: Path = None, spatial
     return command_str.split('\n')
 
 
-def build_tuflow_command_string(input_text: typing.Union[str, list[str]], ref_cf: Path = None,
+def build_tuflow_command_string(input_text: str | list[str], ref_cf: Path = None,
                                 spatial_db: Path = None) -> str:
     """Build a single line TUFLOW command string from input_text. Useful for generating GIS commands from a GIS file(s).
     If input_text is a list, it must be a list of (at least one) GIS files and numbers. If input_text is a string,
@@ -100,10 +103,10 @@ def build_tuflow_command_string(input_text: typing.Union[str, list[str]], ref_cf
     ::
 
 
-        >>> build_tuflow_command_string([r"C:\TUFLOW\model\2d_zsh_EG00_001_L.shp", r"C:\TUFLOW\model\2d_zsh_EG00_001_P.shp"])
+        >>> build_tuflow_command_string(["C:/TUFLOW/model/2d_zsh_EG00_001_L.shp", r"C:/TUFLOW/model/2d_zsh_EG00_001_P.shp"])
         'Read GIS Z Shape == ..\\model\\2d_zsh_EG00_001_L.shp | ..\\model\\2d_zsh_EG00_001_P.shp\\n'
 
-        >>> build_tuflow_command_string([r"C:\TUFLOW\model\gis\2d_mat_EG00_001_R.shp", 2])
+        >>> build_tuflow_command_string(["C:/TUFLOW/model/gis/2d_mat_EG00_001_R.shp", 2])
         'Read GIS Mat == ..\\gis\\2d_mat_EG00_001_R.shp | 2\\n'
 
     Parameters
@@ -125,7 +128,8 @@ def build_tuflow_command_string(input_text: typing.Union[str, list[str]], ref_cf
     str
         A single line TUFLOW command string.
     """
-    command = Command('', Settings())
+    from ..settings import TCFConfig
+    command = Command('', TCFConfig())
 
     cmd = None
     if isinstance(input_text, str):
@@ -143,13 +147,7 @@ def build_tuflow_command_string(input_text: typing.Union[str, list[str]], ref_cf
         else:
             text = input_text
 
-        type_ = 'setting'
-        if re.findall('^[012]d_', TuflowPath(text).lyrname, re.IGNORECASE):
-            type_ = 'gis'
-        elif TuflowPath(text).suffix.lower() in ['.asc', '.flt', '.tif', '.gpkg' '.nc', '.txt', '.tiff', '.gtif', '.gtiff', '.tif8', '.tiff8', '.bigtif', '.bigtiff']:
-            type_ = 'grid'
-        elif TuflowPath(text).suffix.lower() in ['.12da', '.xml']:
-            type_ = 'tin'
+        type_ = _command_type(text)
         if isinstance(input_text, list) and input_text:
             left, cf = guess_command_from_text(TuflowPath(input_text[0]).lyrname, type_)
         else:
@@ -158,21 +156,21 @@ def build_tuflow_command_string(input_text: typing.Union[str, list[str]], ref_cf
             logger.error('Could not guess command from text: {}'.format(text))
             raise ValueError('Could not guess command from text')
     else:
-        cmd = Command(input_text, command.settings)
+        cmd = Command(input_text, command.config)
         left, right = cmd.command_orig, cmd.value_orig
         input_text = [x.strip() for x in right.split('|')]
         text = input_text[0]
         if len(input_text) == 1:
             input_text = input_text[0]
 
-    settings = command.settings
+    settings = command.config
     if ref_cf:
         settings.control_file = ref_cf
     else:
         settings.control_file = try_find_control_file(TuflowPath(text), cf)
     if spatial_db:
         settings.spatial_database = spatial_db
-    input_text = concat_command_values(settings.control_file, input_text, settings.spatial_database)
+    input_text = concat_command_values(TuflowPath(settings.control_file), input_text, TuflowPath(settings.spatial_database))
     input_text = f'{left} == {input_text}'
     if cmd:
         input_text = cmd.re_add_comments(input_text, rel_gap=True)
@@ -183,7 +181,7 @@ def build_tuflow_command_string(input_text: typing.Union[str, list[str]], ref_cf
     return input_text
 
 
-def guess_command_from_text(text: str, type_: str) -> tuple[str, str]:
+def guess_command_from_text(text: str, cmd_type: str) -> tuple[str, str]:
     """Guess the TUFLOW command and control file type from some text and given a type. Only works for GIS/GRID/TIN
     commands.
 
@@ -202,7 +200,7 @@ def guess_command_from_text(text: str, type_: str) -> tuple[str, str]:
     ----------
     text : str
         The text to guess the command from.
-    type\_ : str
+    cmd_type : str
         The type of command to guess from. Can be one of 'gis', 'grid', or 'tin'.
 
     Returns
@@ -213,8 +211,8 @@ def guess_command_from_text(text: str, type_: str) -> tuple[str, str]:
     json_file = TuflowPath(__file__).parent.parent.parent / 'data' / 'command_db.json'
     with json_file.open() as f:
         data = json.load(f)
-        if type_:
-            data = data.get(type_)
+        if cmd_type:
+            data = data.get(cmd_type)
             if not data:
                 return '', ''
         if isinstance(data, str):
@@ -281,23 +279,24 @@ def try_find_control_file(file: Path, cf: str) -> Path:
             return root / 'model' / '__dummy__{0}'.format(ext)
 
 
-def find_parent_dir(start_loc: typing.Union[str, Path], dir_name: str, max_levels: int = -1) -> Path:
-    start_loc = Path(start_loc)
+def find_parent_dir(start_loc: str | Path, dir_name: str, max_levels: int = -1) -> Path:
+    start_loc: Path = Path(start_loc)
     nparts = len(start_loc.parts)
     if max_levels == -1 and dir_name.lower() in [x.lower() for x in start_loc.parts]:
         for i, part in enumerate(reversed(start_loc.parts)):
             if part.lower() == dir_name.lower():
-                return Path(os.path.join(*start_loc.parts[:nparts - i]))
+                return Path(os.path.join('', *start_loc.parts[:nparts - i]))
     elif dir_name.lower() in [x.lower() for x in start_loc.parts[nparts-max_levels:]]:
         for i, part in enumerate(reversed(start_loc.parts)):
             if part.lower() == dir_name.lower():
-                return Path(os.path.join(*start_loc.parts[:nparts - i]))
+                return Path(os.path.join('', *start_loc.parts[:nparts - i]))
+    raise ValueError('Could not determine parent directory for {0} in {1}'.format(dir_name, start_loc))
 
 
-def find_highest_matching_file(start_loc: typing.Union[str, Path], pattern: str) -> Path:
+def find_highest_matching_file(start_loc: typing.Union[str, Path], pattern: str) -> Path | None:
     start_loc = Path(start_loc)
     if len(start_loc.parts) < 3:
-        return
+        return None
     files = [file for file in start_loc.glob('**/{0}'.format(pattern))]
     if files:
         nparts = 1000
@@ -307,9 +306,11 @@ def find_highest_matching_file(start_loc: typing.Union[str, Path], pattern: str)
                 nparts = len(file.parts)
                 chosen_file = file
         return chosen_file
+    return None
 
 
 def concat_command_values(control_file: 'TuflowPath', values: list[str], spatial_database: 'TuflowPath') -> str:
+    # noinspection PyUnreachableCode
     if not isinstance(values, list):
         values = [values]
     if not values:
@@ -329,14 +330,13 @@ class TuflowCommand:
     def __new__(cls, control_file, fpath, spatial_database):
         if not isinstance(fpath, (int, float)):
             fpath = TuflowPath(fpath)
-        else:
-            fmt = 'NUMBER'
+
         try:
             fmt = ogr_format(fpath)
-        except MinorConvertException:
+        except (ValueError, RuntimeError, FileNotFoundError):
             try:
                 fmt = gdal_format(fpath)
-            except MinorConvertException:
+            except (ValueError, RuntimeError, FileNotFoundError):
                 if fpath.is_file():
                     fmt = 'TIN'
                     logger.warning('MinorConvertException: Format assumed to be "TIN"')
@@ -345,20 +345,21 @@ class TuflowCommand:
                     logger.warning('MinorConvertException: Format unknown')
         except TypeError:
             fmt = 'NUMBER'
-        if fmt == 'GPKG':
+
+        if fmt == GisFormat.GPKG:
             cls = TuflowCommandGPKG
-        elif fmt == 'Esri Shapefile':
+        elif fmt == GisFormat.SHP:
             cls = TuflowCommandSHP
-        elif fmt == 'Mapinfo File':
+        elif fmt == GisFormat.MIF:
             cls = TuflowCommandMapinfo
         elif fmt == 'NUMBER':
             cls = TuflowCommandNumber
-        elif fmt in ['GTiff', 'AAIGrid', 'EHdr', 'netCDF']:
+        elif fmt in [GisFormat.TIF, GisFormat.ASC, GisFormat.FLT, GisFormat.NC]:
             cls = TuflowCommandRaster
         elif fmt == 'TIN':
             cls = TuflowCommandTin
         else:
-            return
+            raise ValueError('Unknown TUFLOW command type for file: {0}'.format(fpath))
         return super().__new__(cls)
 
     def __repr__(self):
@@ -421,7 +422,8 @@ class TuflowCommandNumber(TuflowCommand):
     def __repr__(self):
         return '<{0} {1}>'.format(self.__class__.__name__, self.ds)
 
-    def __init__(self, control_file, fpath, spatial_database) -> None:
+    def __init__(self, control_file, fpath, spatial_database):
+        super().__init__(control_file, fpath, spatial_database)
         self.ds = fpath
         self.valid = True
 
@@ -435,7 +437,8 @@ class TuflowCommandSHP(TuflowCommand):
     def __init__(self, control_file, fpath, spatial_database) -> None:
         super().__init__(control_file, fpath, spatial_database)
         self._in_right = False
-        self.commands = [self]
+        self.commands = []
+        self.commands.append(self)
 
     def appendable(self, command: 'TuflowCommand') -> bool:
         appendable_types = ['2d_zsh', '2d_bc', '2d_ztin', '2d_vzsh', '2d_bg', '2d_lfcsh']

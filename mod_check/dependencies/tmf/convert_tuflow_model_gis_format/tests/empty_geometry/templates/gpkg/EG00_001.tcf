@@ -1,0 +1,3 @@
+SHP Projection == ..\model\gis\projection.prj
+GPKG Projection == ..\model\gis\projection.gpkg
+Create TIN Zpts == ..\model\gis\2d_ztin_EG07_011.gpkg >> 2d_ztin_EG07_011_R && 2d_ztin_EG07_011_L && 2d_ztin_EG07_011_P

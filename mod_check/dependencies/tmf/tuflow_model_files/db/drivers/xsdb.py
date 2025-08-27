@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from .xs import CrossSectionDatabaseDriver
-from ...dataclasses.types import PathLike
+from ...tmf_types import PathLike
 
 
 class XsDatabaseDriver(CrossSectionDatabaseDriver):
@@ -31,4 +31,4 @@ class XsDatabaseDriver(CrossSectionDatabaseDriver):
             The file path to the database file.
         """
         super().__init__(fpath)
-        self.path = Path(fpath)
+        self.fpath = Path(fpath)
