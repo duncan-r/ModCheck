@@ -217,7 +217,64 @@ class MbCheckIndividualGraphicsView(QGraphicsView):
                     color_count = 0
 
         self.axes.grid(True)
-        self.axes.legend(plot_lines, labels, loc='upper right')
+        self.axes.legend(plot_lines, labels, loc='lower right')
+        self.fig.tight_layout()
+        self.canvas.draw()
+        
+
+class HpcCheckIndividualGraphicsView(QGraphicsView):
+    """GraphicsView to display the Individual MB Check tab graphs.
+    """
+    
+    def __init__(self):
+        QGraphicsView.__init__(self)
+
+        scene = QGraphicsScene()
+        self.setScene(scene)
+        self.fig = Figure()
+        self.axes = self.fig.gca()
+        self.fig.tight_layout()
+        self.canvas = FigureCanvas(self.fig)
+        proxy_widget = scene.addWidget(self.canvas)
+        
+    def drawPlot(self, series_meta, results, title):
+        plot_colors = ['-b', '-g', '-r', '-c', '-m', '-y', '-k',]
+        color_count = 0
+        labels = []
+        plot_lines = []
+        self.axes.clear()
+        self.fig.clear()
+        self.axes = self.fig.gca()
+        
+        x = results[:,1]
+        self.axes.set_xlabel('tEnd (h)')
+        self.axes.set_title(title)
+
+        gtype = series_meta[1]
+        if gtype in ['Nc', 'Nu', 'Nd']:
+            if gtype == 'Nc' or gtype == 'Nu':
+                tol_max = [1.0 for i in x]
+            else:
+                tol_max = [0.3 for i in x]
+
+            max_plot = self.axes.plot(x, tol_max, "-g", alpha=0.5, label="Max recommended", dashes=[6,2])
+            pl = [p for p in max_plot]
+            plot_lines += pl
+            labels += [l.get_label() for l in pl]
+    
+
+        s = results[:,series_meta[0]]
+        left_plot = self.axes.plot(x, s, plot_colors[color_count], label=gtype)
+        self.axes.set_ylabel(gtype)
+        pl = [p for p in left_plot]
+        plot_lines += pl
+        labels += [l.get_label() for l in pl]
+        color_count += 1
+        if color_count > len(plot_colors):
+            color_count = 0
+            
+        self.axes.grid(True)
+        self.axes.legend(plot_lines, labels, loc='lower right')
         self.fig.tight_layout()
         self.canvas.draw()
         

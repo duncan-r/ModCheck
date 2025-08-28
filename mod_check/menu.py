@@ -79,6 +79,7 @@ from .dialogs import (
     FileCheckDialog,
     FmpTuflowVariablesCheckDialog,
     AssessmentDialog,
+    TuflowStabilityCheckDialog,
 )
 # from .dialogs import *
 
@@ -112,11 +113,11 @@ class Menu:
             # 'FMP_Section_Check': {'dialog': None, 'class': FmpSectionCheckDialog},
             # 'View_NRFA_Station': {'dialog': None, 'class': NrfaStationViewerDialog},
             # 'FMP_REFH_Check': {'dialog': None, 'class': FmpRefhCheckDialog},
-            # 'TUFLOW_Stability_Check': {'dialog': None, 'class': TuflowStabilityCheckDialog},
             # 'FMP_Stability_Check': {'dialog': None, 'class': FmpStabilityCheckDialog},
             'Model_File_Audit': {'dialog': None, 'class': FileCheckDialog},
             'Model_Variables_Check': {'dialog': None, 'class': FmpTuflowVariablesCheckDialog},
             'Model_Assessment': {'dialog': None, 'class': AssessmentDialog},
+            'TUFLOW_Stability_Check': {'dialog': None, 'class': TuflowStabilityCheckDialog},
         }
 
         # submenu example: Chainage submenu
@@ -162,12 +163,12 @@ class Menu:
         # self.check_fmprefh_action = QAction(icon, "Compare FMP refh units", self.iface.mainWindow())
         # self.check_fmprefh_action.triggered.connect(self.check_fmp_refh)
         # self.iface.addPluginToMenu("&ModCheck", self.check_fmprefh_action)
-        #
-        # # TUFLOW stability outputs viewer (MB, Dvol, etc)
-        # self.check_tuflowstability_action = QAction(icon, "Check TUFLOW MB", self.iface.mainWindow())
-        # self.check_tuflowstability_action.triggered.connect(self.check_tuflow_stability)
-        # self.iface.addPluginToMenu("&ModCheck", self.check_tuflowstability_action)
-        #
+        
+        # TUFLOW stability outputs viewer (MB, Dvol, etc)
+        self.check_tuflowstability_action = QAction(icon, "Check TUFLOW MB / dt", self.iface.mainWindow())
+        self.check_tuflowstability_action.triggered.connect(self.check_tuflow_stability)
+        self.iface.addPluginToMenu("&ModCheck", self.check_tuflowstability_action)
+        
         # # FMP stability outputs viewer (Stage and Flow oscillations)
         # self.check_fmpstability_action = QAction(icon, "Check FMP Stability Plots", self.iface.mainWindow())
         # self.check_fmpstability_action.triggered.connect(self.check_fmp_stability)
@@ -191,7 +192,7 @@ class Menu:
         self.iface.removePluginMenu("&ModCheck", self.get_runsummary_action)
         # self.iface.removePluginMenu("&ModCheck", self.check_fmpsections_action)
         # self.iface.removePluginMenu("&ModCheck", self.check_fmprefh_action)
-        # self.iface.removePluginMenu("&ModCheck", self.check_tuflowstability_action)
+        self.iface.removePluginMenu("&ModCheck", self.check_tuflowstability_action)
         # self.iface.removePluginMenu("&ModCheck", self.check_fmpstability_action)
         # self.iface.removePluginMenu("&ModCheck", self.nrfa_stationviewer_action)
         self.iface.removePluginMenu("&ModCheck", self.filecheck_action)
@@ -224,10 +225,10 @@ class Menu:
     #
     # def check_fmp_refh(self):
     #     self.launchDialog('FMP_REFH_Check')
-    #
-    # def check_tuflow_stability(self): 
-    #     self.launchDialog('TUFLOW_Stability_Check')
-    #
+    
+    def check_tuflow_stability(self): 
+        self.launchDialog('TUFLOW_Stability_Check')
+    
     # def check_fmp_stability(self): 
     #     self.launchDialog('FMP_Stability_Check')
     #

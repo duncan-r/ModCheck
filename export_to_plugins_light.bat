@@ -13,5 +13,6 @@ xcopy /q /y ".\mod_check\dialogs.py" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS3\
 xcopy /q /y ".\mod_check\mod_check.py" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\mod_check\mod_check.py"
 xcopy /e /q /y ".\mod_check\tools" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\mod_check\tools"
 xcopy /e /q /y ".\mod_check\forms" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\mod_check\forms"
+xcopy /e /q /y ".\mod_check\mywidgets" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\mod_check\mywidgets"
 
 ::PAUSE
