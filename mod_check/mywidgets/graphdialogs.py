@@ -395,7 +395,8 @@ class SectionPropertiesGraphicsView(QGraphicsView):
         self.canvas = FigureCanvas(self.fig)
         proxy_widget = scene.addWidget(self.canvas)
         
-    def drawConveyancePlot(self, section_data, section_id):
+    # def drawConveyancePlot(self, k_data, section_data, section_id):
+    def drawConveyancePlot(self, k_data, section_id):
         """Plot the conveyance and cross section data provided.
         
         Args:
@@ -409,13 +410,7 @@ class SectionPropertiesGraphicsView(QGraphicsView):
         self.axes = self.fig.gca()
         self.axes2 = self.axes.twinx()
         
-        minx = section_data['xvals'][0]
-        maxx = section_data['xvals'][-1]
-        miny = min(section_data['yvals'])
-        maxy = max(section_data['yvals'])
-        
-        x = section_data['xvals']
-        y = section_data['yvals']
+        section = k_data['section']
         
         self.axes.set(
             ylabel='Elevation (mAOD)',
@@ -423,28 +418,19 @@ class SectionPropertiesGraphicsView(QGraphicsView):
             title="Node Name: {0}".format(section_id)
         )
 
-        xs_plot = self.axes.plot(x, y, "-k", label="Cross Section")
+        xs_plot = self.axes.plot(section.xs_x, section.xs_y, "-k", label="Cross Section")
+        xs_plot_active = self.axes.plot(section.xs_active_x, section.xs_active_y, "limegreen", label="Cross Section Active")
         p_plot = None
 
-        panel_count = 0
-        for i, panel in enumerate(section_data['panels']):
-            if panel:
-                panel_count += 1
-                panel_label = 'Panel {}'.format(panel_count)
-                panelx = [section_data['xvals'][i], section_data['xvals'][i]]
-                panely = [miny, maxy]
-                p_plot = self.axes.plot(panelx, panely, "-b", label=panel_label)
-        
-        cx = []
-        cy = []
-        for c in section_data['conveyance']:
-            cx.append(c[0])
-            cy.append(c[1])
-        self.axes2 = self.axes.twiny()
-        k_plot = self.axes2.plot(cx, cy, "-r", label="Conveyance")
-        self.axes2.set_xlabel('Conveyance (m3/s)', color='r')
+        for panel in section.panels:
+            panel_label = 'Panel {}'.format(section.panel_count)
+            p_plot = self.axes.plot(panel['x'], panel['y'], "-b", label=panel_label)
 
-        plot_lines = xs_plot + k_plot
+        self.axes2 = self.axes.twiny()
+        k_plot = self.axes2.plot(section.conveyance['x'], section.conveyance['y'], "-r", label="Conveyance")
+        self.axes2.set_xlabel('Conveyance (m3/s)', color='r')
+        
+        plot_lines = xs_plot + xs_plot_active + k_plot
         labels = [l.get_label() for l in plot_lines]
         if p_plot is not None: 
             plot_lines += p_plot

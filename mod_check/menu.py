@@ -80,6 +80,7 @@ from .dialogs import (
     FmpTuflowVariablesCheckDialog,
     AssessmentDialog,
     TuflowStabilityCheckDialog,
+    FmpSectionCheckDialog,
 )
 # from .dialogs import *
 
@@ -110,7 +111,7 @@ class Menu:
         self.dialogs = {
             # 'FMP_TUFLOW_Chainage': {'dialog': None, 'class': ChainageCalculatorDialog},
             # 'FMP_TUFLOW_Width_Check': {'dialog': None, 'class': FmpTuflowWidthCheckDialog},
-            # 'FMP_Section_Check': {'dialog': None, 'class': FmpSectionCheckDialog},
+            ##### 'FMP_Section_Check': {'dialog': None, 'class': FmpSectionCheckDialog},
             # 'View_NRFA_Station': {'dialog': None, 'class': NrfaStationViewerDialog},
             # 'FMP_REFH_Check': {'dialog': None, 'class': FmpRefhCheckDialog},
             # 'FMP_Stability_Check': {'dialog': None, 'class': FmpStabilityCheckDialog},
@@ -118,6 +119,7 @@ class Menu:
             'Model_Variables_Check': {'dialog': None, 'class': FmpTuflowVariablesCheckDialog},
             'Model_Assessment': {'dialog': None, 'class': AssessmentDialog},
             'TUFLOW_Stability_Check': {'dialog': None, 'class': TuflowStabilityCheckDialog},
+            'FMP_Section_Check': {'dialog': None, 'class': FmpSectionCheckDialog},
         }
 
         # submenu example: Chainage submenu
@@ -154,11 +156,11 @@ class Menu:
         self.get_runsummary_action.triggered.connect(self.get_runsummary)
         self.iface.addPluginToMenu("&ModCheck", self.get_runsummary_action)
         
-        # # FMP section property check
-        # self.check_fmpsections_action = QAction(icon, "Check FMP section properties", self.iface.mainWindow())
-        # self.check_fmpsections_action.triggered.connect(self.check_fmp_sections)
-        # self.iface.addPluginToMenu("&ModCheck", self.check_fmpsections_action)
-        #
+        # FMP section property check
+        self.check_fmpsections_action = QAction(icon, "Check FMP section properties", self.iface.mainWindow())
+        self.check_fmpsections_action.triggered.connect(self.check_fmp_sections)
+        self.iface.addPluginToMenu("&ModCheck", self.check_fmpsections_action)
+        
         # # FMP REFH unit compare
         # self.check_fmprefh_action = QAction(icon, "Compare FMP refh units", self.iface.mainWindow())
         # self.check_fmprefh_action.triggered.connect(self.check_fmp_refh)
@@ -190,7 +192,7 @@ class Menu:
         # self.iface.removePluginMenu("&ModCheck", self.check_fmptuflow_chainage_action)
         # self.iface.removePluginMenu("&ModCheck", self.check_1d2dWidth_action)
         self.iface.removePluginMenu("&ModCheck", self.get_runsummary_action)
-        # self.iface.removePluginMenu("&ModCheck", self.check_fmpsections_action)
+        self.iface.removePluginMenu("&ModCheck", self.check_fmpsections_action)
         # self.iface.removePluginMenu("&ModCheck", self.check_fmprefh_action)
         self.iface.removePluginMenu("&ModCheck", self.check_tuflowstability_action)
         # self.iface.removePluginMenu("&ModCheck", self.check_fmpstability_action)
@@ -216,10 +218,10 @@ class Menu:
     #
     # def check_1d2d_width(self):
     #     self.launchDialog('FMP_TUFLOW_Width_Check')
-    #
-    # def check_fmp_sections(self):
-    #     self.launchDialog('FMP_Section_Check')
-    #
+    
+    def check_fmp_sections(self):
+        self.launchDialog('FMP_Section_Check')
+    
     # def view_nrfa_station(self):
     #     self.launchDialog('View_NRFA_Station')
     #
