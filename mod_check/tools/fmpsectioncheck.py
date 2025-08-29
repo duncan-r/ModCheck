@@ -215,7 +215,6 @@ class CheckFmpSections(ti.ToolInterface):
             model = DAT(dat_path)
         except Exception as err:
             pass
-        rivers = model.unitsByType('river')
         sections = model.sections
         rivers = {}
         for k, s in sections.items():

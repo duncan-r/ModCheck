@@ -17,10 +17,11 @@ import csv
 from pprint import pprint
 
 from . import toolinterface as ti
+from floodmodeller_api import DAT
 
-from ship.utils.fileloaders import fileloader as fl
-from ship.utils import utilfunctions as uf
-from ship.fmp.datunits import ROW_DATA_TYPES as rdt
+# from ship.utils.fileloaders import fileloader as fl
+# from ship.utils import utilfunctions as uf
+# from ship.fmp.datunits import ROW_DATA_TYPES as rdt
 
 
 
@@ -44,30 +45,48 @@ class CompareFmpTuflowChainage():
         self.tuflow_chainage = {}
         self.nwk_has_id = True
         self.nwk_has_len_or_ana = True
+        self.total_tuflow_chainage = 0.0
 
         # Check what kind of layer we're dealing with. Make a note of whether there
         # is a Len_or_ANA column and whether there is an ID column.
         # If no Len_or_ANA it's ignored. If no ID we fall back to the first column
+        len_or_ana_lookup = 'Len_or_ANA'
         headers = [f.name() for f in nwk_layer.fields()]
         if not 'Len_or_ANA' in headers:
-            self.nwk_has_len_or_ana = False
-        if not 'ID' in headers:
+            if not len(nwk_layer.fields()) >= 5:
+                self.nwk_has_len_or_ana = False
+            else:
+                len_or_ana_lookup = 4
+
+        if not len(nwk_layer.fields()) > 0:
             self.nwk_has_id = False
 
         for feature in nwk_layer.getFeatures():
             if self.nwk_has_id:
-                fmp_id = feature['ID']
+                # fmp_id = feature['ID']
+                fmp_id = feature[0]
             else:
                 fmp_id = feature[0]
             
             if self.nwk_has_len_or_ana:
-                tuflow_table_length = feature['Len_or_ANA']
+                tuflow_table_length = feature[len_or_ana_lookup]
             else:
-                tuflow_table_length = 0
+                tuflow_table_length = -1
 
             tuflow_geom_length = feature.geometry().length()
             self.tuflow_chainage[fmp_id] = [tuflow_table_length, tuflow_geom_length]
-        return self.tuflow_chainage 
+
+            if tuflow_table_length != -1 and tuflow_table_length > 0:
+                prev_ttc = self.total_tuflow_chainage
+                try:
+                    self.total_tuflow_chainage += tuflow_table_length
+                except ValueError:
+                    self.total_tuflow_chainage = prev_ttc # Just in case
+                    self.total_tuflow_chainage += tuflow_geom_length
+            else:
+                self.total_tuflow_chainage += tuflow_geom_length
+
+        return self.tuflow_chainage, self.total_tuflow_chainage
     
     def compareChainage(self, fmp_chainage, tuflow_chainage, dx_tol):    
         problem_nodes = {'no_nwk': [], 'mismatch': []}
@@ -109,13 +128,16 @@ class CompareFmpTuflowChainage():
         return self.comparison
 
     def loadFmpModel(self, dat_path):
-        file_loader = fl.FileLoader()
-        model = file_loader.loadFile(dat_path)
+        model = None
+        try:
+            model = DAT(dat_path)
+        except Exception as err:
+            pass
         return model
         
     def calculateFmpChainage(self, model):
         
-        unit_categories = ['river', 'interpolate', 'conduit']
+        unit_categories = ['RIVER', 'INTERPOLATE', 'CONDUIT']
         unit_chainage = []
         prev_unit_name = ''
         prev_unit_category = ''
@@ -126,29 +148,38 @@ class CompareFmpTuflowChainage():
         reach_totals = []
         reach_section_count = 0
         
-        for unit in model:
-            if unit.unit_category in unit_categories:
-                chainage = unit.head_data['distance'].value
+        # Bit manky - we're hitting a protected variable that stores the units
+        # I'm not quite sure how you find either a) the first river unit in the model
+        # or b) the first unit in separate reaches. Maybe there's a better way?
+        # TODO: Try not to circumvent the intended API if possible.
+        #       If the above can be handled, the api does offer public next/prev methods.
+        for unit in model._all_units:
+
+            # Found a unit we want
+            # Update the chainge values
+            if unit.unit in unit_categories:
+                chainage = unit.dist_to_next
                 cum_reach_chainage += chainage
                 total_chainage += chainage
                 reach_section_count += 1
-
+                
                 if not in_reach:
                     reach_totals.append({
                         'start': unit.name, 'end': '', 'total_chainage': chainage,
                         'reach_number': reach_number
                     })
-                
                 in_reach = True
-                
                 unit_chainage.append({
-                    'category': unit.unit_category, 'name': unit.name, 'chainage': chainage,
+                    'category': unit.unit, 'name': unit.name, 'chainage': chainage,
                     'prev_unit_name': prev_unit_name, 'prev_unit_cat': prev_unit_category,
                     'reach_number': reach_number, 'cum_reach_chainage': cum_reach_chainage,
                     'cum_total_chainage': total_chainage
                 })
                 prev_unit_name = unit.name
-                prev_unit_category = unit.unit_category
+                prev_unit_category = unit.unit
+
+            # Not a unit we want (doesn't have any distance)
+            # Reset the reach totals
             else:
                 if in_reach:
                     reach_totals[-1]['end'] = prev_unit_name
@@ -158,7 +189,7 @@ class CompareFmpTuflowChainage():
                 cum_reach_chainage = 0
                 reach_section_count = 0
                 in_reach = False
-                
+        
         return unit_chainage, reach_totals
     
     def exportResults(self, folder, result_type):
