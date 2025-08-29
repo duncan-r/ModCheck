@@ -76,6 +76,7 @@ sys.path.append(dependency_path)
 #     raise ('Unable to load t2 and t3 library')
 
 from .dialogs import (
+    HelpPageDialog,
     FileCheckDialog,
     FmpTuflowVariablesCheckDialog,
     # AssessmentDialog,
