@@ -408,7 +408,7 @@ class SectionPropertiesGraphicsView(QGraphicsView):
         self.axes.clear()
         self.fig.clear()
         self.axes = self.fig.gca()
-        self.axes2 = self.axes.twinx()
+        # self.axes2 = self.axes.twinx()
         
         section = k_data['section']
         
@@ -418,8 +418,8 @@ class SectionPropertiesGraphicsView(QGraphicsView):
             title="Node Name: {0}".format(section_id)
         )
 
-        xs_plot = self.axes.plot(section.xs_x, section.xs_y, "-k", label="Cross Section")
-        xs_plot_active = self.axes.plot(section.xs_active_x, section.xs_active_y, "limegreen", label="Cross Section Active")
+        xs_plot = self.axes.plot(section.xs_x, section.xs_y, "-k", alpha=0.5, dashes=[6,2], label="Cross Section")
+        xs_plot_active = self.axes.plot(section.xs_active_x, section.xs_active_y, "-k", label="Cross Section Active")
         p_plot = None
 
         for panel in section.panels:
@@ -427,7 +427,7 @@ class SectionPropertiesGraphicsView(QGraphicsView):
             p_plot = self.axes.plot(panel['x'], panel['y'], "-b", label=panel_label)
 
         self.axes2 = self.axes.twiny()
-        k_plot = self.axes2.plot(section.conveyance['x'], section.conveyance['y'], "-r", label="Conveyance")
+        k_plot = self.axes2.plot(section.active_k['x'], section.active_k['y'], "-r", label="Conveyance")
         self.axes2.set_xlabel('Conveyance (m3/s)', color='r')
         
         plot_lines = xs_plot + xs_plot_active + k_plot

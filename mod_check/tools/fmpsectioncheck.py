@@ -18,6 +18,7 @@ from pprint import pprint
 
 from floodmodeller_api import DAT
 from floodmodeller_api.units import RIVER
+from floodmodeller_api.units.conveyance import calculate_cross_section_conveyance_cached
 from . import toolinterface as ti
 
 # from ship.utils.fileloaders import fileloader as fl
@@ -26,6 +27,14 @@ from . import toolinterface as ti
 # from ship.utils.tools import openchannel
 
 class ConveyanceData():
+    """Wrapper for the FM River section data for section checks.
+    
+    Precalculates required data on load to make access for graphing etc easier.
+    Centralises the logic in one place for ease of update later.
+    
+    TODO:
+        Very basic, needs refactoring.
+    """
     
     def __init__(self):
         self.minx = 0
@@ -39,14 +48,19 @@ class ConveyanceData():
         self.panels = []
         self.k_x = None
         self.k_y = None
-        self.conveyance = None
+        # self.conveyance = None
+        self.active_k = None
         
     @property
     def panel_count(self):
         return len(self.panels)
     
-    def addSection(self, section_data):
+    def addSection(self, section_data, active_k):
 
+        self.active_k = {
+            'x': active_k.values,
+            'y': active_k.index,
+        }
         self.minx = section_data.data['X'].min()
         self.maxx = section_data.data['X'].max()
         self.miny = section_data.data['Y'].min()
@@ -64,11 +78,11 @@ class ConveyanceData():
                     'y': [self.miny, self.maxy]
                 })
         
-        k = section_data.conveyance
-        self.conveyance = {
-            'x': k.values,
-            'y': k.index,
-        }
+        # k = section_data.conveyance
+        # self.conveyance = {
+        #     'x': k.values,
+        #     'y': k.index,
+        # }
         
 
 class CheckFmpSections(ti.ToolInterface):
@@ -101,25 +115,55 @@ class CheckFmpSections(ti.ToolInterface):
         #     'panel_marker': active_p
         # }
 
+    @classmethod
+    def calculateActiveConveyance(cls, active_data):
+        """Calculate conveyance for the active part of the section.
+        
+        FM API conveyance only seems to calculate from the full section? So the
+        active only version is implemented here.
+        
+        Args:
+            active_data(df): active component of the river section.
+            
+        Return:
+            pandas.Series: containing the conveyance results
+        """
+        return calculate_cross_section_conveyance_cached(
+            x=tuple(active_data.X.values),
+            y=tuple(active_data.Y.values),
+            n=tuple(active_data["Mannings n"].values),
+            rpl=tuple(active_data.RPL.values),
+            panel_markers=tuple(active_data.Panel.values),
+        )
+
     def calculateConveyance(self, river_sections, k_tol):
         """
         """
+        
+        
         k_tol = -k_tol
         negative_k = {}
-        conveyance = {}
+        # conveyance = {}
         for name, river in river_sections.items():
-            k = river.conveyance
+            # k = river.conveyance
+            k = self.calculateActiveConveyance(river.active_data)
+
+            # Duplicate k data, shift duplicate rows up by 1, find the difference,
+            # and check the difference against the tolerance
             kf = k.to_frame()
             kf.columns = ['K']
             kf['K2'] = kf['K'].shift(-1)
             kf[:-1]
             kf['Kdiff'] = kf['K2'] - kf['K']
             has_diff = kf[kf['Kdiff'].lt(k_tol)]
+            
+            # If we have any matches the dataframe won't be empty.
+            # Generate some conveyance data and add it to the match dict
             if not has_diff.empty:
                 min_val = kf['Kdiff'].min()
                 min_elev = kf['Kdiff'].idxmin()
                 conv = ConveyanceData()
-                conv.addSection(river)
+                conv.addSection(river, k)
                 negative_k[name] = {
                     'max_kx': min_val, 'max_kx_depth': min_elev,
                     'section': conv,
