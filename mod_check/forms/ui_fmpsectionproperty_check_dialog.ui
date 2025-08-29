@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1227</width>
-    <height>783</height>
+    <width>938</width>
+    <height>712</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -138,7 +138,7 @@
        </sizepolicy>
       </property>
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="conveyanceTab">
        <attribute name="title">

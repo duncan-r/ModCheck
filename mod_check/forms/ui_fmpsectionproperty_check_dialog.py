@@ -14,7 +14,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_FmpSectionPropertyCheckDialog(object):
     def setupUi(self, FmpSectionPropertyCheckDialog):
         FmpSectionPropertyCheckDialog.setObjectName("FmpSectionPropertyCheckDialog")
-        FmpSectionPropertyCheckDialog.resize(1227, 783)
+        FmpSectionPropertyCheckDialog.resize(938, 712)
         self.verticalLayout = QtWidgets.QVBoxLayout(FmpSectionPropertyCheckDialog)
         self.verticalLayout.setObjectName("verticalLayout")
         self.horizontalLayout_4 = QtWidgets.QHBoxLayout()
@@ -134,7 +134,7 @@ class Ui_FmpSectionPropertyCheckDialog(object):
         self.verticalLayout.setStretch(3, 20)
 
         self.retranslateUi(FmpSectionPropertyCheckDialog)
-        self.resultsTabWidget.setCurrentIndex(1)
+        self.resultsTabWidget.setCurrentIndex(0)
         self.buttonBox.accepted.connect(FmpSectionPropertyCheckDialog.accept) # type: ignore
         self.buttonBox.rejected.connect(FmpSectionPropertyCheckDialog.reject) # type: ignore
         QtCore.QMetaObject.connectSlotsByName(FmpSectionPropertyCheckDialog)

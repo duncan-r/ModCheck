@@ -78,7 +78,7 @@ sys.path.append(dependency_path)
 from .dialogs import (
     FileCheckDialog,
     FmpTuflowVariablesCheckDialog,
-    AssessmentDialog,
+    # AssessmentDialog,
     TuflowStabilityCheckDialog,
     FmpSectionCheckDialog,
     ChainageCalculatorDialog,
@@ -117,7 +117,7 @@ class Menu:
             # 'FMP_Stability_Check': {'dialog': None, 'class': FmpStabilityCheckDialog},
             'Model_File_Audit': {'dialog': None, 'class': FileCheckDialog},
             'Model_Variables_Check': {'dialog': None, 'class': FmpTuflowVariablesCheckDialog},
-            'Model_Assessment': {'dialog': None, 'class': AssessmentDialog},
+            # 'Model_Assessment': {'dialog': None, 'class': AssessmentDialog},
             'TUFLOW_Stability_Check': {'dialog': None, 'class': TuflowStabilityCheckDialog},
             'FMP_Section_Check': {'dialog': None, 'class': FmpSectionCheckDialog},
         }
@@ -137,9 +137,9 @@ class Menu:
         self.iface.addPluginToMenu("&ModCheck", self.help_page_action)
         
         # Assessment - complete test run
-        self.model_assessment_action = QAction(icon, "Run general model assessment", self.iface.mainWindow())
-        self.model_assessment_action.triggered.connect(self.model_assessment)
-        self.iface.addPluginToMenu("&ModCheck", self.model_assessment_action)
+        # self.model_assessment_action = QAction(icon, "Run general model assessment", self.iface.mainWindow())
+        # self.model_assessment_action.triggered.connect(self.model_assessment)
+        # self.iface.addPluginToMenu("&ModCheck", self.model_assessment_action)
 
         # Chainage / node distance check
         self.check_fmptuflow_chainage_action = QAction(icon, "Check FMP-TUFLOW Chainage", self.iface.mainWindow())
@@ -188,7 +188,7 @@ class Menu:
         
     def unload(self):
         self.iface.removePluginMenu("&ModCheck", self.help_page_action)
-        self.iface.removePluginMenu("&ModCheck", self.model_assessment_action)
+        # self.iface.removePluginMenu("&ModCheck", self.model_assessment_action)
         self.iface.removePluginMenu("&ModCheck", self.check_fmptuflow_chainage_action)
         # self.iface.removePluginMenu("&ModCheck", self.check_1d2dWidth_action)
         self.iface.removePluginMenu("&ModCheck", self.get_runsummary_action)
@@ -240,8 +240,8 @@ class Menu:
     def get_runsummary(self):
         self.launchDialog('Model_Variables_Check')
 
-    def model_assessment(self):
-        self.launchDialog('Model_Assessment')
+    # def model_assessment(self):
+    #     self.launchDialog('Model_Assessment')
         
     def help_page(self):
         dialog = HelpPageDialog(self.iface, QgsProject.instance())

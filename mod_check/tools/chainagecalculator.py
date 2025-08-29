@@ -19,11 +19,6 @@ from pprint import pprint
 from . import toolinterface as ti
 from floodmodeller_api import DAT
 
-# from ship.utils.fileloaders import fileloader as fl
-# from ship.utils import utilfunctions as uf
-# from ship.fmp.datunits import ROW_DATA_TYPES as rdt
-
-
 
 class CompareFmpTuflowChainage():
     

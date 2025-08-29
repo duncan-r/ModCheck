@@ -641,6 +641,8 @@ class FileCheckDialog(DialogBase, filecheck_ui.Ui_CheckFilesDialog):
             return
         except IndexError:
             return
+        except TypeError:
+            return
 
         self.summaryTable.setSortingEnabled(False)
         row_position = 0
