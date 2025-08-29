@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file './forms/ui_fmpsectionproperty_check_dialog.ui'
+# Form implementation generated from reading ui file 'ui_fmpsectionproperty_check_dialog.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.11
 #
@@ -112,9 +112,9 @@ class Ui_FmpSectionPropertyCheckDialog(object):
         self.banktopCheckTable.horizontalHeader().setStretchLastSection(True)
         self.verticalLayout_6.addWidget(self.banktopCheckTable)
         self.resultsTabWidget.addTab(self.banktopTab, "")
-        self.widget = QtWidgets.QWidget(self.splitter)
-        self.widget.setObjectName("widget")
-        self.graphLayout = QtWidgets.QVBoxLayout(self.widget)
+        self.layoutWidget = QtWidgets.QWidget(self.splitter)
+        self.layoutWidget.setObjectName("layoutWidget")
+        self.graphLayout = QtWidgets.QVBoxLayout(self.layoutWidget)
         self.graphLayout.setContentsMargins(0, 0, 0, 0)
         self.graphLayout.setObjectName("graphLayout")
         self.verticalLayout.addWidget(self.splitter)
@@ -134,7 +134,7 @@ class Ui_FmpSectionPropertyCheckDialog(object):
         self.verticalLayout.setStretch(3, 20)
 
         self.retranslateUi(FmpSectionPropertyCheckDialog)
-        self.resultsTabWidget.setCurrentIndex(0)
+        self.resultsTabWidget.setCurrentIndex(1)
         self.buttonBox.accepted.connect(FmpSectionPropertyCheckDialog.accept) # type: ignore
         self.buttonBox.rejected.connect(FmpSectionPropertyCheckDialog.reject) # type: ignore
         QtCore.QMetaObject.connectSlotsByName(FmpSectionPropertyCheckDialog)

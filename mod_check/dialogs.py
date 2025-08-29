@@ -1285,14 +1285,13 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
         """
         if caller == 'conveyance':
             self.graphics_view.drawConveyancePlot(
-                # self.properties['negative_k'][node_id], node_id
-                self.properties['negative_k'][node_id],
-                # self.properties['sections'][node_id],
-                node_id,
+                self.properties['problems'][node_id],
+                node_id
             )
         elif caller == 'bad_banks':
             self.graphics_view.drawBanktopsPlot(
-                self.properties['bad_banks'][node_id], node_id
+                self.properties['problems'][node_id],
+                node_id
             )
 
     def showSelectedNode(self, node_id):
@@ -1337,60 +1336,57 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
             'dat_file', self.project.readPath('./temp')
         )
         section_check = fmpsection_check.CheckFmpSections()
-        # try:
-        self.statusLabel.setText("Loading FMP model river sections ...")
-        QApplication.processEvents()
-        river_sections = section_check.loadRiverSections(dat_path)
-        self.properties['sections'] = river_sections
-        self.statusLabel.setText("Calculating section conveyance ...")
-        QApplication.processEvents()
-        # self.properties['negative_k'], self.properties['conveyance'] = section_check.calculateConveyance(
-        self.properties['negative_k'] = section_check.calculateConveyance(
-            river_sections, k_tol
-        )
-        # self.statusLabel.setText("Checking bank elevations ...")
-        # QApplication.processEvents()
-        # self.properties['bad_banks'] = section_check.checkBankLocations(river_sections, dy_tol)
-        # except Exception as err:
-        #     self.statusLabel.setText("FMP model load failed!")
-        #     QMessageBox.warning(
-        #         self, "FMP dat file load error", err.args[0]
-        #     )
+        try:
+            self.statusLabel.setText("Loading FMP model river sections ...")
+            QApplication.processEvents()
+            river_sections = section_check.loadRiverSections(dat_path)
+            # self.properties['sections'] = river_sections
+
+            self.statusLabel.setText("Calculating section properties...")
+            QApplication.processEvents()
+            problem_sections = section_check.findProblemSections(
+                river_sections, k_tol=k_tol, dy_tol=dy_tol
+            )
+            self.properties['problems'] = problem_sections
+
+        except Exception as err:
+            self.statusLabel.setText("FMP model load failed!")
+            QMessageBox.warning(
+                self, "FMP dat file load error", err.args[0]
+            )
         
-        # if len(self.properties['n_zero']) > 0:
-        #     msg = ["This error is probably caused by sections with '0' Manning's values."]
-        #     msg.append("The following sections were affected\n")
-        #     msg += self.properties['n_zero'] 
-        #     QMessageBox.warning(
-        #         self, "Zero Division Error",
-        #         '\n'.join(msg)
-        #     )
-        #
+        # Conveyance issues table
         self.statusLabel.setText("Populating tables ...")
         QApplication.processEvents()
-        conveyance = self.properties['negative_k']
         row_position = 0
         self.negativeConveyanceTable.setRowCount(row_position)
-        for name, details in conveyance.items():
-            max_kx = '{:.2f}'.format(details['max_kx'])
-            max_kx_depth = '{:.2f}'.format(details['max_kx_depth'])
+        for name, details in problem_sections.items():
+            if details.active_k is None:
+                continue
+
+            max_kx = '{:.2f}'.format(details.max_kx)
+            max_kx_depth = '{:.2f}'.format(details.max_kx_depth)
             self.negativeConveyanceTable.insertRow(row_position)
             self.negativeConveyanceTable.setItem(row_position, 0, QTableWidgetItem(name))
             self.negativeConveyanceTable.setItem(row_position, 1, QTableWidgetItem(max_kx))
             self.negativeConveyanceTable.setItem(row_position, 2, QTableWidgetItem(max_kx_depth))
             row_position += 1
         
-        # bad_banks = self.properties['bad_banks']
-        # row_position = 0
-        # self.banktopCheckTable.setRowCount(row_position)
-        # for name, details in bad_banks.items():
-        #     left_drop = 'FAIL: {:.2f} m'.format(details['left_drop']) if details['left_drop'] > 0 else 'PASS'
-        #     right_drop = 'FAIL: {:.2f} m'.format(details['right_drop']) if details['right_drop'] > 0 else 'PASS'
-        #     self.banktopCheckTable.insertRow(row_position)
-        #     self.banktopCheckTable.setItem(row_position, 0, QTableWidgetItem(name))
-        #     self.banktopCheckTable.setItem(row_position, 1, QTableWidgetItem(left_drop))
-        #     self.banktopCheckTable.setItem(row_position, 2, QTableWidgetItem(right_drop))
-        #     row_position += 1
+        # Banktop issues table
+        row_position = 0
+        self.banktopCheckTable.setRowCount(row_position)
+        for name, details in problem_sections.items():
+            if details.bad_banks is None:
+                continue
+
+            left_drop = 'FAIL: {:.2f} m'.format(details.bad_banks['drop_left']) if details.bad_banks['drop_left'] > dy_tol else 'PASS'
+            right_drop = 'FAIL: {:.2f} m'.format(details.bad_banks['drop_right']) if details.bad_banks['drop_right'] > dy_tol else 'PASS'
+            self.banktopCheckTable.insertRow(row_position)
+            self.banktopCheckTable.setItem(row_position, 0, QTableWidgetItem(name))
+            self.banktopCheckTable.setItem(row_position, 1, QTableWidgetItem(left_drop))
+            self.banktopCheckTable.setItem(row_position, 2, QTableWidgetItem(right_drop))
+            row_position += 1
+
         self.statusLabel.setText("Section check complete")
 
 
