@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1227</width>
-    <height>783</height>
+    <width>938</width>
+    <height>712</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -147,10 +147,10 @@
        <layout class="QVBoxLayout" name="verticalLayout_5">
         <item>
          <widget class="QTableWidget" name="negativeConveyanceTable">
-          <attribute name="horizontalHeaderDefaultSectionSize">
+          <attribute name="horizontalHeaderMinimumSectionSize">
            <number>120</number>
           </attribute>
-          <attribute name="horizontalHeaderMinimumSectionSize">
+          <attribute name="horizontalHeaderDefaultSectionSize">
            <number>120</number>
           </attribute>
           <attribute name="horizontalHeaderStretchLastSection">
@@ -182,10 +182,10 @@
        <layout class="QVBoxLayout" name="verticalLayout_6">
         <item>
          <widget class="QTableWidget" name="banktopCheckTable">
-          <attribute name="horizontalHeaderDefaultSectionSize">
+          <attribute name="horizontalHeaderMinimumSectionSize">
            <number>120</number>
           </attribute>
-          <attribute name="horizontalHeaderMinimumSectionSize">
+          <attribute name="horizontalHeaderDefaultSectionSize">
            <number>120</number>
           </attribute>
           <attribute name="horizontalHeaderStretchLastSection">
@@ -211,7 +211,7 @@
        </layout>
       </widget>
      </widget>
-     <widget class="QWidget" name="">
+     <widget class="QWidget" name="layoutWidget">
       <layout class="QVBoxLayout" name="graphLayout"/>
      </widget>
     </widget>

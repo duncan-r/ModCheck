@@ -35,16 +35,33 @@ from builtins import IOError
 ICON_NAME = 'icon.png'
 MENU_NAME = 'ModCheck'
 TR_MENU_NAME = '&ModCheck'
-SHIP_VERSION = 'ship-0.3.4.dev0-py3.8.egg'
 
-# Make sure we have access to the SHIP library
-ship_path = os.path.join(os.path.dirname(__file__), 'dependencies', SHIP_VERSION)
-try:
-    sys.path.append(ship_path)
-    import ship
-except ImportError:
-    raise ('Unable to load SHIP library')
-from .dialogs import *
+
+dependency_path = os.path.join(os.path.dirname(__file__), 'dependencies')
+sys.path.append(dependency_path)
+# import floodmodeller_api as fm_api
+# from tmf import tuflow_model_files as tuflow_api
+
+# try:
+#     sys.path.append(fm_path)
+#     import floodmodeller_api
+# except ImportError:
+#     raise ('Unable to load FM library')
+# try:
+    # sys.path.append(tmf_path)
+# from .dependencies import tmf
+# except ImportError:
+    # raise ImportError('Unable to load TMF library')
+
+
+from .dialogs.help import HelpPageDialog
+from .dialogs.fmtuflowvariablescheckdialog import FmpTuflowVariablesCheckDialog
+from .dialogs.filecheckdialog import FileCheckDialog
+from .dialogs.fmpsectioncheckdialog import FmpSectionCheckDialog
+from .dialogs.chainagecalculatordialog import ChainageCalculatorDialog
+from .dialogs.fmptuflowwidthcheckdialog import FmpTuflowWidthCheckDialog
+from .dialogs.tuflowstabilitycheckdialog import TuflowStabilityCheckDialog
+
 
 class Menu:
 
@@ -73,13 +90,14 @@ class Menu:
         self.dialogs = {
             'FMP_TUFLOW_Chainage': {'dialog': None, 'class': ChainageCalculatorDialog},
             'FMP_TUFLOW_Width_Check': {'dialog': None, 'class': FmpTuflowWidthCheckDialog},
-            'FMP_Section_Check': {'dialog': None, 'class': FmpSectionCheckDialog},
-            'View_NRFA_Station': {'dialog': None, 'class': NrfaStationViewerDialog},
-            'FMP_REFH_Check': {'dialog': None, 'class': FmpRefhCheckDialog},
-            'TUFLOW_Stability_Check': {'dialog': None, 'class': TuflowStabilityCheckDialog},
-            'FMP_Stability_Check': {'dialog': None, 'class': FmpStabilityCheckDialog},
+            # 'View_NRFA_Station': {'dialog': None, 'class': NrfaStationViewerDialog},
+            # 'FMP_REFH_Check': {'dialog': None, 'class': FmpRefhCheckDialog},
+            # 'FMP_Stability_Check': {'dialog': None, 'class': FmpStabilityCheckDialog},
             'Model_File_Audit': {'dialog': None, 'class': FileCheckDialog},
             'Model_Variables_Check': {'dialog': None, 'class': FmpTuflowVariablesCheckDialog},
+            # 'Model_Assessment': {'dialog': None, 'class': AssessmentDialog},
+            'TUFLOW_Stability_Check': {'dialog': None, 'class': TuflowStabilityCheckDialog},
+            'FMP_Section_Check': {'dialog': None, 'class': FmpSectionCheckDialog},
         }
 
         # submenu example: Chainage submenu
@@ -95,6 +113,11 @@ class Menu:
         self.help_page_action = QAction(icon, "Help", self.iface.mainWindow())
         self.help_page_action.triggered.connect(self.help_page)
         self.iface.addPluginToMenu("&ModCheck", self.help_page_action)
+        
+        # Assessment - complete test run
+        # self.model_assessment_action = QAction(icon, "Run general model assessment", self.iface.mainWindow())
+        # self.model_assessment_action.triggered.connect(self.model_assessment)
+        # self.iface.addPluginToMenu("&ModCheck", self.model_assessment_action)
 
         # Chainage / node distance check
         self.check_fmptuflow_chainage_action = QAction(icon, "Check FMP-TUFLOW Chainage", self.iface.mainWindow())
@@ -105,7 +128,7 @@ class Menu:
         self.check_1d2dWidth_action = QAction(icon, "Check 1D-2D width", self.iface.mainWindow())
         self.check_1d2dWidth_action.triggered.connect(self.check_1d2d_width)
         self.iface.addPluginToMenu("&ModCheck", self.check_1d2dWidth_action)
-
+        
         # FMP / TUFLOW default variables check
         self.get_runsummary_action = QAction(icon, "Run variables and summary", self.iface.mainWindow())
         self.get_runsummary_action.triggered.connect(self.get_runsummary)
@@ -116,41 +139,42 @@ class Menu:
         self.check_fmpsections_action.triggered.connect(self.check_fmp_sections)
         self.iface.addPluginToMenu("&ModCheck", self.check_fmpsections_action)
         
-        # FMP REFH unit compare
-        self.check_fmprefh_action = QAction(icon, "Compare FMP refh units", self.iface.mainWindow())
-        self.check_fmprefh_action.triggered.connect(self.check_fmp_refh)
-        self.iface.addPluginToMenu("&ModCheck", self.check_fmprefh_action)
+        # # FMP REFH unit compare
+        # self.check_fmprefh_action = QAction(icon, "Compare FMP refh units", self.iface.mainWindow())
+        # self.check_fmprefh_action.triggered.connect(self.check_fmp_refh)
+        # self.iface.addPluginToMenu("&ModCheck", self.check_fmprefh_action)
         
         # TUFLOW stability outputs viewer (MB, Dvol, etc)
-        self.check_tuflowstability_action = QAction(icon, "Check TUFLOW MB", self.iface.mainWindow())
+        self.check_tuflowstability_action = QAction(icon, "Check TUFLOW MB / dt", self.iface.mainWindow())
         self.check_tuflowstability_action.triggered.connect(self.check_tuflow_stability)
         self.iface.addPluginToMenu("&ModCheck", self.check_tuflowstability_action)
-
-        # FMP stability outputs viewer (Stage and Flow oscillations)
-        self.check_fmpstability_action = QAction(icon, "Check FMP Stability Plots", self.iface.mainWindow())
-        self.check_fmpstability_action.triggered.connect(self.check_fmp_stability)
-        self.iface.addPluginToMenu("&ModCheck", self.check_fmpstability_action)
-
+        
+        # # FMP stability outputs viewer (Stage and Flow oscillations)
+        # self.check_fmpstability_action = QAction(icon, "Check FMP Stability Plots", self.iface.mainWindow())
+        # self.check_fmpstability_action.triggered.connect(self.check_fmp_stability)
+        # self.iface.addPluginToMenu("&ModCheck", self.check_fmpstability_action)
+        
         # TUFLOW stability outputs viewer (MB, Dvol, etc)
         self.filecheck_action = QAction(icon, "Audit Model Files", self.iface.mainWindow())
         self.filecheck_action.triggered.connect(self.check_files)
         self.iface.addPluginToMenu("&ModCheck", self.filecheck_action)
-
-        # NRFA Station viewer
-        self.nrfa_stationviewer_action = QAction(icon, "View NRFA Station Info", self.iface.mainWindow())
-        self.nrfa_stationviewer_action.triggered.connect(self.view_nrfa_station)
-        self.iface.addPluginToMenu("&ModCheck", self.nrfa_stationviewer_action)
+        
+        # # NRFA Station viewer
+        # self.nrfa_stationviewer_action = QAction(icon, "View NRFA Station Info", self.iface.mainWindow())
+        # self.nrfa_stationviewer_action.triggered.connect(self.view_nrfa_station)
+        # self.iface.addPluginToMenu("&ModCheck", self.nrfa_stationviewer_action)
         
     def unload(self):
         self.iface.removePluginMenu("&ModCheck", self.help_page_action)
+        # self.iface.removePluginMenu("&ModCheck", self.model_assessment_action)
         self.iface.removePluginMenu("&ModCheck", self.check_fmptuflow_chainage_action)
         self.iface.removePluginMenu("&ModCheck", self.check_1d2dWidth_action)
         self.iface.removePluginMenu("&ModCheck", self.get_runsummary_action)
         self.iface.removePluginMenu("&ModCheck", self.check_fmpsections_action)
-        self.iface.removePluginMenu("&ModCheck", self.check_fmprefh_action)
+        # self.iface.removePluginMenu("&ModCheck", self.check_fmprefh_action)
         self.iface.removePluginMenu("&ModCheck", self.check_tuflowstability_action)
-        self.iface.removePluginMenu("&ModCheck", self.check_fmpstability_action)
-        self.iface.removePluginMenu("&ModCheck", self.nrfa_stationviewer_action)
+        # self.iface.removePluginMenu("&ModCheck", self.check_fmpstability_action)
+        # self.iface.removePluginMenu("&ModCheck", self.nrfa_stationviewer_action)
         self.iface.removePluginMenu("&ModCheck", self.filecheck_action)
         
     def launchDialog(self, dialog_name):
@@ -169,30 +193,33 @@ class Menu:
         
     def check_fmptuflow_chainage(self):
         self.launchDialog('FMP_TUFLOW_Chainage')
-
+    
     def check_1d2d_width(self):
         self.launchDialog('FMP_TUFLOW_Width_Check')
-        
+    
     def check_fmp_sections(self):
         self.launchDialog('FMP_Section_Check')
-        
-    def view_nrfa_station(self):
-        self.launchDialog('View_NRFA_Station')
-
-    def check_fmp_refh(self):
-        self.launchDialog('FMP_REFH_Check')
-
+    
+    # def view_nrfa_station(self):
+    #     self.launchDialog('View_NRFA_Station')
+    #
+    # def check_fmp_refh(self):
+    #     self.launchDialog('FMP_REFH_Check')
+    
     def check_tuflow_stability(self): 
         self.launchDialog('TUFLOW_Stability_Check')
-
-    def check_fmp_stability(self): 
-        self.launchDialog('FMP_Stability_Check')
-
+    
+    # def check_fmp_stability(self): 
+    #     self.launchDialog('FMP_Stability_Check')
+    #
     def check_files(self):
         self.launchDialog('Model_File_Audit')
-
+    
     def get_runsummary(self):
         self.launchDialog('Model_Variables_Check')
+
+    # def model_assessment(self):
+    #     self.launchDialog('Model_Assessment')
         
     def help_page(self):
         dialog = HelpPageDialog(self.iface, QgsProject.instance())

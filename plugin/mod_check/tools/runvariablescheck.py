@@ -19,8 +19,10 @@ import re
 from pprint import pprint
 import sys
 
-from ship.utils import utilfunctions as uf
-from ship.utils.fileloaders import fileloader as fl
+# from ship.utils import utilfunctions as uf
+# from ship.utils.fileloaders import fileloader as fl
+from floodmodeller_api import IEF
+from floodmodeller_api.ief_flags import flags
 
 from . import toolinterface as ti
 
@@ -155,7 +157,7 @@ class IefVariablesCheck(ti.ToolInterface):
     def checkFmpVariables(self, ief, params):
 
         for variable, variable_dict in self.variables.items():
-            ief_value = ief.getValue(variable)
+            ief_value = getattr(ief, variable, None)
             has_checkval = True if 'checkval' in variable_dict.keys() else False
             check_value = variable_dict['value_default'][0] if not has_checkval else variable_dict['checkval']
             used_value = variable_dict['value_default'][0] if not variable_dict['value_default'][0] == 'value' else ief_value
@@ -194,21 +196,23 @@ class IefVariablesCheck(ti.ToolInterface):
 #         if not ext == '.ief':
 #             raise AttributeError ('Must provide an FMP .ief file')
         
-        loader = fl.FileLoader()
-        ief = loader.loadFile(self.ief_path)
+        # loader = fl.FileLoader()
+        # ief = loader.loadFile(self.ief_path)
+        ief = IEF(self.ief_path)
+        # return {'title': 'nothing'}
 #         try:
 #             ief = loader.loadFile(self.ief_path)
 #         except OSError as err:
 #             raise ('Unable to read .ief file')
-        
+        ip = ief.filepath.resolve() 
         filepaths = {
-            'Ief file': ief.path_holder.absolutePath(),
-            '1D data file': ief.getValue('Datafile'),
-            '2-d control file': ief.getValue('2DFile'),
-            'Results files': ief.getValue('Results'),
-            'Initial conditions file': ief.getValue('InitialConditions'),
-            'Event data': ief.getIedData()
+            'Ief file': str(ief.filepath.resolve()),
+            '1D data file': getattr(ief, 'Datafile'),
+            '2-d control file': getattr(ief, '2DFile', ''),
+            'Results files': getattr(ief, 'Results'),
+            'Initial conditions file': getattr(ief, 'InitialConditions', ''),
         }
+        filepaths['Event data'] = [{'name': k, 'file': v} for k, v in ief.EventData.items()]
         
         # Check if any key params have been changed from default
         params = {'changed': {}, 'default': {}}
@@ -216,15 +220,16 @@ class IefVariablesCheck(ti.ToolInterface):
             'ief_variables_name': 'Timestep', 'value': 'Not Found',
             'default': '', 'description': 'If Not found this is probably a steady state run'
         }
-        if not ief.getValue('Timestep') is None:
+        timestep = getattr(ief, 'Timestep', None)
+        if not timestep is None:
             params['changed']['Timestep'] = {
-                'ief_variable_name': 'Timestep', 'value': ief.getValue('Timestep'), 
+                'ief_variable_name': 'Timestep', 'value': timestep, 
                 'default': '',
                 'description': 'If 2D model - No less than 1/2 of 2D timestep'
             }
         else:
             try:
-                run_type = ief.getValue('RunType')
+                run_type = getattr(ief, 'RunType')
                 if run_type != 'Unsteady':
                     params['changed']['Timestep']['description'] = 'Run Type = {0}'.format(run_type)
             except: pass
@@ -446,8 +451,15 @@ class TlfDetailsCheck(ti.ToolInterface):
         self.run_summary = {}
         
     def run_tool(self):
+        
+        # def keyfunc(tup):
+        #     key, d = tup
+        #     return d["is_default"]
+        
         super()
         self.loadTlfDetails()
+        # variables = sorted(self.variables.items(), key=keyfunc)
+        # self.variables = variables
     
     def loadTlfDetails(self):
         """
@@ -568,6 +580,8 @@ class TlfDetailsCheck(ti.ToolInterface):
             'Density of Water': {'default': '1025.', 'value': '', 'options': '', 'description': ''},
             'Wind/Wave Shallow Depths': {'default': '0.2, 1.', 'value': '', 'options': '', 'description': ''},
             'Blockage Matrix': {'default': 'OFF', 'value': '', 'options': '', 'description': ''},
+            'Default': {},
+            'Non_Default': {},
         }
         
         self.run_summary = {
@@ -593,7 +607,7 @@ class TlfDetailsCheck(ti.ToolInterface):
             line_counter = 1
             for line in tlf_file:
                 
-                rmatch = re.search('(WARNING|ERROR|CHECK)\s[0-9]{4}', line)
+                rmatch = re.search(r'(WARNING|ERROR|CHECK)\s[0-9]{4}', line)
                 if not rmatch is None:
                     check_and_code = rmatch.group().split(' ')
                     check_type = check_and_code[0]
@@ -652,7 +666,14 @@ class TlfDetailsCheck(ti.ToolInterface):
                             for c in command_keys:
                                 if command == c:
                                     found_variable = True
-                                    self.variables[c]['value'] = value
+                                    # Create a separate default and non default dict to hold the outputs so that
+                                    # they can be ordered in the table easily
+                                    if value == self.variables[c]['default']:
+                                        self.variables['Default'][c] = self.variables[c]
+                                        self.variables['Default'][c]['value'] = value
+                                    else:
+                                        self.variables['Non_Default'][c] = self.variables[c]
+                                        self.variables['Non_Default'][c]['value'] = value
                         
                         if not found_variable:
                             split_line = line.split(':')

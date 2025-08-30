@@ -1,0 +1,4 @@
+Write Check Files == check_files/prefix2d
+START 1D DOMAIN
+	Write Check Files == check_files_1d/prefix1d
+End define

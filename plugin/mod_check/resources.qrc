@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/plugins/mod_check" >
+        <file>icon.png</file>
+    </qresource>
+</RCC>

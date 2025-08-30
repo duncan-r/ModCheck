@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>665</width>
+    <width>774</width>
     <height>699</height>
    </rect>
   </property>
@@ -46,14 +46,17 @@
       <string>TUFLOW inputs</string>
      </property>
      <layout class="QGridLayout" name="gridLayout_3">
-      <item row="5" column="5">
-       <widget class="QLabel" name="label_5">
+      <item row="0" column="0" colspan="3">
+       <widget class="QLabel" name="label_3">
         <property name="text">
-         <string>DX Tolerance (m)</string>
+         <string>Nwk line layer</string>
         </property>
        </widget>
       </item>
-      <item row="5" column="4">
+      <item row="1" column="0" colspan="8">
+       <widget class="QgsMapLayerComboBox" name="estryNwkLayerCBox"/>
+      </item>
+      <item row="5" column="5">
        <spacer name="horizontalSpacer">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
@@ -66,17 +69,21 @@
         </property>
        </spacer>
       </item>
-      <item row="0" column="0" colspan="3">
-       <widget class="QLabel" name="label_3">
+      <item row="5" column="0">
+       <widget class="QPushButton" name="compareChainageBtn">
         <property name="text">
-         <string>Nwk line layer</string>
+         <string>Compare TUFLOW / FMP Chainage</string>
         </property>
        </widget>
       </item>
-      <item row="1" column="0" colspan="7">
-       <widget class="QgsMapLayerComboBox" name="estryNwkLayerCBox"/>
+      <item row="5" column="3">
+       <widget class="QLabel" name="label_5">
+        <property name="text">
+         <string>DX Tolerance (m)</string>
+        </property>
+       </widget>
       </item>
-      <item row="5" column="6">
+      <item row="5" column="4">
        <widget class="QgsSpinBox" name="dxToleranceSpinbox">
         <property name="suffix">
          <string> m</string>
@@ -86,13 +93,6 @@
         </property>
         <property name="value">
          <number>10</number>
-        </property>
-       </widget>
-      </item>
-      <item row="5" column="0">
-       <widget class="QPushButton" name="compareChainageBtn">
-        <property name="text">
-         <string>Compare TUFLOW / FMP Chainage</string>
         </property>
        </widget>
       </item>
@@ -190,6 +190,28 @@
       <string>Outputs</string>
      </property>
      <layout class="QVBoxLayout" name="verticalLayout_4">
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_4">
+        <item>
+         <widget class="QLabel" name="fmpTotalChainageLabel">
+          <property name="text">
+           <string>Total FMP Chainage: </string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_5">
+        <item>
+         <widget class="QLabel" name="tuflowTotalChainageLabel">
+          <property name="text">
+           <string>Total Tuflow Chainage:</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
       <item>
        <widget class="QTabWidget" name="outputsTabWidget">
         <property name="sizePolicy">

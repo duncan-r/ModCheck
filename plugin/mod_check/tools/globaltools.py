@@ -2,7 +2,7 @@
 import os
 
 
-def longPathCheck(the_path, update_path_if_long=True):
+def longPathCheck(the_path, update_path_if_long=True, return_islong=False):
     """Check for windows paths with lengths over 256 characters.
     
     Check if a path is longer than the maximum length allowed standardly on
@@ -24,5 +24,8 @@ def longPathCheck(the_path, update_path_if_long=True):
             # Don't add it twice
             if not the_path[:4] == '\\\\?\\':
                 new_path = '\\\\?\\' + the_path
-    return new_path, is_over_256
+    if return_islong:
+        return new_path, is_over_256
+    else:
+        return new_path
         

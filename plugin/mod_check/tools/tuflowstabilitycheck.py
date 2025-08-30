@@ -16,8 +16,68 @@ import sys
 import csv
 from pprint import pprint
 from PyQt5 import QtCore
+import numpy as np
 
 from . import globaltools as gt
+
+
+class TuflowHpcCheck(QtCore.QObject):
+    status_signal = QtCore.pyqtSignal(str)
+    
+    def __init__(self):
+        super().__init__()
+        self.series_data = None
+        self.series_columns = {
+            'tend': (1, 'tEnd'),
+            'dtstar': (2, 'dtStar'),
+            'dt': (3, 'dt'),
+            'nu': (4, 'Nu'),
+            'nc': (5, 'Nc'),
+            'nd': (6, 'Nd'),
+            'eff': (7, 'Efficiency'),
+        }
+        
+    def findHpcFiles(self, root_folder):
+        """
+        """
+        hpc_paths = []
+        for root, dirs, files in os.walk(root_folder):
+            self.status_signal.emit('Searching folder {0} ...'.format(root))
+            for f in files:
+                filepath = os.path.join(root,f)
+
+                # Skip the differently formatted files for section MB
+                if 'hpc.dt.csv' in filepath:
+                    hpc_paths.append(filepath)
+
+        return hpc_paths
+    
+    def seriesColumn(self, column_name):
+        if not column_name in self.series_columns.keys():
+            return None
+            # raise KeyError('Column name does not exist')
+        return (self.series_columns[column_name][0], self.series_columns[column_name][1])
+    
+    def loadHpcFile(self, hpc_path):
+        """Load the contents of TUFLOW hpc.dt.csv file.
+        
+        Note:
+            As well as returning the loaded data, it is saved as a class member.
+        
+        Args:
+            hpc_path(str): file path for the hpc dt log file (hpc.dt.csv)
+        
+        Return:
+            nparray: containing the loaded series data
+        """
+        
+        # use_cols = (1, 2, 3, 4, 5, 6, 7)
+        converters = {
+            1: lambda x: float(x.strip()) / 3600
+        }
+        self.series_data = np.loadtxt(hpc_path, delimiter=',', skiprows=1, converters=converters)
+        return self.series_data
+            
 
 def getMbHeaders(mb_path):
     """Get the column headers to load for a specific MB file type.
@@ -158,6 +218,7 @@ class TuflowStabilityCheck(QtCore.QObject):
                 plen = len(mb)
                 txt = '[Chars {0}] {1}'.format(plen, mb)
                 failed_load['error'].append(txt)
+
         if empty_count > 0 or fail_count > 0:
             self.status_signal.emit('Loaded {0} files out of {1} ({2} files were empty and {3} failed to load)'.format(
                 count, total, empty_count, fail_count
@@ -190,7 +251,7 @@ class TuflowStabilityCheck(QtCore.QObject):
             results[h] = []
             col_lookup[h] = -1
 
-        mb_path, _ = gt.longPathCheck(mb_path)
+        mb_path = gt.longPathCheck(mb_path)
         with open(mb_path, 'r') as mb_file:
             reader = csv.reader(mb_file, delimiter=',')
             count = 0

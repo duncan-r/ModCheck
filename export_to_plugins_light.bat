@@ -9,10 +9,11 @@ REM xcopy /q /y ".\mod_check\mod_check_dialog_base.py" "C:\Users\ermev\AppData\R
 REM xcopy /q /y ".\mod_check\mod_check_dialog_base.ui" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\mod_check\mod_check_dialog_base.ui"
 
 xcopy /q /y ".\mod_check\menu.py" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\mod_check\menu.py"
-xcopy /q /y ".\mod_check\dialogs.py" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\mod_check\dialogs.py"
+xcopy /q /y ".\mod_check\olddialogs.py" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\mod_check\olddialogs.py"
 xcopy /q /y ".\mod_check\mod_check.py" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\mod_check\mod_check.py"
 xcopy /e /q /y ".\mod_check\tools" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\mod_check\tools"
 xcopy /e /q /y ".\mod_check\forms" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\mod_check\forms"
 xcopy /e /q /y ".\mod_check\mywidgets" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\mod_check\mywidgets"
+xcopy /e /q /y ".\mod_check\dialogs" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\mod_check\dialogs"
 
 ::PAUSE

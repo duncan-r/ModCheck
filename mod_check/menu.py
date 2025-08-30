@@ -35,30 +35,13 @@ from builtins import IOError
 ICON_NAME = 'icon.png'
 MENU_NAME = 'ModCheck'
 TR_MENU_NAME = '&ModCheck'
-# SHIP_VERSION = 'ship-0.3.4.dev0-py3.8.egg'
 
-# Make sure we have access to the SHIP library
-# ship_path = os.path.join(os.path.dirname(__file__), 'dependencies', SHIP_VERSION)
-# fm_path = os.path.join(os.path.dirname(__file__), 'dependencies', 'floodmodeller_api')
-# tmf_path = os.path.join(os.path.dirname(__file__), 'dependencies', 'tmf')
-# t2_path = os.path.join(os.path.dirname(__file__), 'dependencies', 'tmf', 'convert_tuflow_model_gis_format')
-# t3_path = os.path.join(os.path.dirname(__file__), 'dependencies', 'tmf', 'tuflow_model_files')
 
 dependency_path = os.path.join(os.path.dirname(__file__), 'dependencies')
 sys.path.append(dependency_path)
 # import floodmodeller_api as fm_api
 # from tmf import tuflow_model_files as tuflow_api
 
-# import tmf
-# except ImportError:
-    # raise ImportError('Unable to load dependency libraries')
-
-
-# try:
-#     sys.path.append(ship_path)
-#     import ship
-# except ImportError:
-#     raise ('Unable to load SHIP library')
 # try:
 #     sys.path.append(fm_path)
 #     import floodmodeller_api
@@ -69,25 +52,16 @@ sys.path.append(dependency_path)
 # from .dependencies import tmf
 # except ImportError:
     # raise ImportError('Unable to load TMF library')
-# try:
-#     sys.path.append(t2_path)
-#     sys.path.append(t3_path)
-#     import t2_path
-#     import t3_path
-# except ImportError:
-#     raise ('Unable to load t2 and t3 library')
 
-from .dialogs import (
-    HelpPageDialog,
-    FileCheckDialog,
-    FmpTuflowVariablesCheckDialog,
-    # AssessmentDialog,
-    TuflowStabilityCheckDialog,
-    FmpSectionCheckDialog,
-    ChainageCalculatorDialog,
-    FmpTuflowWidthCheckDialog,
-)
-# from .dialogs import *
+
+from .dialogs.help import HelpPageDialog
+from .dialogs.fmtuflowvariablescheckdialog import FmpTuflowVariablesCheckDialog
+from .dialogs.filecheckdialog import FileCheckDialog
+from .dialogs.fmpsectioncheckdialog import FmpSectionCheckDialog
+from .dialogs.chainagecalculatordialog import ChainageCalculatorDialog
+from .dialogs.fmptuflowwidthcheckdialog import FmpTuflowWidthCheckDialog
+from .dialogs.tuflowstabilitycheckdialog import TuflowStabilityCheckDialog
+
 
 class Menu:
 

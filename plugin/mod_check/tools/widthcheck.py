@@ -23,9 +23,10 @@ from pprint import pprint
 from qgis.core import QgsDistanceArea, QgsWkbTypes
 from . import toolinterface as ti
 
-from ship.utils.fileloaders import fileloader as fl
-from ship.utils import utilfunctions as uf
-from ship.fmp.datunits import ROW_DATA_TYPES as rdt
+from floodmodeller_api import DAT
+# from ship.utils.fileloaders import fileloader as fl
+# from ship.utils import utilfunctions as uf
+# from ship.fmp.datunits import ROW_DATA_TYPES as rdt
 
 
 class SectionWidthCheck(ti.ToolInterface):
@@ -51,13 +52,22 @@ class SectionWidthCheck(ti.ToolInterface):
             "type", "flags", "name", "f", "d", "td", "a", "b", 
         ]
         
-    def run_tool(self):
-        super()
-        self.results = []
-        fmp_widths = self.fetchFmpWidths(self.dat_path)
-        cn_widths, missing_cn, total_found = self.fetchCnWidths()
-        results, failed = self.check_widths(fmp_widths, cn_widths, missing_cn)
-        return results, failed#, total_found
+    # def run_tool(self):
+    #     super()
+    #     self.results = []
+    #     model = self.loadModel(self.dat_path)
+    #     fmp_widths = self.fetchFmpWidths(model)
+    #     cn_widths, missing_cn, total_found = self.fetchCnWidths()
+    #     results, failed = self.check_widths(fmp_widths, cn_widths, missing_cn)
+    #     return results, failed#, total_found
+    
+    def loadModel(self, dat_path):
+        model = None
+        try:
+            model = DAT(dat_path)
+        except Exception as err:
+            raise Exception ("Problem loading FMP .dat file at:\n{}\n{}".format(dat_path, str(err)))
+        return model
         
     def fetchFmpWidths(self, dat_path):
         """Calculate the active widths of all FMP river and interpolate sections.
@@ -78,64 +88,86 @@ class SectionWidthCheck(ti.ToolInterface):
         Note: Does not currently find FMP Replicate sections.
             This will be added soon.
         """
-        self.dat_path = dat_path
-        file_loader = fl.FileLoader()
-        try:
-            model = file_loader.loadFile(dat_path)
-        except Exception as e:
-            # raise Exception ("Problem loading FMP .dat file at:\n{}".format(dat_path))
-            raise Exception ("Problem loading FMP .dat file at:\n{}\n{}".format(dat_path, str(e)))
-        unit_categories = ['river', 'interpolate']
-        units = model.unitsByCategory(unit_categories)
-        
-        widths = {}
-        prev_river = None
-        interpolates = []
-        interpolated_chainage = 0
-        for unit in units:
-            if unit.unit_type == 'river':
-        
-                # Get the width and deactivation values form the river section
-                xvals = unit.row_data['main'].dataObjectAsList(rdt.CHAINAGE)
-                dvals = unit.row_data['main'].dataObjectAsList(rdt.DEACTIVATION)
-                
-                x_start = xvals[0]
-                x_end = xvals[-1]
-                
-                # loop through the section width values, check where any deactivation
-                # markers are and set the active width start and end variables accordingly
-                for i, x in enumerate(xvals, 0):
-                    if dvals[i] == 'LEFT':
-                        x_start = x
-                    if dvals[i] == 'RIGHT':
-                        x_end = x
-                
-                active_width = math.fabs(x_end - x_start)
-                widths[unit.name] = [active_width, unit.unit_type]
-                
-                if len(interpolates) > 0:
-                    r1_width = prev_river[1]
-                    chainage = prev_river[2]
-                    r2_width = active_width
-                    x = interpolated_chainage + chainage
-                    # Treat width as y and get the slope of the line
-                    m = (r2_width - r1_width) / x
-                    current_x = chainage
-                    for i in interpolates:
-                        # c = r1_width because x = 0 is at the first section
-                        widths[i[0]] = [m * current_x + r1_width, 'interpolate']
-                        current_x += i[1]   # add the interpolates chainage to x 
-                    
-                    # Reset the interpolate stuff
-                    interpolates = []
-                    interpolated_chainage = 0
-                
-                prev_river = [unit.name, active_width, unit.head_data['distance'].value]
-                
-            else:
-                interpolates.append([unit.name, unit.head_data['distance'].value])
-                interpolated_chainage += unit.head_data['distance'].value
+
+        def interpolate_widths(start_river, end_river, interpolates, end_width, dist_diff):
+            """Interpolate widths between two cross sections (RIVER units).
             
+            Calculates a linear relationship between surrounding river sections and the cross
+            section widths. Applies that relationship to the interpolate sections, based on
+            their distance between the sections, to derive interpolated section widths.
+            No clever assumptions about difference in flow area, or suchlike, are considered
+            here, which could make a difference in reality. It's a fairly good estimate of
+            suitability though and should identify interpolate sections where the 2D channel
+            is significantly different from the 1D width at that location.
+            
+            Args:
+                start_river(Unit): the RIVER unit before the interpolates.
+                end_river(Unit): the RIVER unit after the interpolates.
+                interpolates(list): the intervening INTERPOLATE units.
+                end_width(float): the width of the end_river unit.
+                dist_diff(float): distance between start and end river units.
+                
+            Return:
+                list - width of the INTERPOLATE units in the same order as 'interpolates'.
+            """
+            start_width = start_river[1]
+            start_river = start_river[0]
+            
+            x1 = 0
+            x2 = dist_diff
+            y1 = start_width
+            y2 = end_width
+            c = y1
+            m = ((y2 - y1) / x2)
+            new_widths = {}
+            dist_sum = start_river.dist_to_next
+            for i in interpolates:
+                width = m * dist_sum + c
+                new_widths[i.name] = [width, i.unit]
+                dist_sum += i.dist_to_next
+            
+            return new_widths
+        
+        model = self.loadModel(dat_path)
+        
+        # TODO: Add 'REPLICATE' to the checks
+        unit_categories = ['RIVER', 'INTERPOLATE']
+        widths = {}
+        prev_unit = None
+        prev_river = []
+        interps = []
+        interp_chainage = 0.0
+        
+        # Bit manky - we're hitting a protected variable that stores the units
+        # I'm not quite sure how you find either a) the first river unit in the model
+        # or b) the first unit in separate reaches. Maybe there's a better way?
+        # TODO: Try not to circumvent the intended API if possible.
+        #       If the above can be handled, the api does offer public next/prev methods.
+        for unit in model._all_units:
+            if not unit.unit in unit_categories:
+                continue
+            
+            if unit.unit == 'RIVER':
+                active_start = float(unit.active_data.head(1)['X'])
+                active_end = float(unit.active_data.tail(1)['X'])
+                active_width = active_end - active_start
+                
+                if prev_unit and prev_unit.unit == 'INTERPOLATE':
+                    dist_diff = interp_chainage + unit.dist_to_next
+                    interp_widths = interpolate_widths(prev_river, unit, interps, active_width, dist_diff)
+                    widths = widths | interp_widths
+                    interps = []
+                        
+                widths[unit.name] = [active_width, unit.unit]
+                prev_river = [unit, active_width]
+                prev_unit = unit
+                interp_chainage = unit.dist_to_next
+                
+            elif unit.unit == 'INTERPOLATE':
+                interps.append(unit)
+                prev_unit = unit
+                interp_chainage += unit.dist_to_next
+
         return widths
         
     def fetchCnWidths(self, node_layer, cn_layer):
