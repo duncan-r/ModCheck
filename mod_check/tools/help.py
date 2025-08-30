@@ -28,6 +28,22 @@ Copyright 2025 Duncan Runnacles
 
 """
 
+APIS = """
+Modcheck has been updated to use the Flood Modeller API to handle all Flood Modeller
+file types. Modcheck maintains its own version of the Flood Modeller API that has
+been adapted to work within QGIS; it is likey behind the main version to provide
+stability. However, if you would like to use it in QGIS, you can import it 
+directly within the python console and use it there.
+
+To import it in the Python console:
+>>> from mod_check.dependencies import floodmodeller_api as fm_api
+>>> fm_api.IEF()
+<floodmodeller_api Class: IEF(filepath=None)>
+
+You can now use all of the functionality from the API in your QGIS Python console.
+
+"""
+
 CHECK_CHAINAGE = """
 Check FMP-TUFLOW Chainage allows you to extract the chainage (node distance) values from
 Flood Modeller and TUFLOW model nodes and compare them to ensure that they have similar 
@@ -575,6 +591,7 @@ the file.
 
 HELP_LOOKUP = {
     'Overview': OVERVIEW,
+    'APIs': APIS,
     'Check Chainage': CHECK_CHAINAGE,
     # 'Check Width': CHECK_WIDTH,
     'Run Variables Summary': VARIABLES_SUMMARY,

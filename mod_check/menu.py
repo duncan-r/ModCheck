@@ -43,10 +43,12 @@ TR_MENU_NAME = '&ModCheck'
 # tmf_path = os.path.join(os.path.dirname(__file__), 'dependencies', 'tmf')
 # t2_path = os.path.join(os.path.dirname(__file__), 'dependencies', 'tmf', 'convert_tuflow_model_gis_format')
 # t3_path = os.path.join(os.path.dirname(__file__), 'dependencies', 'tmf', 'tuflow_model_files')
+
 dependency_path = os.path.join(os.path.dirname(__file__), 'dependencies')
-# try:
 sys.path.append(dependency_path)
-# import floodmodeller_api
+# import floodmodeller_api as fm_api
+# from tmf import tuflow_model_files as tuflow_api
+
 # import tmf
 # except ImportError:
     # raise ImportError('Unable to load dependency libraries')

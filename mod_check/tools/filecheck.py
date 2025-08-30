@@ -18,6 +18,7 @@ from PyQt5 import QtCore
 import re
 from pathlib import Path
 from lxml import etree
+from glob import glob
 
 from . import globaltools as gt
 from floodmodeller_api import IEF
@@ -25,6 +26,7 @@ from tmf.tuflow_model_files import TCF
 from tmf.tuflow_model_files.inp.file import FileInput
 from tmf.tuflow_model_files.inp.gis import GisInput
 from tmf.tuflow_model_files.inp.setting import SettingInput
+
 
 class WorkspaceFile():
     
@@ -78,6 +80,72 @@ def loadWorkspaceFiles(workspaces):
         files = w.readWorkspaceFile()
         workspace_files[workspace.name] = files
     return workspace_files
+
+
+class IefSubfile():
+    
+    def __init__(self, path):
+        self.rawpath = path
+        self.path = Path(path)
+        self.missing = 'Yes'
+        
+    @property
+    def fullpath(self):
+        return self.path.absolute()
+
+    @property
+    def name(self):
+        return self.path.name
+
+    @property
+    def extension(self):
+        return self.path.suffix
+
+class IefFile():
+    
+    def __init__(self, ief):
+        self.ief = ief
+        self._files = []
+        
+    @property
+    def filepath(self):
+        return self.ief.filepath
+    
+    @property
+    def files(self):
+        if not self._files:
+            self._files = self.findFiles()
+        return self._files
+    
+    def findFiles(self):
+        dat = IefSubfile(self.ief.Datafile)
+        results = IefSubfile(self.ief.Results + '.zzn')
+        ieds = [IefSubfile(i) for i in self.ief.EventData.values()]
+        tcf = getattr(self.ief, '2DFile', None)
+        ics = getattr(self.ief, 'InitialConditions', None)
+
+        all_files = [dat, results]
+        all_files.extend(ieds)
+        if tcf:
+            all_files.append(IefSubfile(tcf))
+        if ics:
+            all_files.append(IefSubfile(ics))
+        
+        return all_files
+    
+    
+
+def loadIefFiles(fm_files):
+    # ief_paths = glob(folder + + '\*.ief', recursive=True)
+    iefs = {}
+    for fm in fm_files:
+        if fm.fileExt == 'ief':
+            ief_path = Path(fm.filepath)
+            ief = IEF(ief_path)
+            ief = IefFile(ief)
+            iefs[str(ief_path.name)] = ief
+    
+    return iefs
     
 
 class FileChecker(QtCore.QObject):
@@ -750,7 +818,7 @@ tuflow_model_file_exts = ['tcf', 'tgc', 'tbc', 'tef', 'ecf', 'trd', 'tsoil', 'tm
 fm_model_file_exts = ['ief', 'ied', 'iic']
 gis_file_exts = ['shp', 'mif', 'mid', 'asc', 'flt', 'tif', 'tiff', 'xml', 'sqlite']
 log_file_exts = ['tlf', 'tsf']
-result_file_exts = ['xmdf', 'sup', '2dm', 'eof', 'dat', 'zzd']
+result_file_exts = ['xmdf', 'sup', '2dm', 'eof', 'dat', 'zzd', 'zzn', 'zzs']
 workspace_file_exts = ['qgs']#, 'wor']
 class SomeFile(object):
     '''
@@ -780,6 +848,9 @@ class SomeFile(object):
         self.logFile = self.fileExt in log_file_exts
         self.csvFile = self.fileExt == 'csv'
         self.workspaceFile = self.fileExt in workspace_file_exts
+        
+    def __str__(self):
+        return f"[{self.fileExt.upper()}] {self.name}"
 
     def getFilePath(self):
         return self.filepath
