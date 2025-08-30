@@ -85,6 +85,7 @@ from .dialogs import (
     TuflowStabilityCheckDialog,
     FmpSectionCheckDialog,
     ChainageCalculatorDialog,
+    FmpTuflowWidthCheckDialog,
 )
 # from .dialogs import *
 
@@ -114,7 +115,7 @@ class Menu:
         
         self.dialogs = {
             'FMP_TUFLOW_Chainage': {'dialog': None, 'class': ChainageCalculatorDialog},
-            # 'FMP_TUFLOW_Width_Check': {'dialog': None, 'class': FmpTuflowWidthCheckDialog},
+            'FMP_TUFLOW_Width_Check': {'dialog': None, 'class': FmpTuflowWidthCheckDialog},
             # 'View_NRFA_Station': {'dialog': None, 'class': NrfaStationViewerDialog},
             # 'FMP_REFH_Check': {'dialog': None, 'class': FmpRefhCheckDialog},
             # 'FMP_Stability_Check': {'dialog': None, 'class': FmpStabilityCheckDialog},
@@ -149,10 +150,10 @@ class Menu:
         self.check_fmptuflow_chainage_action.triggered.connect(self.check_fmptuflow_chainage)
         self.iface.addPluginToMenu("&ModCheck", self.check_fmptuflow_chainage_action)
         
-        # # 1D2D width check
-        # self.check_1d2dWidth_action = QAction(icon, "Check 1D-2D width", self.iface.mainWindow())
-        # self.check_1d2dWidth_action.triggered.connect(self.check_1d2d_width)
-        # self.iface.addPluginToMenu("&ModCheck", self.check_1d2dWidth_action)
+        # 1D2D width check
+        self.check_1d2dWidth_action = QAction(icon, "Check 1D-2D width", self.iface.mainWindow())
+        self.check_1d2dWidth_action.triggered.connect(self.check_1d2d_width)
+        self.iface.addPluginToMenu("&ModCheck", self.check_1d2dWidth_action)
         
         # FMP / TUFLOW default variables check
         self.get_runsummary_action = QAction(icon, "Run variables and summary", self.iface.mainWindow())
@@ -193,7 +194,7 @@ class Menu:
         self.iface.removePluginMenu("&ModCheck", self.help_page_action)
         # self.iface.removePluginMenu("&ModCheck", self.model_assessment_action)
         self.iface.removePluginMenu("&ModCheck", self.check_fmptuflow_chainage_action)
-        # self.iface.removePluginMenu("&ModCheck", self.check_1d2dWidth_action)
+        self.iface.removePluginMenu("&ModCheck", self.check_1d2dWidth_action)
         self.iface.removePluginMenu("&ModCheck", self.get_runsummary_action)
         self.iface.removePluginMenu("&ModCheck", self.check_fmpsections_action)
         # self.iface.removePluginMenu("&ModCheck", self.check_fmprefh_action)
@@ -219,8 +220,8 @@ class Menu:
     def check_fmptuflow_chainage(self):
         self.launchDialog('FMP_TUFLOW_Chainage')
     
-    # def check_1d2d_width(self):
-    #     self.launchDialog('FMP_TUFLOW_Width_Check')
+    def check_1d2d_width(self):
+        self.launchDialog('FMP_TUFLOW_Width_Check')
     
     def check_fmp_sections(self):
         self.launchDialog('FMP_Section_Check')

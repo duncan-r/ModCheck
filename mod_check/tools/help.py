@@ -95,59 +95,59 @@ select whichever tables you would like to export the results for.
 
 """
 
-# CHECK_WIDTH = """
-# Check 1D-2D Width allows you to compare the Flood Modeller 1D river section width
-# with the width - between the HX lines - at the 1D node locations in the TUFLOW model.
-#
-# Select an FMP .dat file, select the TUFLOW 1d_nodes layer, select the TUFLOW layer
-# containing the CN lines, set the DW Tolerance value, and click the Check 1D-2D Widths button.
-#
-# The DW Tolerance value sets the limit at which a difference in the FMP and TUFLOW 
-# width values is considered acceptable. It is best to base this value on what you think
-# will be acceptable based on the cell size used in the model (a 5m grid may mean that
-# a variation in width of up to 5m won't make any difference, for example). Any 
-# differences less than the tolerance will not be flagged as "FAIL" in the Failed table.
-#
-# Once the model files have been analysed the Outputs tables will be populated with the 
-# results. There are two tables:
-#
-# - Failed: A summary of all of the FMP sections that have an active width with a
-#   difference greater than the tolerance when compared to the 2D widths; these will
-#   be given a "FAIL" status. If an FMP node could not be found in the 2D model it 
-#   will be given a "MISSING" status. If a node only has a single CN line (so the
-#   width doesn't make any sense / can't be calculated) it will be given a "SINGLE_CN" status.
-#
-# - All: A summary of all of the FMP nodes and the comparison widths, regardless of 
-#   whether they passed or failed the check.
-#
-# The results of the check can be exported to a csv file with the Export Results button.
-# If you tick the Create failed nodes file? checkbox a second csv file that has the same
-# name as the first with "_failed" appended to it will be created. This file will 
-# include only the details of the FMP sections that failed the check.
-#
-# You can bring up a menu by right-clicking on a table row in the outputs and then
-# select "Locate Section" to view the location of a failed section. This will 
-# select the 1D node that failed, re-centre and zoom the map window to that location.
-#
-# The check works by calculating the active width of the river sections in the FMP
-# model - the non deactivated part of the section - and comparing it to the
-# distance between the end points of the CN lines in the TUFLOW model; the cartesian
-# distance between the two polyline nodes that are furthest away from each other.
-# Interpolate section widths are calculated based on the width of the two nearest
-# river sections and the position (chainage) of the interpolate between them. This is
-# essentially just a straight line calculation of width over distance.
-#
-# Multipe Node / CN line layers:
-# If the model includes multiple nodes layers or multiple HX/CN line layers you
-# may want to combine the layers first, in order to avoid a lot of "MISSING" node
-# warnings. The easiest way to do this is with the "Toolbox" under the "Processing"
-# menu on the main QGIS menu bar. look under the "Vector general" tools and you
-# will find the "Merge vector layers" tool; use this to create two layers containing
-# all of the nodes in one and the cn lines in the other. At some point in the 
-# future I'll add a way to automatically combine the layers for checking, but
-# for the timebeing you'll need to do it manually.
-#
-# """
+CHECK_WIDTH = """
+Check 1D-2D Width allows you to compare the Flood Modeller 1D river section width
+with the width - between the HX lines - at the 1D node locations in the TUFLOW model.
+
+Select an FMP .dat file, select the TUFLOW 1d_nodes layer, select the TUFLOW layer
+containing the CN lines, set the DW Tolerance value, and click the Check 1D-2D Widths button.
+
+The DW Tolerance value sets the limit at which a difference in the FMP and TUFLOW 
+width values is considered acceptable. It is best to base this value on what you think
+will be acceptable based on the cell size used in the model (a 5m grid may mean that
+a variation in width of up to 5m won't make any difference, for example). Any 
+differences less than the tolerance will not be flagged as "FAIL" in the Failed table.
+
+Once the model files have been analysed the Outputs tables will be populated with the 
+results. There are two tables:
+
+- Failed: A summary of all of the FMP sections that have an active width with a
+  difference greater than the tolerance when compared to the 2D widths; these will
+  be given a "FAIL" status. If an FMP node could not be found in the 2D model it 
+  will be given a "MISSING" status. If a node only has a single CN line (so the
+  width doesn't make any sense / can't be calculated) it will be given a "SINGLE_CN" status.
+
+- All: A summary of all of the FMP nodes and the comparison widths, regardless of 
+  whether they passed or failed the check.
+
+The results of the check can be exported to a csv file with the Export Results button.
+If you tick the Create failed nodes file? checkbox a second csv file that has the same
+name as the first with "_failed" appended to it will be created. This file will 
+include only the details of the FMP sections that failed the check.
+
+You can bring up a menu by right-clicking on a table row in the outputs and then
+select "Locate Section" to view the location of a failed section. This will 
+select the 1D node that failed, re-centre and zoom the map window to that location.
+
+The check works by calculating the active width of the river sections in the FMP
+model - the non deactivated part of the section - and comparing it to the
+distance between the end points of the CN lines in the TUFLOW model; the cartesian
+distance between the two polyline nodes that are furthest away from each other.
+Interpolate section widths are calculated based on the width of the two nearest
+river sections and the position (chainage) of the interpolate between them. This is
+essentially just a straight line calculation of width over distance.
+
+Multipe Node / CN line layers:
+If the model includes multiple nodes layers or multiple HX/CN line layers you
+may want to combine the layers first, in order to avoid a lot of "MISSING" node
+warnings. The easiest way to do this is with the "Toolbox" under the "Processing"
+menu on the main QGIS menu bar. look under the "Vector general" tools and you
+will find the "Merge vector layers" tool; use this to create two layers containing
+all of the nodes in one and the cn lines in the other. At some point in the 
+future I'll add a way to automatically combine the layers for checking, but
+for the timebeing you'll need to do it manually.
+
+"""
 
 VARIABLES_SUMMARY = """
 Run variables and summary allows you to review the 1D and 2D FMP and TUFLOW run
@@ -593,7 +593,7 @@ HELP_LOOKUP = {
     'Overview': OVERVIEW,
     'APIs': APIS,
     'Check Chainage': CHECK_CHAINAGE,
-    # 'Check Width': CHECK_WIDTH,
+    'Check Width': CHECK_WIDTH,
     'Run Variables Summary': VARIABLES_SUMMARY,
     'Check FMP Sections': FMP_SECTIONS,
     'ReFH Check': REFH_CHECK,
