@@ -4,11 +4,11 @@
 
 [general]
 name=ModCheck
-qgisMinimumVersion=3.0
+qgisMinimumVersion=3.3
 description=Review, interrogation and assessment tools for hydraulic models
-version=0.1
+version=0.2
 author=Duncan Runnacles
-email=info@ermeviewenvironmental.co.uk
+email=duncan.runnacles@edenvaleyoung.com
 
 about=Suite of tools for reviewing and assessing hydraulic models such as FMP and TuFLOW.
 
@@ -29,7 +29,7 @@ homepage=http://homepage
 category=Plugins
 icon=icon.png
 # experimental flag
-experimental=True
+experimental=False
 
 # deprecated flag (applies to the whole plugin, not just a single version)
 deprecated=False
