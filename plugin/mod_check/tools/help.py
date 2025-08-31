@@ -333,52 +333,51 @@ of +-1%; the recommended tolerance for CME.
 The rate of change in volume (dVol) is graphed on the secondary (right) y axis.
 """
 
-# CHECK_FMP_STABILITY = """
-# (BETA) Autocheck for FMP stage/flow time series instabilities.
-#
-# Generate, or load existing, TabularCSV result outputs from an FMP model and plot
-# the time series data. Sections are validated to try and identify time series that
-# show indications of instability within the series.
-#
-#
-# Converting results (Dat and Results tab):
-# - Set the FMP .dat file location.
-# - Select the .zzn results file you want to check.
-# - Set the location of the FMP TabularCSV.exe file. The default installation folder
-#   is set by default, but can be changed if it's stored elsewhere.
-# - Set the validation series to either "Stage" or "Flow".
-# - Click the "Load Results" button.
-# - The binary results data will be converted to csv format and the data loaded below.
-#
-# Loading existing results (Existing Results tab):
-# - Optionally set the FMP .dat file location.
-# - Choose the TabularCSV converted results for stage and flow that you want to load.
-# - Set the validation series to either "Stage" or "Flow".
-# - Click the "Load Results" button.
-# - The data will be loaded below.
-#
-# The results will be loaded into two lists, "All Sections" and "Failed Sections". The
-# sections that were identified as potentially being unstable are added to the "Failed 
-# Sections" list for quick identification. Clicking on a section ID in either list will
-# show the stage and flow time series results in the left graph. If a .dat file has been
-# selected and the results node ID is found in the .dat file (currently only checks
-# river units) the cross section will be displayed on the right side graph.
-# The stage elevation of the results at different timesteps can be seen by altering the
-# "Timestep" slider above the graphs. The time will show on the stage/flow graph and the
-# stage elevation at that time will show on the cross section.
-#
-#
-# The stability validation algorithm uses a comparison of the 1st and 2nd derivates of
-# the time series to try and determine the rate of change against a tolerance
-# ( abs(dy2) > (abs(dy) * TOLERANCE) ) to identify the presense of instabilites. This
-# is applied to a smoothed version of the time series over a time window to try and 
-# reduce the impact of minor localised changes. A tolerance of 1.5 and a time window of 0.5
-# hours are used.
-# This approach does have a tendency to identify false-positives, although usually they are
-# caused by sudden, steep changes in the hydrograph. Reducing the sensitivity appears to
-# result in missing issues, so this is preferred. Hopefully further testing will aim to
-# improve the consistency of the results.
-# """
+CHECK_FMP_STABILITY = """
+(BETA) Autocheck for FMP stage/flow time series instabilities.
+
+Generate stage and flow result outputs from an FMP model and plot the time series data. 
+Sections are validated to try and identify time series that show indications of 
+instability within the series.
+
+Converting results (Dat and Results tab):
+- Set the FMP .dat file location (optional).
+- Select the .zzn results file you want to check.
+- Set the validation series to either "Stage" or "Flow".
+- Click the "Load Results" button.
+- The binary results data will be loaded into time series for viewing.
+
+The instability checks can take a while for larger models. Progress is shown via a
+progress bar next to the "Load Results" button. Validation can be taken against
+either the Stage or Flow results. Changing the option in the dropdown box will result
+in the validation being run against the chosen series.
+
+The results will be loaded into two lists, "All Sections" and "Failed Sections". The
+sections that were identified as potentially being unstable are added to the "Failed 
+Sections" list for quick identification. Clicking on a section ID in either list will
+show the stage and flow time series results in the left graph. If a .dat file has been
+selected and the results node ID is found in the .dat file (currently only checks
+river units) the cross section will be displayed on the right side graph.
+The stage elevation of the results at different timesteps can be seen by altering the
+"Timestep" slider above the graphs. The time will show on the stage/flow graph and the
+stage elevation at that time will show on the cross section.
+
+Click on the "<" or ">" buttons to increment or decrement by a single timestep, 
+respectively. Click to the left or right of the slider button to incremement by 20 
+timesteps. Drag the slider to the position required for larger movement.
+
+Bridges and spills will be added to the cross section viewer soon.
+
+The stability validation algorithm uses a comparison of the 1st and 2nd derivates of
+the time series to try and determine the rate of change against a tolerance
+( abs(dy2) > (abs(dy) * TOLERANCE) ) to identify the presense of instabilites. This
+is applied to a smoothed version of the time series over a moving window to try and 
+reduce the impact of minor localised changes. A tolerance of 1.5 and a time window of 0.5
+hours are used.
+This approach does have a tendency to identify false-positives, although usually they are
+caused by sudden, steep changes in the hydrograph. Reducing the sensitivity appears to
+result in missing issues, so this is preferred. 
+"""
 
 FILE_AUDIT = """
 #######################################################
@@ -598,7 +597,7 @@ HELP_LOOKUP = {
     'Check FMP Sections': FMP_SECTIONS,
     'ReFH Check': REFH_CHECK,
     'Check TUFLOW MB': CHECK_TUFLOW_MB,
-    # 'Check FMP Stability': CHECK_FMP_STABILITY,
+    'Check FMP Stability': CHECK_FMP_STABILITY,
     'Model File Audit': FILE_AUDIT,
     # 'NRFA Station Viewer': NRFA_STATIONS,
 }

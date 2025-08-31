@@ -350,7 +350,7 @@ class FmpStabilityGraphicsView(QGraphicsView):
         self.axes.set_xlabel('Time (h)')
         fail_times = ''
         if derivs['status'] == 'Failed':
-            fail_times = '(First fail: {} - Last Fail: {})'.format(derivs['fail_times'][0], derivs['fail_times'][-1])
+            fail_times = '(First fail: {:.3f} - Last Fail: {:.3f})'.format(derivs['fail_times'][0], derivs['fail_times'][-1])
         status_text = '{} {}'.format(node_name, fail_times) #'Dy2 Fail = {}   :   {}'.format(derivs['status'], fail_times)
         self.axes.set_title(status_text)
         self.axes.set_ylabel('Stage (mAOD)')
@@ -365,7 +365,7 @@ class FmpStabilityGraphicsView(QGraphicsView):
         
         time_x = [timestep, timestep]
         time_y = [min(results[0]), max(results[0])]
-        time_plot = self.axes.plot(time_x, time_y, '-k')
+        time_plot = self.axes.plot(time_x, time_y, '-k', alpha=0.5, dashes=[6,2])
 
         # User doesn't need derivative graphs, just for debugging
         if show_derivs:
