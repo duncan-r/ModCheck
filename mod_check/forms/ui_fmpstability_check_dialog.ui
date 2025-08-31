@@ -30,45 +30,45 @@
        <string>Dat and Results</string>
       </attribute>
       <layout class="QGridLayout" name="gridLayout">
-       <item row="1" column="1">
-        <widget class="QgsFileWidget" name="datResultsFileWidget">
-         <property name="filter">
-          <string>*.zzn</string>
+       <item row="3" column="1">
+        <widget class="QProgressBar" name="loadResultsProgressBar">
+         <property name="value">
+          <number>0</number>
          </property>
         </widget>
        </item>
-       <item row="1" column="0">
+       <item row="0" column="0">
         <widget class="QLabel" name="label_3">
          <property name="text">
           <string>FMP .zzn results</string>
          </property>
         </widget>
        </item>
-       <item row="0" column="0">
+       <item row="1" column="0">
         <widget class="QLabel" name="label_2">
          <property name="text">
-          <string>FMP .dat file</string>
+          <string>FMP .dat file (optional)</string>
          </property>
         </widget>
        </item>
-       <item row="2" column="0">
+       <item row="3" column="0">
         <widget class="QPushButton" name="reloadDatAndResultsBtn">
          <property name="text">
           <string>Load Results</string>
          </property>
         </widget>
        </item>
-       <item row="0" column="1">
+       <item row="1" column="1">
         <widget class="QgsFileWidget" name="datFileWidget">
          <property name="filter">
           <string>*.dat</string>
          </property>
         </widget>
        </item>
-       <item row="2" column="1">
-        <widget class="QProgressBar" name="loadResultsProgressBar">
-         <property name="value">
-          <number>0</number>
+       <item row="0" column="1">
+        <widget class="QgsFileWidget" name="datResultsFileWidget">
+         <property name="filter">
+          <string>*.zzn</string>
          </property>
         </widget>
        </item>
@@ -86,13 +86,6 @@
          </property>
          <property name="filter">
           <string>*.dat</string>
-         </property>
-        </widget>
-       </item>
-       <item row="3" column="0">
-        <widget class="QPushButton" name="loadExistingResultsBtn">
-         <property name="text">
-          <string>Load Results</string>
          </property>
         </widget>
        </item>
@@ -131,6 +124,13 @@
          </property>
          <property name="text">
           <string>FMP .dat file (optional)</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="2">
+        <widget class="QPushButton" name="loadExistingResultsBtn">
+         <property name="text">
+          <string>Load Results</string>
          </property>
         </widget>
        </item>
@@ -216,6 +216,9 @@
      </item>
      <item>
       <widget class="QSlider" name="timestepSlider">
+       <property name="pageStep">
+        <number>20</number>
+       </property>
        <property name="orientation">
         <enum>Qt::Horizontal</enum>
        </property>
