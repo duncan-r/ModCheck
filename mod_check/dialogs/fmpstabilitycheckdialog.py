@@ -10,13 +10,12 @@ from qgis.gui import QgsMessageBar, QgsFileWidget
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
 from .dialogbase import DialogBase
-from ..forms import ui_chainage_calculator_dialog as chaincalc_ui
 from ..forms import ui_fmpstability_check_dialog as fmpstability_ui
 from ..tools import help, globaltools
 from ..tools import fmpstabilitycheck as fmps_check
 from ..tools import settings as mrt_settings
 
-from .mywidgets import graphdialogs as graphs
+from ..mywidgets import graphdialogs as graphs
 
 DATA_DIR = './data'
 TEMP_DIR = './temp'
@@ -31,14 +30,10 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
         self.default_tabcsv_path = "C:/Program Files/Flood Modeller/bin/TabularCSV.exe"
 
         self.tab_csv_path = "C:/Program Files/Flood Modeller/bin/TabularCSV.exe"
-        self.working_dir = ""#"C:/Users/ermev/Documents/Programming/Test_Data/QGIS_Plugin/FMP_Stability"
-        self.dat_path = ""#"C:/Users/ermev/OneDrive/Documents/Main/Company/1_Projects/2_Open/P2009001_CherwellThame_ModelReview/Technical/Hydraulics/Models/River_Cherwell/FMP/DAT/108500_FMP_BAS_DES_001.dat"
-        self.results_path = ""#"C:/Users/ermev/OneDrive/Documents/Main/Company/1_Projects/2_Open/P2009001_CherwellThame_ModelReview/Technical/Hydraulics/Models/River_Cherwell/FMP/RESULTS/001/BAS/1000/108500_IST_BAS_DES_1000_001"
-#         self.stab_check = None
-        self.flow_data = None
-        self.times = None
-        self.nodes = None
-        self.sections = None
+        self.working_dir = ""
+        self.dat_path = ""
+        self.results_path = ""
+        self.results = None
         self.timestep_press_active = False
         self.graph_view = graphs.FmpStabilityGraphicsView()
         self.graph_toolbar = NavigationToolbar(self.graph_view.canvas, self)
@@ -48,18 +43,24 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
         self.setDefaultSettings()
         self.datFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'dat_file'))
         self.datResultsFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'results_file'))
-        self.datTabularCsvFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'tabcsv_file'))
-        self.existingResultsDatFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'dat_file'))
-        self.flowResultsFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'flow_results'))
-        self.stageResultsFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'stage_results'))
-
         self.reloadDatAndResultsBtn.clicked.connect(self.loadDatResults)
-        self.loadExistingResultsBtn.clicked.connect(self.loadExistingResults)
+        self.validationSeriesCbox.currentTextChanged.connect(lambda s: self.validationSeriesChanged(s))
+        
+        self.fileSelectionTabWidget.setCurrentIndex(0) # Make sure we're on the usable tab
+        self.fileSelectionTabWidget.removeTab(1)
+        # Not currently used
+        # self.existingResultsDatFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'dat_file'))
+        # self.loadExistingResultsBtn.clicked.connect(self.loadExistingResults)
+        # self.flowResultsFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'flow_results'))
+        # self.stageResultsFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'stage_results'))
+
         self.allSeriesList.currentRowChanged.connect(lambda i: self.updateGraph(i, 'all'))
         self.failedSeriesList.currentRowChanged.connect(lambda i: self.updateGraph(i, 'fail'))
         self.timestepSlider.valueChanged.connect(self.updateTimestepSlider)
         self.timestepSlider.sliderPressed.connect(self.timestepSliderPressed)
         self.timestepSlider.sliderReleased.connect(self.timestepSliderReleased)
+        self.timestepIncButton.clicked.connect(lambda i: self.timestepButtonClicked(i, 'inc'))
+        self.timestepDecButton.clicked.connect(lambda i: self.timestepButtonClicked(i, 'dec'))
 
         self.graphLayout.addWidget(self.graph_view)
         self.graphLayout.addWidget(self.graph_toolbar)
@@ -84,12 +85,14 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
             'stage_results', './temp')
         )
 
-#         default_tabcsv = self.default_tabcsv_path if os.path.exists(self.default_tabcsv_path) else ''
-        tabset = mrt_settings.loadProjectSetting('tabcsv_file', self.default_tabcsv_path)
-        if os.path.exists(tabset):
-            self.datTabularCsvFileWidget.setFilePath(tabset)
-            mrt_settings.saveProjectSetting('tabcsv_file', tabset)
-
+    def timestepButtonClicked(self, x, value):
+        if value == 'inc':
+            self.timestepSlider.setValue(self.timestepSlider.value() + 1)
+        elif value == 'dec':
+            self.timestepSlider.setValue(self.timestepSlider.value() - 1)
+        else:
+            return
+        
     def timestepSliderPressed(self):
         self.timestep_press_active = True
 
@@ -105,123 +108,109 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
     def loadDatResults(self):
         dat_path = mrt_settings.loadProjectSetting('dat_file', None)
         results_path = mrt_settings.loadProjectSetting('results_file', None)
-        tabcsv_path = mrt_settings.loadProjectSetting('tabcsv_file', None)
 
-        if dat_path is None or results_path is None or tabcsv_path is None:
+        if results_path is None:
             QMessageBox.warning(
                 self, "Required file path missing", 
-                "Please set .dat, results and TabularCsv paths first."
+                "Please set .dat and results paths first."
             )
             return
         msg = ''
-        if not os.path.exists(dat_path):
-            msg = 'FMP .dat file path does not exists'
         if not os.path.exists(results_path + '.zzn'):
             msg = 'FMP results file path does not exists (or does not contain .zzn unsteady results)'
-        if not os.path.exists(tabcsv_path):
-            msg = 'TabularCsv.exe file path does not exists'
         if msg:
             QMessageBox.warning(self, "File path does not exist", msg)
             return
 
-        self.statusLabel.setText('Loading FMP .dat file...')
+        self.statusLabel.setText('Loading results...')
         QApplication.processEvents()
-#         self.stab_check = fmps_check.FmpStabilityCheck()
-        try:
-            self.sections, self.nodes = fmps_check.loadDatFile(dat_path)
-        except Exception as err:
-            QMessageBox.warning(self, "File Load Error", "Failed to load .dat file")
-            return
-
-        self.statusLabel.setText('Creating TabularCSV .tcf files...')
-        QApplication.processEvents()
-        tcs_stage, tcs_flow, save_paths = fmps_check.createTcsFile(
-            self.nodes, results_path
-        )
-
-        self.statusLabel.setText('Converting results with TabularCSV...')
-        QApplication.processEvents()
-        stdout, return_code = fmps_check.convertResults(
-            tabcsv_path, tcs_stage, results_path
-        )
-        stdout, return_code = fmps_check.convertResults(
-            tabcsv_path, tcs_flow, results_path + '.zzn'
-        )
-
-        flow_path = results_path + '_modcheck_Flow.csv'
-#         stage_path = self.results_path + '_Stage.csv'
-        stage_path = results_path + '_modcheck_Stage.csv'
-
-        self.statusLabel.setText('Loading flow series results...')
-        QApplication.processEvents()
-        self.flow_data, self.times = fmps_check.loadResults(
-#             len(self.nodes), save_paths['flow']
-            len(self.nodes), flow_path
-        )
-        self.statusLabel.setText('Loading stage series results...')
-        QApplication.processEvents()
-        self.stage_data, self.times = fmps_check.loadResults(
-#             len(self.nodes), save_paths['stage']
-            len(self.nodes), stage_path
-        )
-
-        series_check_type = self.validationSeriesCbox.currentText()
-        self.statusLabel.setText('Running stability check...')
-        QApplication.processEvents()
-        status = self.checkStability(series_check_type)
-
-        self.setupNodeLists(self.failed_nodes)
-        self.updateGraph(0, 'all')
-        self.stageResultsFileWidget.setFilePath(stage_path)
-        self.flowResultsFileWidget.setFilePath(flow_path)
-        self.fileSelectionTabWidget.setCurrentIndex(1)
-        self.statusLabel.setText('Results load complete')
-
-    def loadExistingResults(self):
-        dat_path = mrt_settings.loadProjectSetting('dat_file', None)
-        flow_path = mrt_settings.loadProjectSetting('flow_results', None)
-        stage_path = mrt_settings.loadProjectSetting('stage_results', None)
-
-        # ~DEBUG~
-#         results_path = "C:/Users/ermev/OneDrive/Documents/Main/Company/1_Projects/2_Open/P2009001_CherwellThame_ModelReview/Technical/Hydraulics/Models/River_Cherwell/FMP/Results/001/BAS/108500_IST_BAS_DES_1000_001"
-#         flow_path = results_path + "_Flow_Altered.csv"
-#         stage_path = results_path + "_Stage_Altered.csv"
-#         results_path = "C:/Users/ermev/OneDrive/Documents/Main/Company/1_Projects/2_Open/P2009001_CherwellThame_ModelReview/Technical/Hydraulics/Models/River_Cherwell/FMP/Results/001/BAS/1000/108500_IST_BAS_DES_1000_001_"
-#         flow_path = results_path + "Flow_1000Yrs.csv"
-#         stage_path = results_path + "Stage_1000Yrs.csv"
-#         flow_path = results_path + "Flow_10000Yrs.csv"
-#         stage_path = results_path + "Stage_10000Yrs.csv"
-
-
-#         self.stab_check = fmps_check.FmpStabilityCheck()
-        if os.path.exists(dat_path):
+        path_with_ext = results_path + '.zzn'
+        self.results = fmps_check.convertResults(path_with_ext)
+        
+        if dat_path and os.path.exists(dat_path):
             self.statusLabel.setText('Loading FMP .dat file...')
             QApplication.processEvents()
-            self.sections, nodes = fmps_check.loadDatFile(dat_path)
-
-        self.statusLabel.setText('Loading Flow results...')
-        QApplication.processEvents()
-        self.flow_data, self.times, self.nodes, result_type = fmps_check.loadExistingResults(flow_path)
-        self.statusLabel.setText('Loading Stage results...')
-        QApplication.processEvents()
-        self.stage_data, self.times, self.nodes, result_type = fmps_check.loadExistingResults(stage_path)
+            try:
+                dat = fmps_check.loadDatFile(dat_path)
+                self.results.dat = dat
+            except Exception as err:
+                self.results._dat = None
+                QMessageBox.warning(self, "File Load Error", "Failed to load .dat file - series results can still be viewed")
 
         series_check_type = self.validationSeriesCbox.currentText()
-        self.statusLabel.setText('Running stability check...')
+        self.statusLabel.setText(f'Running stability check for {series_check_type}...')
         QApplication.processEvents()
         status = self.checkStability(series_check_type)
 
-        self.setupNodeLists(self.failed_nodes)
+        self.setupNodeLists(self.results.failed_nodes)
         self.updateGraph(0, 'all')
+        # self.stageResultsFileWidget.setFilePath(stage_path)
+        # self.flowResultsFileWidget.setFilePath(flow_path)
+        # self.fileSelectionTabWidget.setCurrentIndex(1) # NOTE: don't use while disabling tab in __init__
         self.statusLabel.setText('Results load complete')
+        
+    def validationSeriesChanged(self, text):
+        if not self.results:
+            return
+        
+        series_check_type = self.validationSeriesCbox.currentText()
+        self.statusLabel.setText(f'Running stability check for {series_check_type}...')
+        QApplication.processEvents()
+        status = self.checkStability(series_check_type)
+
+        self.setupNodeLists(self.results.failed_nodes)
+        self.updateGraph(0, 'all')
+        # self.fileSelectionTabWidget.setCurrentIndex(1) # NOTE: don't use while disabling tab in __init__
+        self.statusLabel.setText('Stability check complete')
+
+#     def loadExistingResults(self):
+#         dat_path = mrt_settings.loadProjectSetting('dat_file', None)
+#         flow_path = mrt_settings.loadProjectSetting('flow_results', None)
+#         stage_path = mrt_settings.loadProjectSetting('stage_results', None)
+#
+#         # ~DEBUG~
+# #         results_path = "C:/Users/ermev/OneDrive/Documents/Main/Company/1_Projects/2_Open/P2009001_CherwellThame_ModelReview/Technical/Hydraulics/Models/River_Cherwell/FMP/Results/001/BAS/108500_IST_BAS_DES_1000_001"
+# #         flow_path = results_path + "_Flow_Altered.csv"
+# #         stage_path = results_path + "_Stage_Altered.csv"
+# #         results_path = "C:/Users/ermev/OneDrive/Documents/Main/Company/1_Projects/2_Open/P2009001_CherwellThame_ModelReview/Technical/Hydraulics/Models/River_Cherwell/FMP/Results/001/BAS/1000/108500_IST_BAS_DES_1000_001_"
+# #         flow_path = results_path + "Flow_1000Yrs.csv"
+# #         stage_path = results_path + "Stage_1000Yrs.csv"
+# #         flow_path = results_path + "Flow_10000Yrs.csv"
+# #         stage_path = results_path + "Stage_10000Yrs.csv"
+#
+#
+# #         self.stab_check = fmps_check.FmpStabilityCheck()
+#         if os.path.exists(dat_path):
+#             self.statusLabel.setText('Loading FMP .dat file...')
+#             QApplication.processEvents()
+#             self.results.sections, nodes = fmps_check.loadDatFile(dat_path)
+#
+#         self.statusLabel.setText('Loading results...')
+#         QApplication.processEvents()
+#         # self.flow_data, self.times, self.nodes, result_type = fmps_check.loadExistingResults(flow_path)
+#         self.results = fmps_check.loadExistingResults(stage_path)
+#
+#         # self.statusLabel.setText('Loading Stage results...')
+#         # QApplication.processEvents()
+#         # self.stage_data, self.times, self.nodes, result_type = fmps_check.loadExistingResults(stage_path)
+#         # self.results = fmps_check.loadExistingResults(stage_path)
+#
+#         series_check_type = self.validationSeriesCbox.currentText()
+#         self.statusLabel.setText('Running stability check...')
+#         QApplication.processEvents()
+#         status = self.checkStability(series_check_type)
+#
+#         self.setupNodeLists(self.results.failed_nodes)
+#         self.updateGraph(0, 'all')
+#         self.statusLabel.setText('Results load complete')
 
     def setupNodeLists(self, failed_nodes):
         self.allSeriesList.clear()
         self.failedSeriesList.clear()
-        self.allSeriesList.addItems(self.nodes)
+        self.allSeriesList.addItems(self.results.nodes)
         for f in failed_nodes:
             self.failedSeriesList.addItem(f[0])
-        self.timestepSlider.setMaximum(len(self.times))
+        self.timestepSlider.setMaximum(len(self.results.times))
 
     def updateTimestepSlider(self, val):
         if self.timestep_press_active:
@@ -230,35 +219,33 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
         self.updateGraph(node_index, 'all')
 
     def updateGraph(self, node_index, caller):
-        if caller == 'fail':
-            node_index = self.failed_nodes[node_index][1]
+        if caller == 'fail' and node_index >= 0:
+            node_index = self.results.failed_nodes[node_index][1]
             self.allSeriesList.blockSignals(True)
             self.allSeriesList.setCurrentRow(node_index)
             self.allSeriesList.blockSignals(False)
 
         series_check_type = self.validationSeriesCbox.currentText()
-        node_name = self.nodes[node_index]
+        node_name = self.results.nodes[node_index]
+        node_type = self.results.unit_type(node_name)
         self.nodeNameLabel.setText(node_name)
+        self.nodeTypeLabel.setText(node_type)
 
         timestep_idx = self.timestepSlider.value()
-        timestep = self.times[timestep_idx]
-        time_stage = self.stage_data[timestep_idx,node_index]
-        self.timestepValueLabel.setText(str(timestep))
-#         geom = None
-#         if self.sections is not None:
-#             geom = fmpstabilitycheck.loadGeometry(node_name, self.sections)
-
+        timestep = self.results.times[timestep_idx]
+        time_stage = self.results.stage.at[timestep, node_name]
+        self.timestepValueLabel.setText(str("{:.3f}".format(timestep)))
         self.graph_view.drawPlot(
-            self.times, [self.stage_data[:,node_index], self.flow_data[:,node_index]], 
-            self.derivs[node_index], timestep, series_type=series_check_type, 
+            self.results.times, [self.results.stage[node_name], self.results.flows[node_name]], 
+            self.results.derivs[node_index], timestep, series_type=series_check_type, 
             node_name=node_name,
         )
         self.updateGeomGraph(node_name, time_stage)
 
     def updateGeomGraph(self, node_name, time_stage):
         geom = None
-        if self.sections is not None:
-            geom = fmpstabilitycheck.loadGeometry(node_name, self.sections)
+        if self.results.dat is not None:
+            geom = fmps_check.loadGeometry(node_name, self.results.dat)
 
         if geom is None:
             self.geom_graph_view.clearPlot()
@@ -290,8 +277,12 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
             Should check to see if there's some way to avoid having to do so much 
             looping to get a reasonable result. This is caused by needing to 
             smooth the time series first.
+            Still think that an FFT would be better here?
         """
-
+        
+        self.loadResultsProgressBar.setMaximum(len(self.results.nodes))
+        self.loadResultsProgressBar.setValue(0)
+        # progress_inc = len(self.nodes) / 100
         TOL = 1.5
         SMOOTH_TIME_WINDOW = 0.5
         if series_type == 'Flow':
@@ -299,33 +290,35 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
         else:
             DY2_MIN_TOL = 0.2
 
-        DX = self.times[1] - self.times[0]
+        DX = self.results.save_interval
         node_fail = []
         fail = False
-        self.derivs = []
-        self.failed_nodes = []
-        for i, node in enumerate(self.nodes):
+        derivs = []
+        failed_nodes = []
+        for i, node in enumerate(self.results.nodes):
+            if i % 5 == 0:
+                self.loadResultsProgressBar.setValue(i)
 
             window_length = -1
             found_timewindow = False
             found_hourlength = False
-            for j, t in enumerate(self.times):
+            for j, t in enumerate(self.results.times):
                 if found_timewindow and found_hourlength:
                     break
 
-                if not found_timewindow and t - self.times[0] >= SMOOTH_TIME_WINDOW:
+                if not found_timewindow and t - self.results.times[0] >= SMOOTH_TIME_WINDOW:
                     window_length = j
                     found_timewindow = True
-                if t - self.times[0] >= 1:
+                if t - self.results.times[0] >= 1:
                     hour_length = j
                     found_hourlength = True
 
             new_series = []
             count = 0
             if series_type == 'Flow':
-                series = self.flow_data[:,i]
+                series = self.results.flows[node].to_numpy()
             else:
-                series = self.stage_data[:,i]
+                series = self.results.stage[node].to_numpy()
 
             for j, s in enumerate(series):                    
                 if j > window_length:
@@ -356,7 +349,7 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
 
             # Loop the 2nd derivative series and scan the window
             # for variations in 1st/2nd derivative change in relation
-            # to the tolerances devined above
+            # to the tolerances defined above
             for j, val in enumerate(dy2):
                 if j > hour_length:
 
@@ -371,13 +364,16 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
 
                     if (maxdy2 > DY2_MIN_TOL or mindy2 < (DY2_MIN_TOL * -1)) and abscheck:
                         status = 'Failed'
-                        fail_times.append(self.times[j])
+                        fail_times.append(round(self.results.times[j], 3))
 
             if status == 'Failed':
-                self.failed_nodes.append([node, i])
-            self.derivs.append({
+                failed_nodes.append([node, i])
+            derivs.append({
                 'dy2': dy2, 'f': new_series, 'dy': dy, 'status': status, 'fail_times': fail_times, 
             })
 
+        self.results.failed_nodes = failed_nodes
+        self.results.derivs = derivs
+        self.loadResultsProgressBar.setValue(0)
         return node_fail
 

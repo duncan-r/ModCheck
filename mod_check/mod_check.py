@@ -62,6 +62,7 @@ class ModCheck:
         # Declare instance attributes
         self.actions = []
         self.menu = self.tr(u'&ModCheck')
+        # self.fm_api = fm_api
 
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads

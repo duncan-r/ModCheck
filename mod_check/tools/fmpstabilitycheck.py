@@ -13,77 +13,17 @@ import sys
 import csv
 from pprint import pprint
 from PyQt5 import QtCore
-from subprocess import Popen, PIPE
+# from subprocess import Popen, PIPE
 import numpy as np
 
-from ship.utils.fileloaders import fileloader as fl
-from ship.utils import utilfunctions as uf
-from ship.fmp.datunits import ROW_DATA_TYPES as rdt
-
+# from ship.utils.fileloaders import fileloader as fl
+# from ship.fmp.datunits import ROW_DATA_TYPES as rdt
+from floodmodeller_api import DAT, ZZN
+from floodmodeller_api.to_from_json import to_json, from_json
 from ..tools import settings as mrt_settings
 
 
-class StabilityData():
-    
-    def __init__(self, temp_location='./temp'):
-        self.temp_location = temp_location
-        self.flow_data = None
-        self.stage_data = None
-        self.times = []
-        self.nodes = []
-        self.sections = None
-
-        self._tab_csv_path = "C:/Program Files/Flood Modeller/bin/TabularCSV.exe"
-        self._working_dir = ""
-        self._dat_path = ""
-        self._results_path = ""
-        
-    @property
-    def tab_csv_path(self):
-        self._tab_csv_path = mrt_settings.loadProjectSetting('dat_file', self.temp_location)
-        return self._tab_csv_path
-    
-    @tab_csv_path.setter
-    def tab_csv_path(self, value):
-        mrt_settings.saveProjectSetting('tabcsv_file', value)
-        self._tab_csv_path = value
-        
-    @property
-    def dat_path(self):
-        self._dat_path = mrt_settings.loadProjectSetting('dat_file', self.temp_location)
-        return self._dat_path
-    
-    @dat_path.setter
-    def dat_path(self, value):
-        mrt_settings.saveProjectSetting('dat_file', value)
-        self._dat_path = value
-        
-    @property
-    def results_path(self):
-        self._results_path = mrt_settings.loadProjectSetting('results_file', self.temp_location)
-        return self._results_path
-    
-    @results_path.setter
-    def results_path(self, value):
-        mrt_settings.saveProjectSetting('results_file', value)
-        self._results_path = value
-        
-#     @property
-#     def working_dir(self):
-#         self._working_dir = mrt_settings.loadProjectSetting(
-#             'working_dir', self.temp_location
-#         )
-#         return self._working_dir
-#     
-#     @working_dir.setter
-#     def working_dir(self, value):
-#         mrt_settings.saveProjectSetting('working_dir', value)
-#         self._working_dir = value
-
-        
-    
-
-def loadDatFile(self, dat_path):
+def loadDatFile(dat_path):
     """Load section data from an FMP .dat model file.
     
     Args:
@@ -96,98 +36,72 @@ def loadDatFile(self, dat_path):
     Raises:
         OSError - if file could not be loaded.
     """
-    file_loader = fl.FileLoader()
+    dat = None
     try:
-        model = file_loader.loadFile(dat_path)
+        dat = DAT(dat_path)
     except Exception as err:
         raise Exception('Failed to load FMP .dat file')
-    rivers = model.unitsByType('river')
-    nodes = []
-    for r in rivers:
-        nodes.append(r.name)
-    return rivers, nodes
+    
+    return dat
 
-
-def createTcsFile(self, section_names, results_path):
-    """Creates a .tcs file based on lsd values and writes it to file.
     
-    The .tcs file is used by the TabularCSV.exe application to convert the
-    results from binary into csv format. It contains a list of the section
-    names (nodes) to be included and other formatting details.
+class StabilityResults():
     
-    This function creates two, one for flow and one for stage.
-    
-    Args:
-        section_names(list): contain the names to be used.
+    def __init__(self, flows, stage, nodes, times, save_interval, timestep):
+        self.flows = flows
+        self.stage = stage
+        self.times = times
+        self.timestep = timestep
+        self.save_interval = save_interval
+        self.nodes = nodes
+        self.derivs = None
+        self.failed_nodes = None
+        self._dat = None
+        self.section_lookup = {}
         
-    Return:
-        tuple(str, str): the paths to the two files created (stage, flow).
+    def unit_type(self, node_name):
+        utype = 'Unknown'
+        try:
+            utype = self.section_lookup[node_name]
+        except KeyError:
+            pass
+
+        return utype
         
-    Raises:
-        OSError: if file cannot be written.
-    """
-    out_paths = {
-        'stage': results_path + '_modcheck_Stage.csv',
-        'flow': results_path + '_modcheck_Flow.csv',
-    }
-    header_stage = ['[Data]',
-                    'OutputOption=0',
-                    'DataItem=2',
-                    'ColumnPerNode=2',
-                    'OutputTimeUnits=1',
-                    'MaxOverOutputInterval=0',
-                    '[Files]',
-                    'OutputFileName={}'.format(out_paths['stage']),
-                    '[Times]',
-                    'FirstOutputTimeID=-1',
-                    'LastOutputTimeID=-1',
-                    'OutputInterval=1',
-                    '[Nodes]'
-                   ]
-    header_flow = ['[Data]',
-                    'OutputOption=0',
-                    'DataItem=1',
-                    'ColumnPerNode=2',
-                    'OutputTimeUnits=1',
-                    'MaxOverOutputInterval=0',
-                    '[Files]',
-                    'OutputFileName={}'.format(out_paths['flow']),
-                    '[Times]',
-                    'FirstOutputTimeID=-1',
-                    'LastOutputTimeID=-1',
-                    'OutputInterval=1',
-                    '[Nodes]'
-                   ]
+    @property
+    def dat(self):
+        return self._dat
     
-    count = 1
-    data = []
-    for u in section_names:
-        data.append('Node' + str(count) + '=' + u)
-        count += 1
-    
-    header_stage.append('Count=' + str(count))
-    header_stage.extend(data)
-    header_flow.append('Count=' + str(count))
-    header_flow.extend(data)
-    
-    s = results_path + '_modcheck_stage.tcs'
-    f = results_path + '_modcheck_flow.tcs'
-    try:
-        with open(s, 'w') as outfile:
-            for line in header_stage:
-                outfile.write('{}\n'.format(line))
+    # TODO: Setter adding None value for some reason
+    # Don't know why. Check this again at some point
+    # def addDat(self, d):
+    @dat.setter
+    def dat(self, d):
+        if not isinstance(d, DAT):
+            return
+        self._dat = d
 
-        with open(f, 'w') as outfile:
-            for line in header_flow:
-                outfile.write('{}\n'.format(line))
+        ignored_types = ['COMMENT', 'JUNCTION', 'GENERAL']
+        for idx, unit in enumerate(self._dat._all_units):
+            unit_type = 'Unknown'
+            try:
+                unit_type = unit.unit
+            except TypeError:
+                continue
 
-    except OSError as err:
-        raise OSError('Unable to write .tcs files')
+            if unit_type in ignored_types or unit_type == 'UNSUPPORTED':
+                continue
+
+            unit_name = None
+            try:
+                unit_name = unit.name
+            except TypeError:
+                continue
+
+            self.section_lookup[unit_name] = unit_type
+            
         
-    return s, f, out_paths
-    
-
-def convertResults(self, tabular_path, tcs_path, results_path):
+def convertResults(results_path):
     """Call TabularCSV to convert binary results to CSV.
     
     Runs the FMP TabularCSV.exe tool in headless model to convert the
@@ -202,314 +116,33 @@ def convertResults(self, tabular_path, tcs_path, results_path):
         stdout(str): console output from the running the application.
         return_code(int): return code from the application.
     """
-    cmd = [tabular_path, '-silent', '-tcs', tcs_path, results_path]
-    p = Popen(cmd, stdout=PIPE, stderr=PIPE)
-    stdout, stderr= p.communicate()
-    return_code = p.returncode
+    zzn = ZZN(results_path)
+    save_interval = zzn.meta['save_int']
+    timestep = zzn.meta['dt']
+    nodes = zzn.meta['labels']
     
-    return stdout, return_code
+    flows = zzn.to_dataframe(variable='Flow', include_time=True)
+    levels = zzn.to_dataframe(variable='Stage', include_time=True)
+    times = list(flows.index)
+    results = StabilityResults(flows, levels, nodes, times, save_interval, timestep)
+    
+    return results 
 
 
-def loadResults(self, num_of_nodes, results_path):
-    """
-    """
-    """Loads the resuls.csv file created when converting from isis binary.
-
-    The conversion from the ISIS/FMP proprietary binary format creates a 
-    csv file with a particular setup. This loads the csv file into a more
-    usable data format for returning.
-    
-    Args:
-        num_of_nodes(int): number of nodes in the results file. This should
-            be found by reading the dat file.
-        result_path(str): location of the results.csv file.
-    
-    Return:
-        tuple(np.ndarry, list) - containing the loaded results. A 2D array with 
-            the nodes along the columns and time along the rows. Second value
-            is a list containg all of the time values.
-    
-    Raises:
-        IOError: if the file cannot be loaded.
-    """
-    results = None
-    times = []
+def loadGeometry(node_name, dat):
+    data = None
     try:
-        row_count = 0
-        count = 0
-        with open(results_path, 'r') as csvfile:
-            reader = csv.reader(csvfile, delimiter=',')
-            for row in reader:
-                
-                if count == 5:
-                    times = [float(i) for i in row[1:]]
-                
-                if count == 6:
-                    num_of_cols = len(row) - 1
-                    results = np.empty([num_of_cols, num_of_nodes], dtype=np.float32)
-                    results[:, row_count] = [float(i) for i in row[1:]]
-                    row_count += 1
-                
-                elif count > 6:
-                    results[:, row_count] = [float(i) for i in row[1:]]
-                    row_count += 1
-                
-                count += 1
-
-    except OSError as err:
-        raise OSError('Failed to read csv results at: {}'.format(results_path))
-#             logger.error('Unable to read csv results at: ' + result_path)
-    
-    return results, times
-        
-
-def loadExistingResults(results_path):
-    nodes = []
-    times = []
-    raw_results = []
-    results = None
-    times_horizontal = True
-    start_row = 1
-    result_type = 'Stage'
+        unit = dat.sections[node_name]
+        if unit.unit == 'RIVER':
+            data = unit.active_data
+    except KeyError:
+        return None
 
     try:
-        row_count = 0
-        count = 0
-        with open(results_path, 'r') as csvfile:
-            reader = csv.reader(csvfile, delimiter=',')
-            for row in reader:
-                if count == 1:
-                    if row[0] == 'Flow' or row[0] == 'Stage':
-                        start_row = 1
-                    else:
-                        start_row = 4
-                        
-                if count == start_row:
-                    if row[0] == 'Flow':
-                        result_type = 'Flow'
-                        
-                elif count == start_row + 1:
-                    if row[0] == 'Time (hr)':
-                        times_horizontal = False
-                        nodes = [i for i in row[1:]]
-                    else:
-                        times = [float(i) for i in row[1:]]
-                        
-                elif count > start_row + 1:
-                    if times_horizontal:
-                        nodes.append(row[0])
-                    else:
-                        times.append(float(row[0]))
-                        
-                    raw_results.append([float(i) for i in row[1:]])
-                    row_count += 1
-                count += 1
-    except OSError as err:
-        raise ('Failed to read csv results at: {}'.format(results_path))
-                
-    if times_horizontal:
-        results = np.array(raw_results).transpose()
-    else:
-        results = np.array(raw_results)
-        
-    return results, times, nodes, result_type
-        
-
-def loadGeometry(node_name, sections):
-    def loadRiver(section):
-        # DEBUG: Need to get deactivated section NOT whole section.
-        #        Potentially return both?
-        chain = section.row_data['main'].dataObjectAsList(rdt.CHAINAGE)
-        elev = section.row_data['main'].dataObjectAsList(rdt.ELEVATION)
-        deact = section.row_data['main'].dataObjectAsList(rdt.DEACTIVATION)
-        return (chain, elev)
-         
-    geom = None
-    for s in sections:
-        if s.name == node_name:
-            geom = loadRiver(s)
-    return geom
-
-
-# class FmpStabilityCheck(QtCore.QObject):
-#     
-#     def __init__(self):
-#         super().__init__()
-#         
-#     def loadDatFile(self, dat_path):
-#         """Load section data from an FMP .dat model file.
-#         
-#         Args:
-#             dat_path(str): path to the FMP .dat file.
-#         
-#         Return:
-#             list - RiverUnit's found in the .dat file.
-#             nodes - name of all of the RiverUnits in the file.
-#             
-#         Raises:
-#             OSError - if file could not be loaded.
-#         """
-#         file_loader = fl.FileLoader()
-#         try:
-#             model = file_loader.loadFile(dat_path)
-#         except Exception as err:
-#             raise Exception('Failed to load FMP .dat file')
-#         rivers = model.unitsByType('river')
-#         nodes = []
-#         for r in rivers:
-#             nodes.append(r.name)
-#         return rivers, nodes
-#         
-#     def createTcsFile(self, section_names, results_path):
-#         """Creates a .tcs file based on lsd values and writes it to file.
-#         
-#         The .tcs file is used by the TabularCSV.exe application to convert the
-#         results from binary into csv format. It contains a list of the section
-#         names (nodes) to be included and other formatting details.
-#         
-#         This function creates two, one for flow and one for stage.
-#         
-#         Args:
-#             section_names(list): contain the names to be used.
-#             
-#         Return:
-#             tuple(str, str): the paths to the two files created (stage, flow).
-#             
-#         Raises:
-#             OSError: if file cannot be written.
-#         """
-#         out_paths = {
-#             'stage': results_path + '_modcheck_Stage.csv',
-#             'flow': results_path + '_modcheck_Flow.csv',
-#         }
-#         header_stage = ['[Data]',
-#                         'OutputOption=0',
-#                         'DataItem=2',
-#                         'ColumnPerNode=2',
-#                         'OutputTimeUnits=1',
-#                         'MaxOverOutputInterval=0',
-#                         '[Files]',
-#                         'OutputFileName={}'.format(out_paths['stage']),
-#                         '[Times]',
-#                         'FirstOutputTimeID=-1',
-#                         'LastOutputTimeID=-1',
-#                         'OutputInterval=1',
-#                         '[Nodes]'
-#                        ]
-#         header_flow = ['[Data]',
-#                         'OutputOption=0',
-#                         'DataItem=1',
-#                         'ColumnPerNode=2',
-#                         'OutputTimeUnits=1',
-#                         'MaxOverOutputInterval=0',
-#                         '[Files]',
-#                         'OutputFileName={}'.format(out_paths['flow']),
-#                         '[Times]',
-#                         'FirstOutputTimeID=-1',
-#                         'LastOutputTimeID=-1',
-#                         'OutputInterval=1',
-#                         '[Nodes]'
-#                        ]
-#         
-#         count = 1
-#         data = []
-#         for u in section_names:
-#             data.append('Node' + str(count) + '=' + u)
-#             count += 1
-#         
-#         header_stage.append('Count=' + str(count))
-#         header_stage.extend(data)
-#         header_flow.append('Count=' + str(count))
-#         header_flow.extend(data)
-#         
-#         s = results_path + '_modcheck_stage.tcs'
-#         f = results_path + '_modcheck_flow.tcs'
-#         try:
-#             with open(s, 'w') as outfile:
-#                 for line in header_stage:
-#                     outfile.write('{}\n'.format(line))
-# 
-#             with open(f, 'w') as outfile:
-#                 for line in header_flow:
-#                     outfile.write('{}\n'.format(line))
-# 
-#         except OSError as err:
-#             raise OSError('Unable to write .tcs files')
-#             
-#         return s, f, out_paths
-#         
-#     def convertResults(self, tabular_path, tcs_path, results_path):
-#         """Call TabularCSV to convert binary results to CSV.
-#         
-#         Runs the FMP TabularCSV.exe tool in headless model to convert the
-#         proprietary FMP bindary results to a usable csv output.
-#     
-#         Args:
-#             tcs_path(str): path to the .tcs results output template.
-#             tabular_path(str): path to the TabularCSV.exe application.
-#             results(str): path to the binary results to convert.
-#         
-#         Return:
-#             stdout(str): console output from the running the application.
-#             return_code(int): return code from the application.
-#         """
-#         cmd = [tabular_path, '-silent', '-tcs', tcs_path, results_path]
-#         p = Popen(cmd, stdout=PIPE, stderr=PIPE)
-#         stdout, stderr= p.communicate()
-#         return_code = p.returncode
-#         
-#         return stdout, return_code
-#     
-#     def loadResults(self, num_of_nodes, results_path):
-#         """
-#         """
-#         """Loads the resuls.csv file created when converting from isis binary.
-#     
-#         The conversion from the ISIS/FMP proprietary binary format creates a 
-#         csv file with a particular setup. This loads the csv file into a more
-#         usable data format for returning.
-#         
-#         Args:
-#             num_of_nodes(int): number of nodes in the results file. This should
-#                 be found by reading the dat file.
-#             result_path(str): location of the results.csv file.
-#         
-#         Return:
-#             tuple(np.ndarry, list) - containing the loaded results. A 2D array with 
-#                 the nodes along the columns and time along the rows. Second value
-#                 is a list containg all of the time values.
-#         
-#         Raises:
-#             IOError: if the file cannot be loaded.
-#         """
-#         results = None
-#         times = []
-#         try:
-#             row_count = 0
-#             count = 0
-#             with open(results_path, 'r') as csvfile:
-#                 reader = csv.reader(csvfile, delimiter=',')
-#                 for row in reader:
-#                     
-#                     if count == 5:
-#                         times = [float(i) for i in row[1:]]
-#                     
-#                     if count == 6:
-#                         num_of_cols = len(row) - 1
-#                         results = np.empty([num_of_cols, num_of_nodes], dtype=np.float32)
-#                         results[:, row_count] = [float(i) for i in row[1:]]
-#                         row_count += 1
-#                     
-#                     elif count > 6:
-#                         results[:, row_count] = [float(i) for i in row[1:]]
-#                         row_count += 1
-#                     
-#                     count += 1
-# 
-#         except OSError as err:
-#             raise OSError('Failed to read csv results at: {}'.format(results_path))
-# #             logger.error('Unable to read csv results at: ' + result_path)
-#         
-#         return results, times
-#     
-# 
+        x = data['X'].to_numpy()
+        y = data['Y'].to_numpy()
+    except TypeError:
+        return None
+    
+    return (x, y)
+    

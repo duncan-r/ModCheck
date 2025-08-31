@@ -16,25 +16,24 @@
   <layout class="QVBoxLayout" name="verticalLayout" stretch="0,0,8,0">
    <item>
     <widget class="QTabWidget" name="fileSelectionTabWidget">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
      <property name="currentIndex">
-      <number>1</number>
+      <number>0</number>
+     </property>
+     <property name="tabBarAutoHide">
+      <bool>false</bool>
      </property>
      <widget class="QWidget" name="datAndResultsTab">
       <attribute name="title">
        <string>Dat and Results</string>
       </attribute>
       <layout class="QGridLayout" name="gridLayout">
-       <item row="0" column="0">
-        <widget class="QLabel" name="label_2">
-         <property name="text">
-          <string>FMP .dat file</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="1">
-        <widget class="QgsFileWidget" name="datFileWidget">
+       <item row="1" column="1">
+        <widget class="QgsFileWidget" name="datResultsFileWidget">
          <property name="filter">
-          <string>*.dat</string>
+          <string>*.zzn</string>
          </property>
         </widget>
        </item>
@@ -45,31 +44,31 @@
          </property>
         </widget>
        </item>
-       <item row="1" column="1">
-        <widget class="QgsFileWidget" name="datResultsFileWidget">
-         <property name="filter">
-          <string>*.zzn</string>
+       <item row="0" column="0">
+        <widget class="QLabel" name="label_2">
+         <property name="text">
+          <string>FMP .dat file</string>
          </property>
         </widget>
        </item>
        <item row="2" column="0">
-        <widget class="QLabel" name="label_4">
+        <widget class="QPushButton" name="reloadDatAndResultsBtn">
          <property name="text">
-          <string>TabuleCSV.exe</string>
+          <string>Load Results</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QgsFileWidget" name="datFileWidget">
+         <property name="filter">
+          <string>*.dat</string>
          </property>
         </widget>
        </item>
        <item row="2" column="1">
-        <widget class="QgsFileWidget" name="datTabularCsvFileWidget">
-         <property name="filter">
-          <string>*.exe</string>
-         </property>
-        </widget>
-       </item>
-       <item row="3" column="0">
-        <widget class="QPushButton" name="reloadDatAndResultsBtn">
-         <property name="text">
-          <string>Load Results</string>
+        <widget class="QProgressBar" name="loadResultsProgressBar">
+         <property name="value">
+          <number>0</number>
          </property>
         </widget>
        </item>
@@ -80,16 +79,6 @@
        <string>Existing Results</string>
       </attribute>
       <layout class="QGridLayout" name="gridLayout_2">
-       <item row="0" column="0">
-        <widget class="QLabel" name="label_7">
-         <property name="enabled">
-          <bool>true</bool>
-         </property>
-         <property name="text">
-          <string>FMP .dat file (optional)</string>
-         </property>
-        </widget>
-       </item>
        <item row="0" column="1">
         <widget class="QgsFileWidget" name="existingResultsDatFileWidget">
          <property name="enabled">
@@ -100,17 +89,10 @@
          </property>
         </widget>
        </item>
-       <item row="1" column="0">
-        <widget class="QLabel" name="label_5">
+       <item row="3" column="0">
+        <widget class="QPushButton" name="loadExistingResultsBtn">
          <property name="text">
-          <string>Stage Results</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="1">
-        <widget class="QgsFileWidget" name="stageResultsFileWidget">
-         <property name="filter">
-          <string>*.csv</string>
+          <string>Load Results</string>
          </property>
         </widget>
        </item>
@@ -121,6 +103,13 @@
          </property>
         </widget>
        </item>
+       <item row="1" column="1">
+        <widget class="QgsFileWidget" name="stageResultsFileWidget">
+         <property name="filter">
+          <string>*.csv</string>
+         </property>
+        </widget>
+       </item>
        <item row="2" column="1">
         <widget class="QgsFileWidget" name="flowResultsFileWidget">
          <property name="filter">
@@ -128,10 +117,20 @@
          </property>
         </widget>
        </item>
-       <item row="3" column="0">
-        <widget class="QPushButton" name="loadExistingResultsBtn">
+       <item row="1" column="0">
+        <widget class="QLabel" name="label_5">
          <property name="text">
-          <string>Load Results</string>
+          <string>Stage Results</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="0">
+        <widget class="QLabel" name="label_7">
+         <property name="enabled">
+          <bool>true</bool>
+         </property>
+         <property name="text">
+          <string>FMP .dat file (optional)</string>
          </property>
         </widget>
        </item>
@@ -190,6 +189,32 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="timestepDecButton">
+       <property name="maximumSize">
+        <size>
+         <width>30</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>&lt;</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="timestepIncButton">
+       <property name="maximumSize">
+        <size>
+         <width>30</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>&gt;</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QSlider" name="timestepSlider">
        <property name="orientation">
         <enum>Qt::Horizontal</enum>
@@ -213,6 +238,13 @@
         <widget class="QLabel" name="nodeNameLabel">
          <property name="text">
           <string>None</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="nodeTypeLabel">
+         <property name="text">
+          <string/>
          </property>
         </widget>
        </item>
@@ -253,11 +285,11 @@
           <property name="orientation">
            <enum>Qt::Horizontal</enum>
           </property>
-          <widget class="QWidget" name="">
-           <layout class="QVBoxLayout" name="graphLayout" stretch=""/>
+          <widget class="QWidget" name="layoutWidget">
+           <layout class="QVBoxLayout" name="graphLayout"/>
           </widget>
-          <widget class="QWidget" name="">
-           <layout class="QVBoxLayout" name="geomGraphLayout" stretch=""/>
+          <widget class="QWidget" name="layoutWidget">
+           <layout class="QVBoxLayout" name="geomGraphLayout"/>
           </widget>
          </widget>
         </item>
