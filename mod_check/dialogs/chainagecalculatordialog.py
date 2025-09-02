@@ -82,8 +82,18 @@ class ChainageCalculatorDialog(DialogBase, chaincalc_ui.Ui_ChainageCalculator):
             nwk_layer = self.estryNwkLayerCBox.currentLayer()
             self.iface.mainWindow().findChild(QAction, 'mActionDeselectAll').trigger()
             nwk_layer.removeSelection()
+            # use_fname = {'tested': False, 'failed': True}
+            tested_fname = False
+            f_lookup = 'ID'
             for f in nwk_layer.getFeatures():
-                if f['ID'] == id:
+                if not tested_fname:
+                    try:
+                        f['ID'] == id
+                    except KeyError:
+                        f_lookup = 0
+                    tested_fname = True
+
+                if f[f_lookup] == id:
                     nwk_layer.select(f.id())
                     self.iface.mapCanvas().zoomToSelected(nwk_layer)
                     break
@@ -164,6 +174,12 @@ class ChainageCalculatorDialog(DialogBase, chaincalc_ui.Ui_ChainageCalculator):
         )
 
         nwk_layer = self.estryNwkLayerCBox.currentLayer()
+        if nwk_layer is None:
+            QMessageBox.warning(
+                self, "No 1d_nwk Layer Provider", "Please select a 1d_nwk layer or choose FMP only"
+            )
+            return
+
         dx_tol = self.dxToleranceSpinbox.value()
         self.statusLabel.setText('Calculating FMP chainage (1/3) ...')
         QApplication.processEvents()
