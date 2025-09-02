@@ -28,6 +28,7 @@ class FmpTuflowWidthCheckDialog(DialogBase, fmptuflowwidthcheck_ui.Ui_FmpTuflowW
         DialogBase.__init__(self, dialog_name, iface, project, 'Check Width')
 
         self.width_check = widthcheck.SectionWidthCheck(self.project)
+        self.width_check.status_signal.connect(self._updateStatus)
 
         dat_path = mrt_settings.loadProjectSetting(
             'dat_file', self.project.readPath('./')
@@ -45,6 +46,10 @@ class FmpTuflowWidthCheckDialog(DialogBase, fmptuflowwidthcheck_ui.Ui_FmpTuflowW
         # Populate estry nwk layer combo (point and line layers only)
         self.fmpNodesLayerCbox.setFilters(QgsMapLayerProxyModel.PointLayer)
         self.cnLinesLayerCbox.setFilters(QgsMapLayerProxyModel.LineLayer)
+        
+    def _updateStatus(self, status):
+        self.statusLabel.setText(status)
+        QApplication.processEvents()
 
     def _failedTableContext(self, pos):
         """Add context menu to failed sections table.

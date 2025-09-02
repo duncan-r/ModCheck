@@ -20,6 +20,9 @@ import csv
 import math
 from pprint import pprint
 
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
 from qgis.core import QgsDistanceArea, QgsWkbTypes
 from . import toolinterface as ti
 
@@ -29,7 +32,8 @@ from floodmodeller_api import DAT
 # from ship.fmp.datunits import ROW_DATA_TYPES as rdt
 
 
-class SectionWidthCheck(ti.ToolInterface):
+# class SectionWidthCheck(ti.ToolInterface):
+class SectionWidthCheck(QObject):
     """Compare FMP and TUFLOW section widths for parity, based on a tolerance.
     
     Calculates the active section widths for all river sections in an FMP model,
@@ -38,6 +42,7 @@ class SectionWidthCheck(ti.ToolInterface):
     difference in width is greater than a given tolerance they will be 
     marked as failed.
     """
+    status_signal = pyqtSignal(str)
     
     def __init__(self, project):
         super().__init__()
@@ -207,6 +212,7 @@ class SectionWidthCheck(ti.ToolInterface):
         total_found = {'nodes': 0, 'snapped_cn': 0}
         details = {}
         for f in node_layer.getFeatures():
+            self.status_signal.emit(f"Finding snapped CN lines for feature: {f[0]}")
              
             node_id = f[0]
             node_geom = f.geometry()
@@ -228,6 +234,7 @@ class SectionWidthCheck(ti.ToolInterface):
         # Calculate the max distance between CN line pair end points.
         cn_widths = {}
         single_cn = []
+        self.status_signal.emit(f"Calculating widths...")
         for nodename, feats in details.items():
             if len(feats) < 2:
                 single_cn.append(nodename)
