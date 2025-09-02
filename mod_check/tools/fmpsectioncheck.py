@@ -16,6 +16,7 @@ import sys
 import csv
 from pprint import pprint
 
+from PyQt5.QtCore import *
 from floodmodeller_api import DAT
 from floodmodeller_api.units import RIVER
 from floodmodeller_api.units.conveyance import calculate_cross_section_conveyance_cached
@@ -94,7 +95,9 @@ class ProblemData():
         self.bad_banks = bank_data
         
 
-class CheckFmpSections(ti.ToolInterface):
+# class CheckFmpSections(ti.ToolInterface):
+class CheckFmpSections(QObject):
+    status_signal = pyqtSignal(str)
     
     def __init__(self):
         super().__init__()
@@ -131,6 +134,7 @@ class CheckFmpSections(ti.ToolInterface):
         k_tol = -k_tol
         issues = {}
         for name, river in river_sections.items():
+            self.status_signal.emit(f"Calculating conveyance for node {name}")
             k = self.calculateActiveConveyance(river.active_data)
 
             # Duplicate k data, shift duplicate rows up by 1, find the difference,
@@ -159,6 +163,7 @@ class CheckFmpSections(ti.ToolInterface):
         """
         # bad_banks = {}
         for name, river in river_sections.items():
+            self.status_signal.emit(f"Checking bank setup for node {name}")
             # Index references are not updated for the new 'active' part of the df
             # Find the indexes so we can use a relative lookup
             # This feels hacky, assume there's a better way?

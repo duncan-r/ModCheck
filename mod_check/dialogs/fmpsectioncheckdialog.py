@@ -119,6 +119,10 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
         mrt_settings.saveProjectSetting(caller, path)
         if caller == 'dat_file':
             self.loadSectionData()
+            
+    def _updateStatus(self, status):
+        self.statusLabel.setText(status)
+        QApplication.processEvents()
 
     def loadSectionData(self):
         self.properties = {}
@@ -131,6 +135,7 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
             'dat_file', self.project.readPath('./temp')
         )
         section_check = fmpsection_check.CheckFmpSections()
+        section_check.status_signal.connect(self._updateStatus)
         try:
             self.statusLabel.setText("Loading FMP model river sections ...")
             QApplication.processEvents()
