@@ -75,7 +75,7 @@ class ProblemData():
         self.xs_active_x = section_data.active_data['X']
         self.xs_active_y = section_data.active_data['Y']
 
-        for i, panel in enumerate(section_data.data['Marker']):
+        for i, panel in enumerate(section_data.data['Panel']):
             if panel:
                 self.panels.append({
                     'x': [section_data.data['X'][i], section_data.data['X'][i]],
