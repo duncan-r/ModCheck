@@ -22,6 +22,8 @@ from matplotlib import dates as mdates
 from matplotlib.dates import DateFormatter
 import numpy as np
 
+import pyqtgraph as pg
+
 from ..forms import ui_graph_dialog as graph_ui
 from ..forms import ui_text_dialog as text_ui
 
@@ -163,63 +165,172 @@ class MbCheckMultipleGraphicsView(QGraphicsView):
         self.fig.tight_layout()
         self.canvas.draw()
             
-            
-class MbCheckIndividualGraphicsView(QGraphicsView):
-    """GraphicsView to display the Individual MB Check tab graphs.
-    """
-    
-    def __init__(self):
-        QGraphicsView.__init__(self)
 
-        scene = QGraphicsScene()
-        self.setScene(scene)
-        self.fig = Figure()
-        self.axes = self.fig.gca()
-        self.axes2 = self.axes.twinx()
-        self.fig.tight_layout()
-        self.canvas = FigureCanvas(self.fig)
-        proxy_widget = scene.addWidget(self.canvas)
+# class MbCheckIndividualGraphicsView(QGraphicsView):
+class MbCheckIndividualGraphicsView():
+    
+    def __init__(self, graphics_view):
+        self.gv = graphics_view
+        self.gv.setBackground('w')
+        self.series_types = []
+        self.results = None
+        self.title = ""
         
-    def drawPlot(self, graph_series, results, title):
-        plot_colors = ['-b', '-g', '-r', '-c', '-m', '-y', '-k',]
-        color_count = 0
-        labels = []
-        plot_lines = []
-        self.axes2.clear()
-        self.axes.clear()
-        self.fig.clear()
-        self.axes = self.fig.gca()
-        self.axes2 = self.axes.twinx()
+    # def updateSeriesPlot(self):
+    #     self.series_1.setGeometry(self.series_1.vb.sceneBoundingRect())
+    #     # self.series_1.linkedViewChanged(self.series_1.vb)
+    #
+    # def updateSeriesGraph(self, graph_series):
+    #     self.series_1.clear()
+    #     x = self.results['Time (h)']
+    #     y = self.results[graph_series]
+    #     self.series_1.plot(x, y, name=self.title, pen=({'color': 'b', 'width': 1}))
+        
+    def setupPlot(self, graph_series, results, title):
+        self.series_types = graph_series
+        self.results = results
+        self.title = title
+        
+        series_1 = self.series_types[0]
+        series_2 = self.series_types[1]
+        
+        self.p1 = self.gv.plotItem
+        self.p1.getAxis('bottom').setLabel("Time (h)", color='black', **{'font-size': '10pt'})
+        self.p2 = pg.ViewBox()
+        self.p1.showAxis('right')
+        self.p1.scene().addItem(self.p2)
+        self.p1.getAxis('right').linkToView(self.p2)
+        self.p2.setXLink(self.p1)
+        
+        self.p1.showGrid(x=True, y=False, alpha=0.3)
+
+        pen = pg.mkPen(color=(0,0,0), width=1)
+        self.p1.getAxis('left').setPen(pen)
+        self.p1.getAxis('bottom').setPen(pen)
+        self.p1.getAxis('right').setPen(pen)
+
+        self.p1.vb.sigResized.connect(self.updateViews)
+        self.updatePlot()
+        
+    def updatePlot(self):
+        series_1 = self.series_types[0]
+        series_2 = self.series_types[1]
+
+        self.p1.getAxis('left').setLabel(series_1, color='blue', **{'font-size': '10pt'})
+        self.p1.getAxis('right').setLabel(series_2, color='red', **{'font-size': '10pt'})
+        self.p1.plot(
+            self.results['Time (h)'], self.results[series_1],
+            pen=({'color': "b", 'width': 1.5})
+        )
+        self.p2.addItem(pg.PlotCurveItem(
+            self.results['Time (h)'], self.results[series_2], 
+            pen=({'color': "r", 'width': 1.5})
+        ))
+        self.p1.vb.autoRange()
+        self.updateViews()
+        
+    def updateViews(self):
+        self.p2.setGeometry(self.p1.vb.sceneBoundingRect())
+        self.p2.linkedViewChanged(self.p1.vb, self.p2.XAxis)
     
-        x = results['Time (h)']
-        self.axes.set_xlabel('Time (h)')
-        self.axes.set_title(title)
+    def drawPlot(self, graph_series, results, title=""):
+        if not self.series_types or not self.results:
+            self.setupPlot(graph_series, results, title)
+        else:
+            self.series_types = graph_series
+            self.results = results
+            self.title = title
+            self.p1.clear()
+            self.p2.clear()
+            self.updatePlot()
 
-        for gs in graph_series[0]:
-            s = results[gs]
-            left_plot = self.axes.plot(x, s, plot_colors[color_count], label=gs)
-            pl = [p for p in left_plot]
-            plot_lines += pl
-            labels += ['(L) ' + l.get_label() for l in pl]
-            color_count += 1
-            if color_count > len(plot_colors):
-                color_count = 0
+        
+        # self.axes.set_xlabel('Time (h)')
+        # self.axes.set_title(title)
+
+        # for gs in graph_series[0]:
+        #     s = results[gs]
+        #     left_plot = self.axes.plot(x, s, plot_colors[color_count], label=gs)
+        #     pl = [p for p in left_plot]
+        #     plot_lines += pl
+        #     labels += ['(L) ' + l.get_label() for l in pl]
+        #     color_count += 1
+        #     if color_count > len(plot_colors):
+        #         color_count = 0
+        #
+        # if graph_series[1]:
+        #     for gs in graph_series[1]:
+        #         s = results[gs]
+        #         right_plot = self.axes2.plot(x, s, plot_colors[color_count], label=gs)
+        #         pl = [p for p in right_plot]
+        #         plot_lines += pl
+        #         labels += ['(R) ' + l.get_label() for l in pl]
+        #         color_count += 1
+        #         if color_count > len(plot_colors):
+        #             color_count = 0
+        #
+        # self.axes.grid(True)
+        # self.axes.legend(plot_lines, labels, loc='lower right')
+        # self.fig.tight_layout()
+        # self.canvas.draw()
+
             
-        if graph_series[1]:
-            for gs in graph_series[1]:
-                s = results[gs]
-                right_plot = self.axes2.plot(x, s, plot_colors[color_count], label=gs)
-                pl = [p for p in right_plot]
-                plot_lines += pl
-                labels += ['(R) ' + l.get_label() for l in pl]
-                color_count += 1
-                if color_count > len(plot_colors):
-                    color_count = 0
-
-        self.axes.grid(True)
-        self.axes.legend(plot_lines, labels, loc='lower right')
-        self.fig.tight_layout()
-        self.canvas.draw()
+# class MbCheckIndividualGraphicsView(QGraphicsView):
+#     """GraphicsView to display the Individual MB Check tab graphs.
+#     """
+#
+#     def __init__(self):
+#         QGraphicsView.__init__(self)
+#
+#         scene = QGraphicsScene()
+#         self.setScene(scene)
+#         self.fig = Figure()
+#         self.axes = self.fig.gca()
+#         self.axes2 = self.axes.twinx()
+#         self.fig.tight_layout()
+#         self.canvas = FigureCanvas(self.fig)
+#         proxy_widget = scene.addWidget(self.canvas)
+#
+#     def drawPlot(self, graph_series, results, title):
+#         plot_colors = ['-b', '-g', '-r', '-c', '-m', '-y', '-k',]
+#         color_count = 0
+#         labels = []
+#         plot_lines = []
+#         self.axes2.clear()
+#         self.axes.clear()
+#         self.fig.clear()
+#         self.axes = self.fig.gca()
+#         self.axes2 = self.axes.twinx()
+#
+#         x = results['Time (h)']
+#         self.axes.set_xlabel('Time (h)')
+#         self.axes.set_title(title)
+#
+#         for gs in graph_series[0]:
+#             s = results[gs]
+#             left_plot = self.axes.plot(x, s, plot_colors[color_count], label=gs)
+#             pl = [p for p in left_plot]
+#             plot_lines += pl
+#             labels += ['(L) ' + l.get_label() for l in pl]
+#             color_count += 1
+#             if color_count > len(plot_colors):
+#                 color_count = 0
+#
+#         if graph_series[1]:
+#             for gs in graph_series[1]:
+#                 s = results[gs]
+#                 right_plot = self.axes2.plot(x, s, plot_colors[color_count], label=gs)
+#                 pl = [p for p in right_plot]
+#                 plot_lines += pl
+#                 labels += ['(R) ' + l.get_label() for l in pl]
+#                 color_count += 1
+#                 if color_count > len(plot_colors):
+#                     color_count = 0
+#
+#         self.axes.grid(True)
+#         self.axes.legend(plot_lines, labels, loc='lower right')
+#         self.fig.tight_layout()
+#         self.canvas.draw()
         
 
 class HpcCheckIndividualGraphicsView(QGraphicsView):

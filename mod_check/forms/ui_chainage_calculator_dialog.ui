@@ -96,7 +96,7 @@
         <item>
          <widget class="QLabel" name="label_4">
           <property name="text">
-           <string>Use this if there is no nwk line layer available for comparison and you just want to output node distances from the FMP model</string>
+           <string>Use this if there is no nwk line layer available for comparison or you just want to output node distances from the FMP model</string>
           </property>
          </widget>
         </item>
@@ -130,7 +130,7 @@
       <item>
        <widget class="QTabWidget" name="tuflowInputsTabWidget">
         <property name="currentIndex">
-         <number>1</number>
+         <number>0</number>
         </property>
         <widget class="QWidget" name="tuflowNwkLineTab">
          <attribute name="title">
@@ -260,7 +260,7 @@
            <string>1d_nwk</string>
           </property>
           <property name="checked">
-           <bool>false</bool>
+           <bool>true</bool>
           </property>
          </widget>
         </item>
@@ -270,7 +270,7 @@
            <string>HX</string>
           </property>
           <property name="checked">
-           <bool>true</bool>
+           <bool>false</bool>
           </property>
          </widget>
         </item>

@@ -162,6 +162,12 @@ class Ui_TuflowStabilityCheckDialog(object):
         self.horizontalLayout_3.addLayout(self.verticalLayout_7)
         self.mbIndividualGraphLayout = QtWidgets.QVBoxLayout()
         self.mbIndividualGraphLayout.setObjectName("mbIndividualGraphLayout")
+        self.mbIndividualGraphicsView = PlotWidget(self.individualTab)
+        brush = QtGui.QBrush(QtGui.QColor(255, 255, 255))
+        brush.setStyle(QtCore.Qt.NoBrush)
+        self.mbIndividualGraphicsView.setBackgroundBrush(brush)
+        self.mbIndividualGraphicsView.setObjectName("mbIndividualGraphicsView")
+        self.mbIndividualGraphLayout.addWidget(self.mbIndividualGraphicsView)
         self.horizontalLayout_3.addLayout(self.mbIndividualGraphLayout)
         self.horizontalLayout_3.setStretch(0, 2)
         self.horizontalLayout_3.setStretch(1, 8)
@@ -252,7 +258,7 @@ class Ui_TuflowStabilityCheckDialog(object):
 
         self.retranslateUi(TuflowStabilityCheckDialog)
         self.mainTabWidget.setCurrentIndex(0)
-        self.mbTabWidget.setCurrentIndex(0)
+        self.mbTabWidget.setCurrentIndex(1)
         self.mbIndividualSeriesTabWidget.setCurrentIndex(0)
         self.individualSeriesTabWidget_3.setCurrentIndex(0)
         self.buttonBox.accepted.connect(TuflowStabilityCheckDialog.accept) # type: ignore
@@ -305,4 +311,5 @@ class Ui_TuflowStabilityCheckDialog(object):
         self.individualSeriesTabWidget_3.setTabText(self.individualSeriesTabWidget_3.indexOf(self.presetSeriesTab_4), _translate("TuflowStabilityCheckDialog", "Presets"))
         self.hpcUpdateGraphBtn.setText(_translate("TuflowStabilityCheckDialog", "Reset Graph"))
         self.mainTabWidget.setTabText(self.mainTabWidget.indexOf(self.hpcTab), _translate("TuflowStabilityCheckDialog", "HPC"))
+from pyqtgraph import PlotWidget
 from qgsfilewidget import QgsFileWidget

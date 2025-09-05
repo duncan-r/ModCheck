@@ -27,7 +27,7 @@
        <item>
         <widget class="QTabWidget" name="mbTabWidget">
          <property name="currentIndex">
-          <number>0</number>
+          <number>1</number>
          </property>
          <widget class="QWidget" name="summaryTab">
           <attribute name="title">
@@ -320,7 +320,21 @@
               </layout>
              </item>
              <item>
-              <layout class="QVBoxLayout" name="mbIndividualGraphLayout"/>
+              <layout class="QVBoxLayout" name="mbIndividualGraphLayout">
+               <item>
+                <widget class="PlotWidget" name="mbIndividualGraphicsView">
+                 <property name="backgroundBrush">
+                  <brush brushstyle="NoBrush">
+                   <color alpha="255">
+                    <red>255</red>
+                    <green>255</green>
+                    <blue>255</blue>
+                   </color>
+                  </brush>
+                 </property>
+                </widget>
+               </item>
+              </layout>
              </item>
             </layout>
            </item>
@@ -505,6 +519,11 @@
    <class>QgsFileWidget</class>
    <extends>QWidget</extends>
    <header>qgsfilewidget.h</header>
+  </customwidget>
+  <customwidget>
+   <class>PlotWidget</class>
+   <extends>QGraphicsView</extends>
+   <header>pyqtgraph</header>
   </customwidget>
  </customwidgets>
  <resources/>

@@ -36,8 +36,10 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         self.file_results = None
         self.summary_mboptions = ['_MB']
         self.current_mb_filetype = ''
-        self.individual_graphics_view = graphs.MbCheckIndividualGraphicsView()
-        self.individual_graph_toolbar = NavigationToolbar(self.individual_graphics_view.canvas, self)
+        # self.individual_graphics_view = graphs.MbCheckIndividualGraphicsView()
+        # self.individual_graph_toolbar = NavigationToolbar(self.individual_graphics_view.canvas, self)
+        self.individual_graphics_view = graphs.MbCheckIndividualGraphicsView(self.mbIndividualGraphicsView)
+        
         self.summary_graphics_view = graphs.MbCheckMultipleGraphicsView()
         self.summary_graph_toolbar = NavigationToolbar(self.summary_graphics_view.canvas, self)
         
@@ -97,8 +99,8 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         self.mbSummaryTable.setColumnWidth(2, 50)
         self.mbSummaryTable.setColumnWidth(3, 50)
 
-        self.mbIndividualGraphLayout.addWidget(self.individual_graphics_view)
-        self.mbIndividualGraphLayout.addWidget(self.individual_graph_toolbar)
+        # self.mbIndividualGraphLayout.addWidget(self.individual_graphics_view)
+        # self.mbIndividualGraphLayout.addWidget(self.individual_graph_toolbar)
         self.mbSummaryGraphLayout.addWidget(self.summary_graphics_view)
         self.mbSummaryGraphLayout.addWidget(self.summary_graph_toolbar)
         self.hpcGraphLayout.addWidget(self.hpc_individual_graphics_view)
@@ -294,12 +296,13 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         headers, self.current_mb_filetype, self.current_mb_filename = tmb_check.getMbHeaders(mb_path)
         mb_check = tmb_check.TuflowStabilityCheck()
         self._updateStatus('Loading file: {0}'.format(mb_path))
-        try:
-            self.file_results = mb_check.loadMbFile(mb_path, headers)
-            self.updateIndividualGraph()
-        except Exception as err:
-            self._updateStatus('File load error: {0}'.format(mb_path))
-            QMessageBox.warning(self, "MB file load error", err.args[0])
+        # try:
+        self.file_results = mb_check.loadMbFile(mb_path, headers)
+        self.updateIndividualGraph()
+        # except Exception as err:
+        #     self._updateStatus('File load error: {0}'.format(mb_path))
+        #     QMessageBox.warning(self, "MB file load error", "Failed to load MB File")
+        #     # QMessageBox.warning(self, "MB file load error", err.args[0])
         self._updateStatus('Loaded file: {0}'.format(mb_path))
 
     def updateIndividualGraph(self):

@@ -132,35 +132,50 @@ def getIndividualMbSeriesPresets(series_type, mb_type):
     graph_series = []
     if series_type == 'mb_and_dvol':
         if mb_type == 'MB':
-            graph_series = [['Cum ME (%)'], ['dVol']]
+            graph_series = ['Cum ME (%)', 'dVol']
         elif mb_type == 'MB1D':
-            graph_series = [['Cum ME (%)'], ['dVol']]
+            graph_series = ['Cum ME (%)', 'dVol']
         elif mb_type == 'MB2D':
-            graph_series = [['Cum ME (%)'], ['dVol']]
+            graph_series = ['Cum ME (%)', 'dVol']
 
     elif series_type == 'volumes':
         if mb_type == 'MB':
-            graph_series = [['Q Vol In', 'Q Vol Out'], ['Tot Vol In', 'Tot Vol Out']]
+            graph_series = ['Q Vol In', 'Q Vol Out']
         elif mb_type == 'MB1D':
-            graph_series = [['Vol In-Out'],['Cum Vol I+O']]
+            graph_series = ['Vol In-Out', 'Cum Vol I+O']
         elif mb_type == 'MB2D':
-            graph_series = [['V In-Out'],['Cum V In+Out']]
+            graph_series = ['V In-Out', 'Cum V In+Out']
+
+    # elif series_type == 'volumes_totals':
+    #     if mb_type == 'MB':
+    #         graph_series = ['Tot Vol In', 'Tot Vol Out']
+    #     elif mb_type == 'MB1D':
+    #         graph_series = ['Vol In-Out', 'Cum Vol I+O']
+    #     elif mb_type == 'MB2D':
+    #         graph_series = ['V In-Out', 'Cum V In+Out']
 
     elif series_type == 'mass_errors':
         if mb_type == 'MB':
-            graph_series = [['Q ME (%)', 'Cum ME (%)', 'Cum Q ME (%)'],[]]
+            graph_series = ['Q ME (%)', 'Cum ME (%)']
         elif mb_type == 'MB1D':
-            graph_series = [['Q ME (%)', 'Cum ME (%)', 'Cum Q ME (%)'],[]]
+            graph_series = ['Q ME (%)', 'Cum ME (%)']
         elif mb_type == 'MB2D':
-            graph_series = [['Q ME (%)', 'Cum ME (%)', 'Cum Q ME (%)'],[]]
+            graph_series = ['Q ME (%)', 'Cum ME (%)']
+    # elif series_type == 'mass_errors':
+    #     if mb_type == 'MB':
+    #         graph_series = [['Q ME (%)', 'Cum ME (%)', 'Cum Q ME (%)'],[]]
+    #     elif mb_type == 'MB1D':
+    #         graph_series = [['Q ME (%)', 'Cum ME (%)', 'Cum Q ME (%)'],[]]
+    #     elif mb_type == 'MB2D':
+    #         graph_series = [['Q ME (%)', 'Cum ME (%)', 'Cum Q ME (%)'],[]]
 
     elif series_type == 'volume_errors':
         if mb_type == 'MB':
-            graph_series = [['Vol Err'], ['Cum Vol Err']]
+            graph_series = ['Vol Err', 'Cum Vol Err']
         elif mb_type == 'MB1D':
-            graph_series = [['Vol Err'], ['Cum Vol Err']]
+            graph_series = ['Vol Err', 'Cum Vol Err']
         elif mb_type == 'MB2D':
-            graph_series = [['V Err'], ['Cum V Error']]
+            graph_series = ['V Err', 'Cum V Error']
             
     return graph_series
 
