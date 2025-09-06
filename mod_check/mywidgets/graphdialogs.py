@@ -369,105 +369,365 @@ class HpcCheckIndividualGraphicsView():
             self.title = title
             self.updatePlot()
 
-class FmpStabilityGeometryGraphicsView(QGraphicsView):
+        
+class FmpStabilityGeometryGraphicsView():
     """GraphicsView to display the flow/stage for the Fmp stability check.
     """
     
-    def __init__(self):
-        QGraphicsView.__init__(self)
+    def __init__(self, graphics_view):
+        self.gv = graphics_view
+        self.back_color = QgsProject.instance().backgroundColor()
+        self.gv.setBackground(self.back_color)
+        self.show_hover = True
+        self.node_name = ""
+        self.geom_data = None
+        self.stage = 0
+        self.title = ""
+        self.p1 = None
 
-        scene = QGraphicsScene()
-        self.setScene(scene)
-        self.fig = Figure()
-        self.axes = self.fig.gca()
-#         self.axes2 = self.axes.twinx()
-        self.fig.tight_layout()
-        self.canvas = FigureCanvas(self.fig)
-        proxy_widget = scene.addWidget(self.canvas)
+    def _mouseMoved(self, evt):
+        if not self.show_hover:
+            self.display_text.hide()
+            return
+        
+        pos = evt
+        if self.p1.sceneBoundingRect().contains(pos):
+            mousePoint = self.p1.vb.mapSceneToView(pos)
+            index = int(mousePoint.x())
+            series_1 = self.geom_data[0]
+            if index >= 0 and index < len(series_1):
+                self.display_text.setText(
+                    "X = {x:.3f}\n{y1name} = {y1:.3f}\n{y2name} = {y2:.3f}".format(
+                        x=mousePoint.x(),
+                        y1name="Y", y1=mousePoint.y(),
+                        y2name="WL", y2=self.stage,
+                    )
+                )
+                self.display_text.setPos(mousePoint.x(), mousePoint.y())
+                self.display_text.show()
+            else:
+                self.display_text.hide()
         
     def clearPlot(self, redraw=True):
-        self.axes.clear()
-        self.fig.clear()
-        if redraw:
-            self.canvas.draw()
+        if self.p1:
+            self.p1.clear()
+
+    def setupPlot(self, geom_data, node_name, stage):
+        self.geom_data = geom_data
+        self.node_name = node_name
+        self.stage = stage
+        
+        self.p1 = self.gv.plotItem
+        self.p1.setDefaultPadding(0.1)
+        self.p1.getAxis('bottom').setLabel("X (m)", color='black', **{'font-size': '10pt'})
+        self.p1.showGrid(x=True, y=False, alpha=0.3)
+
+        pen = pg.mkPen(color=(0,0,0), width=1)
+        self.p1.getAxis('left').setPen(pen)
+        self.p1.getAxis('bottom').setPen(pen)
+        self.p1.getAxis('left').enableAutoSIPrefix(False)
+        self.p1.getAxis('left').setLabel("Level (mAOD)", color='black', **{'font-size': '10pt'})
+        self.p1.scene().sigMouseMoved.connect(self._mouseMoved)
+        self.updatePlot()
+        
+    def updatePlot(self):
+        """
+        """
+        def interpolate(x1, x2, y1, y2, water_level):
+            m = 1.0
+            # Check for div/0
+            if abs(x1 - x2) > 0.001:
+                m = (y1 - y2) / (x1 - x2)
+            else:
+                m = (y1 - y2) / 0.001
+            c = y1 - m * x1
+            x = (water_level - c) / m
+            return round(x, 3)
+
+        self.p1.clear()
+
+        # Need to interpolate new points between bed geometry to account for the water
+        # level landed in between
+        water_x = []
+        water_y = []
+        x = self.geom_data[0]
+        y = self.geom_data[1]
+        for i, level in enumerate(y):
+            if i > 0:
+                # Left point dry, right point wet
+                if y[i-1] > self.stage and y[i] < self.stage:
+                    new_x = interpolate(x[i-1], x[i], y[i-1], y[i], self.stage)
+                    # New point
+                    water_x.append(new_x)
+                    water_y.append(self.stage)
+                    # Existing point
+                    water_x.append(x[i])
+                    water_y.append(self.stage)
+                    continue
+
+                # Left point wet, right point dry
+                elif y[i] > self.stage and y[i-1] < self.stage:
+                    new_x = interpolate(x[i-1], x[i], y[i-1], y[i], self.stage)
+                    water_x.append(new_x)
+                    water_y.append(self.stage)
+                    water_x.append(x[i])
+                    water_y.append(y[i])
+                    continue
+
+                # Point is wet (previous point wet is implied by previous logic)
+                elif y[i] <= self.stage:
+                    water_x.append(x[i])
+                    water_y.append(self.stage)
+                    continue
+                
+                # Both points are dry
+                else:
+                    water_x.append(x[i])
+                    water_y.append(y[i])
+
+            # First point in the section is either wet or dry
+            else:
+                water_x.append(x[i])
+                if self.stage > y[i]:
+                    water_y.append(self.stage)
+                else:
+                    water_y.append(y[i])
+
+        bed = pg.PlotCurveItem(
+            self.geom_data[0], self.geom_data[1],
+            pen=({'color': "k", 'width': 1.5}), antialias=True
+        )
+        water = pg.PlotCurveItem(
+            water_x, water_y,
+            pen=({'color': "b", 'width': 1.5}), antialias=True
+        )
+        self.p1.plot()
+        self.p1.addItem(water)
+        self.p1.addItem(bed)
+        self.p1.addItem(pg.FillBetweenItem(
+            bed, water, brush=pg.mkBrush(color=(33, 33, 255, 60)),
+        ))
+        self.display_text = pg.TextItem(
+            text="", color=(0,0,0), anchor=(0,1), fill=self.back_color, border=pg.mkColor(0,0,0,100)
+        )
+        self.display_text.hide()
+        self.gv.addItem(self.display_text)
+        self.p1.vb.autoRange()
         
     def drawPlot(self, geom_data, node_name, stage):
-        self.clearPlot(redraw=False)
-        self.axes = self.fig.gca()
-    
-        x = geom_data[0]
-        y = geom_data[1]
-        s = [stage for i in x]
+        if not self.geom_data:
+            self.setupPlot(geom_data, node_name, stage)
+        else:
+            self.geom_data = geom_data
+            self.node_name = node_name
+            self.stage = stage
+            self.updatePlot()
 
-        self.axes.set_xlabel('Chainage (m)')
-        self.axes.set_ylabel('Elevation (mAOD)')
-        self.axes.set_title(node_name)
 
-        bed_plot = self.axes.plot(x, geom_data[1], '-k')
-        stage_plot = self.axes.plot(x, s, '-b')
-        self.axes.fill_between(x, y, s, where=y<=stage, interpolate=True, alpha=0.5, color='b')
-
-        self.fig.tight_layout()
-        self.canvas.draw()
-        
-class FmpStabilityGraphicsView(QGraphicsView):
+class FmpStabilityGraphicsView():
     """GraphicsView to display the flow/stage for the Fmp stability check.
     """
     
-    def __init__(self):
-        QGraphicsView.__init__(self)
-
-        scene = QGraphicsScene()
-        self.setScene(scene)
-        self.fig = Figure()
-        self.axes = self.fig.gca()
-        self.axes2 = self.axes.twinx()
-        self.fig.tight_layout()
-        self.canvas = FigureCanvas(self.fig)
-        proxy_widget = scene.addWidget(self.canvas)
+    def __init__(self, graphics_view):
+        self.gv = graphics_view
+        self.back_color = QgsProject.instance().backgroundColor()
+        self.gv.setBackground(self.back_color)
+        self.show_hover = True
+        self.series_type = ""
+        self.node_name = ""
+        self.time_data = []
+        self.results = None
+        self.title = ""
+ 
+    def _mouseMoved(self, evt):
+        if not self.show_hover:
+            self.display_text.hide()
+            return
         
+        pos = evt
+        if self.p1.sceneBoundingRect().contains(pos):
+            mousePoint = self.p1.vb.mapSceneToView(pos)
+            mousePoint2 = self.p2.mapSceneToView(pos)
+            index = int(mousePoint.x())
+
+            series_1 = None
+            series_1_name = ''
+            series_2_name = ''
+            if self.series_type == 'Stage':
+                series_1 = self.results[0].to_numpy()
+                series_1_name = "Stage"
+                series_2_name = "Flow"
+            else:
+                series_1 = self.results[1].to_numpy()
+                series_1_name = "Flow"
+                series_2_name = "Stage"
+
+            if index >= 0 and index < len(series_1):
+                self.display_text.setText(
+                    "Time = {x:.3f}\n{y1name} = {y1:.3f}\n{y2name} = {y2:.3f}".format(
+                        x=mousePoint.x(),
+                        y1name=series_1_name, y1=mousePoint.y(),
+                        y2name=series_2_name, y2=mousePoint2.y(),
+                    )
+                )
+                self.display_text.setPos(mousePoint.x(), mousePoint.y())
+                self.display_text.show()
+            else:
+                self.display_text.hide()
+        
+    def setupPlot(self, time_data, results, derivs, timestep, series_type, 
+                 node_name, show_derivs=False):
+        self.series_type = series_type
+        self.node_name = node_name
+        self.timestep = timestep
+        self.time_data = time_data
+        self.results = results
+        self.derivs = derivs
+        
+        self.p1 = self.gv.plotItem
+        self.p1.setDefaultPadding(0.1)
+        self.p1.getAxis('bottom').setLabel("Time (h)", color='black', **{'font-size': '10pt'})
+        self.p2 = pg.ViewBox()
+        self.p1.showAxis('right')
+        self.p1.scene().addItem(self.p2)
+        self.p1.getAxis('right').linkToView(self.p2)
+        self.p2.setXLink(self.p1)
+        
+        self.p1.showGrid(x=True, y=False, alpha=0.3)
+
+        pen = pg.mkPen(color=(0,0,0), width=1)
+        self.p1.getAxis('left').setPen(pen)
+        self.p1.getAxis('bottom').setPen(pen)
+        self.p1.getAxis('right').setPen(pen)
+        self.p1.getAxis('left').enableAutoSIPrefix(False)
+        self.p1.getAxis('right').enableAutoSIPrefix(False)
+        
+        self.p1.vb.sigResized.connect(self.updateViews)
+        self.p1.scene().sigMouseMoved.connect(self._mouseMoved)
+        self.updatePlot()
+
+    def updatePlot(self):
+        self.p1.clear()
+        self.p2.clear()
+        
+        series_1 = None
+        series_2 = None
+        series_1_name = "Stage"
+        series_2_name = "Flow"
+        if self.series_type == 'Stage':
+            series_1 = self.results[0].to_numpy()
+            series_2 = self.results[1].to_numpy()
+        else:
+            series_1 = self.results[1].to_numpy()
+            series_2 = self.results[0].to_numpy()
+            series_1_name = "Flow"
+            series_2_name = "Stage"
+
+        fail_times = ''
+        if self.derivs['status'] == 'Failed':
+            fail_times = '(First fail: {:.3f} - Last Fail: {:.3f})'.format(self.derivs['fail_times'][0], self.derivs['fail_times'][-1])
+        status_text = '{} {}'.format(self.node_name, fail_times) #'Dy2 Fail = {}   :   {}'.format(derivs['status'], fail_times)
+        self.title = status_text
+
+        self.p1.getAxis('left').setLabel(series_1_name, color='blue', **{'font-size': '10pt'})
+        self.p1.getAxis('right').setLabel(series_2_name, color='red', **{'font-size': '10pt'})
+        self.p1.plot(
+            self.time_data, series_1,
+            pen=({'color': "b", 'width': 1.5}), antialias=True
+        )
+        self.p1.addItem(pg.InfiniteLine(
+            pos=self.timestep, angle=90, pen=({'color': pg.mkColor(161, 14, 41, 80), 'width': 2, 'style': Qt.DashLine})
+        ))
+        self.p2.addItem(pg.PlotCurveItem(
+            self.time_data, series_2,
+            pen=({'color': "r", 'width': 1.5}), antialias=True, hoverable=True
+        ))
+        self.display_text = pg.TextItem(
+            text="", color=(0,0,0), anchor=(0,1), fill=self.back_color, border=pg.mkColor(0,0,0,100)
+        )
+        self.gv.addItem(self.display_text)
+        self.display_text.hide()
+        self.p1.vb.autoRange()
+        self.updateViews()
+        
+    def updateViews(self):
+        self.p2.setGeometry(self.p1.vb.sceneBoundingRect())
+        self.p2.linkedViewChanged(self.p1.vb, self.p2.XAxis)
+
     def drawPlot(self, time_data, results, derivs, timestep, series_type, 
                  node_name, show_derivs=False):
-        labels = []
-        plot_lines = []
-        self.axes2.clear()
-        self.axes.clear()
-        self.fig.clear()
-        self.axes = self.fig.gca()
-        self.axes2 = self.axes.twinx()
-    
-        x = time_data
-        self.axes.set_xlabel('Time (h)')
-        fail_times = ''
-        if derivs['status'] == 'Failed':
-            fail_times = '(First fail: {:.3f} - Last Fail: {:.3f})'.format(derivs['fail_times'][0], derivs['fail_times'][-1])
-        status_text = '{} {}'.format(node_name, fail_times) #'Dy2 Fail = {}   :   {}'.format(derivs['status'], fail_times)
-        self.axes.set_title(status_text)
-        self.axes.set_ylabel('Stage (mAOD)')
-        self.axes2.set_ylabel('Flow (m3/s)')
-        
-        if series_type == 'Stage':
-            s1_plot = self.axes.plot(x, results[0], '-b')
-            s2_plot = self.axes2.plot(x, derivs['f'], '-r')
+        if not self.series_type or not self.results:
+            self.setupPlot(
+                time_data, results, derivs, timestep, series_type,  node_name, show_derivs=False
+            )
         else:
-            s1_plot = self.axes2.plot(x, derivs['f'], '-r')
-            s2_plot = self.axes.plot(x, results[0], '-b')
-        
-        time_x = [timestep, timestep]
-        time_y = [min(results[0]), max(results[0])]
-        time_plot = self.axes.plot(time_x, time_y, '-k', alpha=0.5, dashes=[6,2])
+            self.series_type = series_type
+            self.node_name = node_name
+            self.timestep = timestep
+            self.time_data = time_data
+            self.results = results
+            self.derivs = derivs
+            self.updatePlot()
 
-        # User doesn't need derivative graphs, just for debugging
-        if show_derivs:
-            x2 = x[:-1]
-            right_plot = self.axes2.plot(x2, derivs['dy'], '-g', alpha=0.5)
-            x3 = x2[:-1]
-            right_plot2 = self.axes2.plot(x3, derivs['dy2'], '-k', alpha=0.5)
 
-        self.fig.tight_layout()
-        self.canvas.draw()
+# class FmpStabilityGraphicsView(QGraphicsView):
+#     """GraphicsView to display the flow/stage for the Fmp stability check.
+#     """
+#
+#     def __init__(self):
+#         QGraphicsView.__init__(self)
+#
+#         scene = QGraphicsScene()
+#         self.setScene(scene)
+#         self.fig = Figure()
+#         self.axes = self.fig.gca()
+#         self.axes2 = self.axes.twinx()
+#         self.fig.tight_layout()
+#         self.canvas = FigureCanvas(self.fig)
+#         proxy_widget = scene.addWidget(self.canvas)
+#
+#     def drawPlot(self, time_data, results, derivs, timestep, series_type, 
+#                  node_name, show_derivs=False):
+#         labels = []
+#         plot_lines = []
+#         self.axes2.clear()
+#         self.axes.clear()
+#         self.fig.clear()
+#         self.axes = self.fig.gca()
+#         self.axes2 = self.axes.twinx()
+#
+#         x = time_data
+#         self.axes.set_xlabel('Time (h)')
+#         fail_times = ''
+#         if derivs['status'] == 'Failed':
+#             fail_times = '(First fail: {:.3f} - Last Fail: {:.3f})'.format(derivs['fail_times'][0], derivs['fail_times'][-1])
+#         status_text = '{} {}'.format(node_name, fail_times) #'Dy2 Fail = {}   :   {}'.format(derivs['status'], fail_times)
+#         self.axes.set_title(status_text)
+#         self.axes.set_ylabel('Stage (mAOD)')
+#         self.axes2.set_ylabel('Flow (m3/s)')
+#
+#         if series_type == 'Stage':
+#             s1_plot = self.axes.plot(x, results[0], '-b')
+#             s2_plot = self.axes2.plot(x, derivs['f'], '-r')
+#         else:
+#             s1_plot = self.axes2.plot(x, derivs['f'], '-r')
+#             s2_plot = self.axes.plot(x, results[0], '-b')
+#
+#         time_x = [timestep, timestep]
+#         time_y = [min(results[0]), max(results[0])]
+#         time_plot = self.axes.plot(time_x, time_y, '-k', alpha=0.5, dashes=[6,2])
+#
+#         # User doesn't need derivative graphs, just for debugging
+#         if show_derivs:
+#             x2 = x[:-1]
+#             right_plot = self.axes2.plot(x2, derivs['dy'], '-g', alpha=0.5)
+#             x3 = x2[:-1]
+#             right_plot2 = self.axes2.plot(x3, derivs['dy2'], '-k', alpha=0.5)
+#
+#         self.fig.tight_layout()
+#         self.canvas.draw()
         
-        
+
 class SectionPropertiesGraphicsView(QGraphicsView):
     """GraphicsView to display section properties graphs.
     

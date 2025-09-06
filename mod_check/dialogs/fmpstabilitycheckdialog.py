@@ -35,10 +35,15 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
         self.results_path = ""
         self.results = None
         self.timestep_press_active = False
-        self.graph_view = graphs.FmpStabilityGraphicsView()
-        self.graph_toolbar = NavigationToolbar(self.graph_view.canvas, self)
-        self.geom_graph_view = graphs.FmpStabilityGeometryGraphicsView()
-        self.geom_graph_toolbar = NavigationToolbar(self.geom_graph_view.canvas, self)
+        # self.graph_view = graphs.FmpStabilityGraphicsView()
+        # self.graph_toolbar = NavigationToolbar(self.graph_view.canvas, self)
+        # self.geom_graph_view = graphs.FmpStabilityGeometryGraphicsView()
+        # self.geom_graph_toolbar = NavigationToolbar(self.geom_graph_view.canvas, self)
+        self.series_graphics_view = graphs.FmpStabilityGraphicsView(self.seriesGraphicsView)
+        self.section_graphics_view = graphs.FmpStabilityGeometryGraphicsView(self.sectionGraphicsView)
+        self.seriesResetGraphButton.clicked.connect(lambda x: self.resetSeriesGraph(x, 'series'))
+        self.sectionResetGraphButton.clicked.connect(lambda x: self.resetSeriesGraph(x, 'section'))
+        self.showHoverTextCBox.stateChanged.connect(self.showHoverTextChanged)
 
         self.setDefaultSettings()
         self.datFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'dat_file'))
@@ -62,10 +67,10 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
         self.timestepIncButton.clicked.connect(lambda i: self.timestepButtonClicked(i, 'inc'))
         self.timestepDecButton.clicked.connect(lambda i: self.timestepButtonClicked(i, 'dec'))
 
-        self.graphLayout.addWidget(self.graph_view)
-        self.graphLayout.addWidget(self.graph_toolbar)
-        self.geomGraphLayout.addWidget(self.geom_graph_view)
-        self.geomGraphLayout.addWidget(self.geom_graph_toolbar)
+        # self.graphLayout.addWidget(self.graph_view)
+        # self.graphLayout.addWidget(self.graph_toolbar)
+        # self.geomGraphLayout.addWidget(self.geom_graph_view)
+        # self.geomGraphLayout.addWidget(self.geom_graph_toolbar)
         self.splitter.setStretchFactor(5, 10)
 
     def setDefaultSettings(self):
@@ -84,6 +89,22 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
         self.stageResultsFileWidget.setFilePath(mrt_settings.loadProjectSetting(
             'stage_results', './temp')
         )
+        
+    def showHoverTextChanged(self, status):
+        if status:
+            self.series_graphics_view.show_hover = True
+            self.section_graphics_view.show_hover = True
+        else:
+            self.series_graphics_view.show_hover = False
+            self.section_graphics_view.show_hover = False
+        
+    def resetSeriesGraph(self, x, caller):
+        if caller == 'series':
+            self.series_graphics_view.updatePlot()
+        elif caller == 'section':
+            pass
+            self.section_graphics_view.updatePlot()
+            
 
     def timestepButtonClicked(self, x, value):
         if value == 'inc':
@@ -235,22 +256,24 @@ class FmpStabilityCheckDialog(DialogBase, fmpstability_ui.Ui_FmpStabilityCheckDi
         timestep = self.results.times[timestep_idx]
         time_stage = self.results.stage.at[timestep, node_name]
         self.timestepValueLabel.setText(str("{:.3f}".format(timestep)))
-        self.graph_view.drawPlot(
+
+        self.series_graphics_view.drawPlot(
             self.results.times, [self.results.stage[node_name], self.results.flows[node_name]], 
-            self.results.derivs[node_index], timestep, series_type=series_check_type, 
-            node_name=node_name,
+            self.results.derivs[node_index], timestep, series_check_type, node_name
         )
+        # self.section_graphics_view(node_name, time_stage)
         self.updateGeomGraph(node_name, time_stage)
 
     def updateGeomGraph(self, node_name, time_stage):
+        pass
         geom = None
         if self.results.dat is not None:
             geom = fmps_check.loadGeometry(node_name, self.results.dat)
-
+        
         if geom is None:
-            self.geom_graph_view.clearPlot()
+            self.section_graphics_view.clearPlot()
         else:
-            self.geom_graph_view.drawPlot(geom, node_name, time_stage)
+            self.section_graphics_view.drawPlot(geom, node_name, time_stage)
 
     def checkStability(self, series_type):
         """Stability analysis of time series.
