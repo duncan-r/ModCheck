@@ -1,18 +1,17 @@
 import numpy as np
+
 from ..Qt import QtGui
-from .. import functions as fn
-from ..python2_3 import xrange
 
 
 class MeshData(object):
     """
     Class for storing and operating on 3D mesh data. May contain:
     
-    - list of vertex locations
-    - list of edges
-    - list of triangles
-    - colors per vertex, edge, or tri
-    - normals per vertex or tri
+      - list of vertex locations
+      - list of edges
+      - list of triangles
+      - colors per vertex, edge, or tri
+      - normals per vertex or tri
     
     This class handles conversion between the standard [list of vertexes, list of faces]
     format (suitable for use with glDrawElements) and 'indexed' [list of vertexes] format
@@ -100,10 +99,10 @@ class MeshData(object):
         return self._edges
         
     def setFaces(self, faces):
-        """Set the (Nf, 3) array of faces. Each rown in the array contains
+        """Set the (Nf, 3) array of faces. Each row in the array contains
         three indexes into the vertex array, specifying the three corners 
         of a triangular face."""
-        self._faces = faces
+        self._faces = np.ascontiguousarray(faces, dtype=np.uint32)
         self._edges = None
         self._vertexFaces = None
         self._vertexesIndexedByFaces = None
@@ -137,12 +136,12 @@ class MeshData(object):
         """
         if indexed is None:
             if verts is not None:
-                self._vertexes = verts
+                self._vertexes = np.ascontiguousarray(verts, dtype=np.float32)
             self._vertexesIndexedByFaces = None
         elif indexed=='faces':
             self._vertexes = None
             if verts is not None:
-                self._vertexesIndexedByFaces = verts
+                self._vertexesIndexedByFaces = np.ascontiguousarray(verts, dtype=np.float32)
         else:
             raise Exception("Invalid indexing mode. Accepts: None, 'faces'")
         
@@ -191,7 +190,7 @@ class MeshData(object):
             return self._faceNormals
         elif indexed == 'faces':
             if self._faceNormalsIndexedByFaces is None:
-                norms = np.empty((self._faceNormals.shape[0], 3, 3))
+                norms = np.empty((self._faceNormals.shape[0], 3, 3), dtype=np.float32)
                 norms[:] = self._faceNormals[:,np.newaxis,:]
                 self._faceNormalsIndexedByFaces = norms
             return self._faceNormalsIndexedByFaces
@@ -208,8 +207,8 @@ class MeshData(object):
         if self._vertexNormals is None:
             faceNorms = self.faceNormals()
             vertFaces = self.vertexFaces()
-            self._vertexNormals = np.empty(self._vertexes.shape, dtype=float)
-            for vindex in xrange(self._vertexes.shape[0]):
+            self._vertexNormals = np.empty(self._vertexes.shape, dtype=np.float32)
+            for vindex in range(self._vertexes.shape[0]):
                 faces = vertFaces[vindex]
                 if len(faces) == 0:
                     self._vertexNormals[vindex] = (0,0,0)
@@ -225,7 +224,15 @@ class MeshData(object):
             return self._vertexNormals[self.faces()]
         else:
             raise Exception("Invalid indexing mode. Accepts: None, 'faces'")
-        
+
+    @staticmethod
+    def _ensure_colors_dtype(colors):
+        if isinstance(colors, np.ndarray) and colors.dtype == np.uint8:
+            dtype = np.uint8
+        else:
+            dtype = np.float32
+        return np.ascontiguousarray(colors, dtype=dtype)
+
     def vertexColors(self, indexed=None):
         """
         Return an array (Nv, 4) of vertex colors.
@@ -247,6 +254,7 @@ class MeshData(object):
         If indexed=='faces', then the array will be interpreted
         as indexed and should have shape (Nf, 3, 4)
         """
+        colors = self._ensure_colors_dtype(colors)
         if indexed is None:
             self._vertexColors = colors
             self._vertexColorsIndexedByFaces = None
@@ -280,6 +288,7 @@ class MeshData(object):
         If indexed=='faces', then the array will be interpreted
         as indexed and should have shape (Nf, 3, 4)
         """
+        colors = self._ensure_colors_dtype(colors)
         if indexed is None:
             self._faceColors = colors
             self._faceColorsIndexedByFaces = None
@@ -313,14 +322,13 @@ class MeshData(object):
         ## I think generally this should be discouraged..
         faces = self._vertexesIndexedByFaces
         verts = {}  ## used to remember the index of each vertex position
-        self._faces = np.empty(faces.shape[:2], dtype=np.uint)
+        self._faces = np.empty(faces.shape[:2], dtype=np.uint32)
         self._vertexes = []
         self._vertexFaces = []
         self._faceNormals = None
         self._vertexNormals = None
-        for i in xrange(faces.shape[0]):
+        for i in range(faces.shape[0]):
             face = faces[i]
-            inds = []
             for j in range(face.shape[0]):
                 pt = face[j]
                 pt2 = tuple([round(x*1e14) for x in pt])  ## quantize to be sure that nearly-identical points will be merged
@@ -333,11 +341,11 @@ class MeshData(object):
                     verts[pt2] = index
                 self._vertexFaces[index].append(i)  # keep track of which vertexes belong to which faces
                 self._faces[i,j] = index
-        self._vertexes = np.array(self._vertexes, dtype=float)
+        self._vertexes = np.array(self._vertexes, dtype=np.float32)
     
     #def _setUnindexedFaces(self, faces, vertexes, vertexColors=None, faceColors=None):
         #self._vertexes = vertexes #[QtGui.QVector3D(*v) for v in vertexes]
-        #self._faces = faces.astype(np.uint)
+        #self._faces = faces.astype(np.uint32)
         #self._edges = None
         #self._vertexFaces = None
         #self._faceNormals = None
@@ -350,8 +358,8 @@ class MeshData(object):
         Return list mapping each vertex index to a list of face indexes that use the vertex.
         """
         if self._vertexFaces is None:
-            self._vertexFaces = [[] for i in xrange(len(self.vertexes()))]
-            for i in xrange(self._faces.shape[0]):
+            self._vertexFaces = [[] for i in range(len(self.vertexes()))]
+            for i in range(self._faces.shape[0]):
                 face = self._faces[i]
                 for ind in face:
                     self._vertexFaces[ind].append(i)
@@ -374,7 +382,7 @@ class MeshData(object):
         if not self.hasFaceIndexedData():
             ## generate self._edges from self._faces
             nf = len(self._faces)
-            edges = np.empty(nf*3, dtype=[('i', np.uint, 2)])
+            edges = np.empty(nf*3, dtype=[('i', np.uint32, 2)])
             edges['i'][0:nf] = self._faces[:,:2]
             edges['i'][nf:2*nf] = self._faces[:,1:3]
             edges['i'][-nf:,0] = self._faces[:,2]
@@ -389,7 +397,7 @@ class MeshData(object):
             #print self._edges
         elif self._vertexesIndexedByFaces is not None:
             verts = self._vertexesIndexedByFaces
-            edges = np.empty((verts.shape[0], 3, 2), dtype=np.uint)
+            edges = np.empty((verts.shape[0], 3, 2), dtype=np.uint32)
             nf = verts.shape[0]
             edges[:,0,0] = np.arange(nf) * 3
             edges[:,0,1] = edges[:,0,0] + 1
@@ -442,7 +450,7 @@ class MeshData(object):
         Return a MeshData instance with vertexes and faces computed
         for a spherical surface.
         """
-        verts = np.empty((rows+1, cols, 3), dtype=float)
+        verts = np.empty((rows+1, cols, 3), dtype=np.float32)
         
         ## compute vertexes
         phi = (np.arange(rows+1) * np.pi / rows).reshape(rows+1, 1)
@@ -456,7 +464,7 @@ class MeshData(object):
         verts = verts.reshape((rows+1)*cols, 3)[cols-1:-(cols-1)]  ## remove redundant vertexes from top and bottom
         
         ## compute faces
-        faces = np.empty((rows*cols*2, 3), dtype=np.uint)
+        faces = np.empty((rows*cols*2, 3), dtype=np.uint32)
         rowtemplate1 = ((np.arange(cols).reshape(cols, 1) + np.array([[0, 1, 0]])) % cols) + np.array([[0, 0, cols]])
         rowtemplate2 = ((np.arange(cols).reshape(cols, 1) + np.array([[0, 1, 1]])) % cols) + np.array([[cols, 0, cols]])
         for row in range(rows):
@@ -481,7 +489,7 @@ class MeshData(object):
         for a cylindrical surface.
         The cylinder may be tapered with different radii at each end (truncated cone)
         """
-        verts = np.empty((rows+1, cols, 3), dtype=float)
+        verts = np.empty((rows+1, cols, 3), dtype=np.float32)
         if isinstance(radius, int):
             radius = [radius, radius] # convert to list
         ## compute vertexes
@@ -494,7 +502,7 @@ class MeshData(object):
         verts[...,1] = r * np.sin(th) # y = r sin(th)
         verts = verts.reshape((rows+1)*cols, 3) # just reshape: no redundant vertices...
         ## compute faces
-        faces = np.empty((rows*cols*2, 3), dtype=np.uint)
+        faces = np.empty((rows*cols*2, 3), dtype=np.uint32)
         rowtemplate1 = ((np.arange(cols).reshape(cols, 1) + np.array([[0, 1, 0]])) % cols) + np.array([[0, 0, cols]])
         rowtemplate2 = ((np.arange(cols).reshape(cols, 1) + np.array([[0, 1, 1]])) % cols) + np.array([[cols, 0, cols]])
         for row in range(rows):

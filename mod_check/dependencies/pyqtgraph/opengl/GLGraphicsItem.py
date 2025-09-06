@@ -1,30 +1,26 @@
-from OpenGL.GL import *
 from OpenGL import GL
-from ..Qt import QtGui, QtCore
-from .. import Transform3D
-from ..python2_3 import basestring
 
+from .. import Transform3D
+from ..Qt import QtCore, QtGui
 
 GLOptions = {
     'opaque': {
-        GL_DEPTH_TEST: True,
-        GL_BLEND: False,
-        GL_ALPHA_TEST: False,
-        GL_CULL_FACE: False,
+        GL.GL_DEPTH_TEST: True,
+        GL.GL_BLEND: False,
+        GL.GL_CULL_FACE: False,
     },
     'translucent': {
-        GL_DEPTH_TEST: True,
-        GL_BLEND: True,
-        GL_ALPHA_TEST: False,
-        GL_CULL_FACE: False,
-        'glBlendFunc': (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA),
+        GL.GL_DEPTH_TEST: True,
+        GL.GL_BLEND: True,
+        GL.GL_CULL_FACE: False,
+        'glBlendFuncSeparate': (GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA,
+                                GL.GL_ONE, GL.GL_ONE_MINUS_SRC_ALPHA),
     },
     'additive': {
-        GL_DEPTH_TEST: False,
-        GL_BLEND: True,
-        GL_ALPHA_TEST: False,
-        GL_CULL_FACE: False,
-        'glBlendFunc': (GL_SRC_ALPHA, GL_ONE),
+        GL.GL_DEPTH_TEST: False,
+        GL.GL_BLEND: True,
+        GL.GL_CULL_FACE: False,
+        'glBlendFunc': (GL.GL_SRC_ALPHA, GL.GL_ONE),
     },
 }    
 
@@ -32,16 +28,17 @@ GLOptions = {
 class GLGraphicsItem(QtCore.QObject):
     _nextId = 0
     
-    def __init__(self, parentItem=None):
-        QtCore.QObject.__init__(self)
+    def __init__(self, parentItem: 'GLGraphicsItem' = None):
+        super().__init__()
         self._id = GLGraphicsItem._nextId
         GLGraphicsItem._nextId += 1
         
-        self.__parent = None
+        self.__parent: GLGraphicsItem | None = None
         self.__view = None
-        self.__children = set()
+        self.__children: list[GLGraphicsItem] = list()
         self.__transform = Transform3D()
         self.__visible = True
+        self.__initialized = False
         self.setParentItem(parentItem)
         self.setDepthValue(0)
         self.__glOpts = {}
@@ -51,13 +48,16 @@ class GLGraphicsItem(QtCore.QObject):
         if self.__parent is not None:
             self.__parent.__children.remove(self)
         if item is not None:
-            item.__children.add(self)
+            item.__children.append(self)
+
+        # if we had a __view, we were a top level object
+        if self.__view is not None:
+            self.__view.removeItem(self)
+
+        # we are now either a child or an orphan.
+        # either way, we don't have our own __view
         self.__parent = item
-        
-        if self.__parent is not None and self.view() is not self.__parent.view():
-            if self.view() is not None:
-                self.view().removeItem(self)
-            self.__parent.view().addItem(self)
+        self.__view = None
     
     def setGLOptions(self, opts):
         """
@@ -91,7 +91,7 @@ class GLGraphicsItem(QtCore.QObject):
             
         
         """
-        if isinstance(opts, basestring):
+        if isinstance(opts, str):
             opts = GLOptions[opts]
         self.__glOpts = opts.copy()
         self.update()
@@ -117,7 +117,12 @@ class GLGraphicsItem(QtCore.QObject):
         self.__view = v
         
     def view(self):
-        return self.__view
+        if self.__parent is None:
+            # top level object
+            return self.__view
+        else:
+            # recurse
+            return self.__parent.view()
         
     def setDepthValue(self, value):
         """
@@ -135,9 +140,12 @@ class GLGraphicsItem(QtCore.QObject):
         
     def setTransform(self, tr):
         """Set the local transform for this object.
-        Must be a :class:`Transform3D <pyqtgraph.Transform3D>` instance. This transform
-        determines how the local coordinate system of the item is mapped to the coordinate
-        system of its parent."""
+
+        Parameters
+        ----------
+        tr : pyqtgraph.Transform3D
+            Tranformation from the local coordinate system to the parent's.
+        """
         self.__transform = Transform3D(tr)
         self.update()
         
@@ -228,6 +236,12 @@ class GLGraphicsItem(QtCore.QObject):
         view, as it may be obscured or outside of the current view area."""
         return self.__visible
     
+    def initialize(self):
+        self.initializeGL()
+        self.__initialized = True
+
+    def isInitialized(self):
+        return self.__initialized
     
     def initializeGL(self):
         """
@@ -245,14 +259,14 @@ class GLGraphicsItem(QtCore.QObject):
         for k,v in self.__glOpts.items():
             if v is None:
                 continue
-            if isinstance(k, basestring):
+            if isinstance(k, str):
                 func = getattr(GL, k)
                 func(*v)
             else:
                 if v is True:
-                    glEnable(k)
+                    GL.glEnable(k)
                 else:
-                    glDisable(k)
+                    GL.glDisable(k)
     
     def paint(self):
         """
@@ -295,6 +309,18 @@ class GLGraphicsItem(QtCore.QObject):
         if tr is None:
             return point
         return tr.inverted()[0].map(point)
-        
-        
-        
+
+    def modelViewMatrix(self) -> QtGui.QMatrix4x4:
+        if (view := self.view()) is None:
+            return QtGui.QMatrix4x4()
+        return view.currentModelView()
+
+    def projectionMatrix(self) -> QtGui.QMatrix4x4:
+        if (view := self.view()) is None:
+            return QtGui.QMatrix4x4()
+        return view.currentProjection()
+
+    def mvpMatrix(self) -> QtGui.QMatrix4x4:
+        if (view := self.view()) is None:
+            return QtGui.QMatrix4x4()
+        return view.currentProjection() * view.currentModelView()

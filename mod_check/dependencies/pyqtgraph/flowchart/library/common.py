@@ -1,23 +1,21 @@
-# -*- coding: utf-8 -*-
-from ...Qt import QtCore, QtGui
-from ...widgets.SpinBox import SpinBox
-#from ...SignalProxy import SignalProxy
-from ...WidgetGroup import WidgetGroup
-#from ColorMapper import ColorMapper
-from ..Node import Node
+__all__ = ["CtrlNode", "PlottingCtrlNode"]
+
 import numpy as np
+
+from ...Qt import QtCore, QtWidgets
+
+from ...WidgetGroup import WidgetGroup
 from ...widgets.ColorButton import ColorButton
-try:
-    import metaarray
-    HAVE_METAARRAY = True
-except:
-    HAVE_METAARRAY = False
+from ...widgets.SpinBox import SpinBox
+
+from ..Node import Node
+
 
 
 def generateUi(opts):
     """Convenience function for generating common UI types"""
-    widget = QtGui.QWidget()
-    l = QtGui.QFormLayout()
+    widget = QtWidgets.QWidget()
+    l = QtWidgets.QFormLayout()
     l.setSpacing(0)
     widget.setLayout(l)
     ctrls = {}
@@ -36,7 +34,7 @@ def generateUi(opts):
         tip = o.pop('tip', None)
 
         if t == 'intSpin':
-            w = QtGui.QSpinBox()
+            w = QtWidgets.QSpinBox()
             if 'max' in o:
                 w.setMaximum(o['max'])
             if 'min' in o:
@@ -44,7 +42,7 @@ def generateUi(opts):
             if 'value' in o:
                 w.setValue(o['value'])
         elif t == 'doubleSpin':
-            w = QtGui.QDoubleSpinBox()
+            w = QtWidgets.QDoubleSpinBox()
             if 'max' in o:
                 w.setMaximum(o['max'])
             if 'min' in o:
@@ -55,11 +53,11 @@ def generateUi(opts):
             w = SpinBox()
             w.setOpts(**o)
         elif t == 'check':
-            w = QtGui.QCheckBox()
+            w = QtWidgets.QCheckBox()
             if 'checked' in o:
                 w.setChecked(o['checked'])
         elif t == 'combo':
-            w = QtGui.QComboBox()
+            w = QtWidgets.QComboBox()
             for i in o['values']:
                 w.addItem(i)
         #elif t == 'colormap':
@@ -173,19 +171,3 @@ class PlottingCtrlNode(CtrlNode):
         out = CtrlNode.process(self, In, display)
         out['plot'] = None
         return out
-
-
-def metaArrayWrapper(fn):
-    def newFn(self, data, *args, **kargs):
-        if HAVE_METAARRAY and (hasattr(data, 'implements') and data.implements('MetaArray')):
-            d1 = fn(self, data.view(np.ndarray), *args, **kargs)
-            info = data.infoCopy()
-            if d1.shape != data.shape:
-                for i in range(data.ndim):
-                    if 'values' in info[i]:
-                        info[i]['values'] = info[i]['values'][:d1.shape[i]]
-            return metaarray.MetaArray(d1, info=info)
-        else:
-            return fn(self, data, *args, **kargs)
-    return newFn
-
