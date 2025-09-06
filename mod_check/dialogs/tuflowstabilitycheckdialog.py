@@ -43,10 +43,11 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         self.summary_graphics_view = graphs.MbCheckMultipleGraphicsView()
         self.summary_graph_toolbar = NavigationToolbar(self.summary_graphics_view.canvas, self)
         
+        self.hpc_check = None
         self.hpc_file_results = None
         self.current_hpc_filetype = ''
-        self.hpc_individual_graphics_view = graphs.HpcCheckIndividualGraphicsView()
-        self.hpc_individual_graph_toolbar = NavigationToolbar(self.hpc_individual_graphics_view.canvas, self)
+        self.hpc_individual_graphics_view = graphs.HpcCheckIndividualGraphicsView(self.hpcGraphicsView)
+        # self.hpc_individual_graph_toolbar = NavigationToolbar(self.hpc_individual_graphics_view.canvas, self)
 
         mb_folder = mrt_settings.loadProjectSetting(
             'mb_folder', self.project.readPath('./temp')
@@ -69,6 +70,7 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         self.mbSummaryResetGraphBtn.clicked.connect(self.resetSummaryGraph)
         self.mbReloadIndividualBtn.clicked.connect(self.loadMbFile)
         self.mbIndividualUpdateGraphBtn.clicked.connect(self.updateIndividualGraph)
+        self.mbIndividualShowHoverCBox.stateChanged.connect(self.mbIndividualShowHoverChanged)
         self.mbSummaryTable.cellChanged.connect(self.summaryCellChanged)
         self.mbSummaryTable.cellClicked.connect(self.summaryTableClicked)
         self.MBCheckbox.stateChanged.connect(self.summaryMbCheckChanged)
@@ -91,6 +93,7 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         self.hpcNuRadioBtn.clicked.connect(self.updateHpcGraph)
         self.hpcNdRadioBtn.clicked.connect(self.updateHpcGraph)
         self.hpcEffRadioBtn.clicked.connect(self.updateHpcGraph)
+        self.hpcShowHoverCBox.stateChanged.connect(self.hpcShowHoverChanged)
 
         self.mbSummaryTable.setContextMenuPolicy(Qt.CustomContextMenu)
         self.mbSummaryTable.customContextMenuRequested.connect(self._showIndividualMbPlot)
@@ -103,8 +106,8 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         # self.mbIndividualGraphLayout.addWidget(self.individual_graph_toolbar)
         self.mbSummaryGraphLayout.addWidget(self.summary_graphics_view)
         self.mbSummaryGraphLayout.addWidget(self.summary_graph_toolbar)
-        self.hpcGraphLayout.addWidget(self.hpc_individual_graphics_view)
-        self.hpcGraphLayout.addWidget(self.hpc_individual_graph_toolbar)
+        # self.hpcGraphLayout.addWidget(self.hpc_individual_graphics_view)
+        # self.hpcGraphLayout.addWidget(self.hpc_individual_graph_toolbar)
 
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)
@@ -114,6 +117,19 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
             self.loadMbFile()
         elif caller == 'hpc_file':
             self.loadHpcFile()
+            
+    def mbIndividualShowHoverChanged(self, checked):
+        if checked:
+            self.individual_graphics_view.show_hover = True
+        else:
+            self.individual_graphics_view.show_hover = False
+
+    # TODO: Combine both hover changed into single method
+    def hpcShowHoverChanged(self, checked):
+        if checked:
+            self.hpc_individual_graphics_view.show_hover = True
+        else:
+            self.hpc_individual_graphics_view.show_hover = False
 
     @pyqtSlot(str)
     def _updateStatus(self, status):
@@ -340,16 +356,16 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         self.current_hpc_filename = os.path.split(hpc_path)[1]
         self.hpc_check = tmb_check.TuflowHpcCheck()
         self._updateStatus('Loading file: {0}'.format(hpc_path))
-        # try:
-        self.hpc_check.loadHpcFile(hpc_path)
-        self.updateHpcGraph()
-        # except Exception as err:
-        #     self._updateStatus('File load error: {0}'.format(mb_path))
-        #     QMessageBox.warning(self, "MB file load error", err.args[0])
+        try:
+            self.hpc_check.loadHpcFile(hpc_path)
+            self.updateHpcGraph()
+        except Exception as err:
+            self._updateStatus('File load error: {0}'.format(hpc_path))
+            QMessageBox.warning(self, "HPC file load error", err.args[0])
         self._updateStatus('Loaded file: {0}'.format(hpc_path))
     
     def updateHpcGraph(self):
-        if self.hpc_check.series_data is None:
+        if not self.hpc_check or self.hpc_check.series_data is None:
             QMessageBox.warning(
                 self, "No HPC File Loaded", 
                 "Please load an HPC File",

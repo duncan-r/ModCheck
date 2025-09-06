@@ -166,25 +166,41 @@ class MbCheckMultipleGraphicsView(QGraphicsView):
         self.canvas.draw()
             
 
-# class MbCheckIndividualGraphicsView(QGraphicsView):
 class MbCheckIndividualGraphicsView():
     
     def __init__(self, graphics_view):
         self.gv = graphics_view
-        self.gv.setBackground('w')
+        self.back_color = QgsProject.instance().backgroundColor()
+        self.gv.setBackground(self.back_color)
         self.series_types = []
         self.results = None
         self.title = ""
+        self.show_hover = True
         
-    # def updateSeriesPlot(self):
-    #     self.series_1.setGeometry(self.series_1.vb.sceneBoundingRect())
-    #     # self.series_1.linkedViewChanged(self.series_1.vb)
-    #
-    # def updateSeriesGraph(self, graph_series):
-    #     self.series_1.clear()
-    #     x = self.results['Time (h)']
-    #     y = self.results[graph_series]
-    #     self.series_1.plot(x, y, name=self.title, pen=({'color': 'b', 'width': 1}))
+    def _mouseMoved(self, evt):
+        if not self.show_hover:
+            self.display_text.hide()
+            return
+        
+        pos = evt
+        if self.p1.sceneBoundingRect().contains(pos):
+            mousePoint = self.p1.vb.mapSceneToView(pos)
+            mousePoint2 = self.p2.mapSceneToView(pos)
+            index = int(mousePoint.x())
+            series_1 = self.results[self.series_types[0]]
+            series_2 = self.results[self.series_types[1]]
+            if index >= 0 and index < len(series_1):
+                self.display_text.setText(
+                    "Time = {x:.3f}\n{y1name} = {y1:.3f}\n{y2name} = {y2:.3f}".format(
+                        x=mousePoint.x(), 
+                        y1name=self.series_types[0], y1=mousePoint.y(),
+                        y2name=self.series_types[1], y2=mousePoint2.y()
+                    )
+                )
+                self.display_text.setPos(mousePoint.x(), mousePoint.y())
+                self.display_text.show()
+            else:
+                self.display_text.hide()
         
     def setupPlot(self, graph_series, results, title):
         self.series_types = graph_series
@@ -195,6 +211,7 @@ class MbCheckIndividualGraphicsView():
         series_2 = self.series_types[1]
         
         self.p1 = self.gv.plotItem
+        self.p1.setDefaultPadding(0.1)
         self.p1.getAxis('bottom').setLabel("Time (h)", color='black', **{'font-size': '10pt'})
         self.p2 = pg.ViewBox()
         self.p1.showAxis('right')
@@ -208,8 +225,11 @@ class MbCheckIndividualGraphicsView():
         self.p1.getAxis('left').setPen(pen)
         self.p1.getAxis('bottom').setPen(pen)
         self.p1.getAxis('right').setPen(pen)
-
+        self.p1.getAxis('left').enableAutoSIPrefix(False)
+        self.p1.getAxis('right').enableAutoSIPrefix(False)
+        
         self.p1.vb.sigResized.connect(self.updateViews)
+        self.p1.scene().sigMouseMoved.connect(self._mouseMoved)
         self.updatePlot()
         
     def updatePlot(self):
@@ -220,12 +240,16 @@ class MbCheckIndividualGraphicsView():
         self.p1.getAxis('right').setLabel(series_2, color='red', **{'font-size': '10pt'})
         self.p1.plot(
             self.results['Time (h)'], self.results[series_1],
-            pen=({'color': "b", 'width': 1.5})
+            pen=({'color': "b", 'width': 1.5}), antialias=True
         )
         self.p2.addItem(pg.PlotCurveItem(
             self.results['Time (h)'], self.results[series_2], 
-            pen=({'color': "r", 'width': 1.5})
+            pen=({'color': "r", 'width': 1.5}), antialias=True, hoverable=True
         ))
+        self.display_text = pg.TextItem(
+            text="", color=(0,0,0), anchor=(0,1), fill=self.back_color, border=pg.mkColor(0,0,0,100)
+        )
+        self.gv.addItem(self.display_text)
         self.p1.vb.autoRange()
         self.updateViews()
         
@@ -243,152 +267,107 @@ class MbCheckIndividualGraphicsView():
             self.p1.clear()
             self.p2.clear()
             self.updatePlot()
-
-        
-        # self.axes.set_xlabel('Time (h)')
-        # self.axes.set_title(title)
-
-        # for gs in graph_series[0]:
-        #     s = results[gs]
-        #     left_plot = self.axes.plot(x, s, plot_colors[color_count], label=gs)
-        #     pl = [p for p in left_plot]
-        #     plot_lines += pl
-        #     labels += ['(L) ' + l.get_label() for l in pl]
-        #     color_count += 1
-        #     if color_count > len(plot_colors):
-        #         color_count = 0
-        #
-        # if graph_series[1]:
-        #     for gs in graph_series[1]:
-        #         s = results[gs]
-        #         right_plot = self.axes2.plot(x, s, plot_colors[color_count], label=gs)
-        #         pl = [p for p in right_plot]
-        #         plot_lines += pl
-        #         labels += ['(R) ' + l.get_label() for l in pl]
-        #         color_count += 1
-        #         if color_count > len(plot_colors):
-        #             color_count = 0
-        #
-        # self.axes.grid(True)
-        # self.axes.legend(plot_lines, labels, loc='lower right')
-        # self.fig.tight_layout()
-        # self.canvas.draw()
-
             
-# class MbCheckIndividualGraphicsView(QGraphicsView):
-#     """GraphicsView to display the Individual MB Check tab graphs.
-#     """
-#
-#     def __init__(self):
-#         QGraphicsView.__init__(self)
-#
-#         scene = QGraphicsScene()
-#         self.setScene(scene)
-#         self.fig = Figure()
-#         self.axes = self.fig.gca()
-#         self.axes2 = self.axes.twinx()
-#         self.fig.tight_layout()
-#         self.canvas = FigureCanvas(self.fig)
-#         proxy_widget = scene.addWidget(self.canvas)
-#
-#     def drawPlot(self, graph_series, results, title):
-#         plot_colors = ['-b', '-g', '-r', '-c', '-m', '-y', '-k',]
-#         color_count = 0
-#         labels = []
-#         plot_lines = []
-#         self.axes2.clear()
-#         self.axes.clear()
-#         self.fig.clear()
-#         self.axes = self.fig.gca()
-#         self.axes2 = self.axes.twinx()
-#
-#         x = results['Time (h)']
-#         self.axes.set_xlabel('Time (h)')
-#         self.axes.set_title(title)
-#
-#         for gs in graph_series[0]:
-#             s = results[gs]
-#             left_plot = self.axes.plot(x, s, plot_colors[color_count], label=gs)
-#             pl = [p for p in left_plot]
-#             plot_lines += pl
-#             labels += ['(L) ' + l.get_label() for l in pl]
-#             color_count += 1
-#             if color_count > len(plot_colors):
-#                 color_count = 0
-#
-#         if graph_series[1]:
-#             for gs in graph_series[1]:
-#                 s = results[gs]
-#                 right_plot = self.axes2.plot(x, s, plot_colors[color_count], label=gs)
-#                 pl = [p for p in right_plot]
-#                 plot_lines += pl
-#                 labels += ['(R) ' + l.get_label() for l in pl]
-#                 color_count += 1
-#                 if color_count > len(plot_colors):
-#                     color_count = 0
-#
-#         self.axes.grid(True)
-#         self.axes.legend(plot_lines, labels, loc='lower right')
-#         self.fig.tight_layout()
-#         self.canvas.draw()
-        
 
-class HpcCheckIndividualGraphicsView(QGraphicsView):
-    """GraphicsView to display the Individual MB Check tab graphs.
-    """
-    
-    def __init__(self):
-        QGraphicsView.__init__(self)
-
-        scene = QGraphicsScene()
-        self.setScene(scene)
-        self.fig = Figure()
-        self.axes = self.fig.gca()
-        self.fig.tight_layout()
-        self.canvas = FigureCanvas(self.fig)
-        proxy_widget = scene.addWidget(self.canvas)
+class HpcCheckIndividualGraphicsView():
+            
+    def __init__(self, graphics_view):
+        self.gv = graphics_view
+        self.back_color = QgsProject.instance().backgroundColor()
+        self.gv.setBackground(self.back_color)
+        self.series_types = []
+        self.results = np.empty(1)
+        self.title = ""
+        self.show_hover = True
         
-    def drawPlot(self, series_meta, results, title):
-        plot_colors = ['-b', '-g', '-r', '-c', '-m', '-y', '-k',]
-        color_count = 0
-        labels = []
-        plot_lines = []
-        self.axes.clear()
-        self.fig.clear()
-        self.axes = self.fig.gca()
+    def _mouseMoved(self, evt):
+        if not self.show_hover:
+            self.display_text.hide()
+            return
         
-        x = results[:,1]
-        self.axes.set_xlabel('tEnd (h)')
-        self.axes.set_title(title)
-
-        gtype = series_meta[1]
-        if gtype in ['Nc', 'Nu', 'Nd']:
-            if gtype == 'Nc' or gtype == 'Nu':
-                tol_max = [1.0 for i in x]
+        pos = evt
+        if self.p1.sceneBoundingRect().contains(pos):
+            mousePoint = self.p1.vb.mapSceneToView(pos)
+            index = int(mousePoint.x())
+            series_1 = self.results[self.series_types[0]]
+            if index >= 0 and index < len(series_1):
+                self.display_text.setText(
+                    "Time = {x:.3f}\n{y1name} = {y1:.3f}".format(
+                        x=mousePoint.x(), y1name=self.series_types[1], y1=mousePoint.y()
+                    )
+                )
+                self.display_text.setPos(mousePoint.x(), mousePoint.y())
+                self.display_text.show()
             else:
-                tol_max = [0.3 for i in x]
-
-            max_plot = self.axes.plot(x, tol_max, "-g", alpha=0.5, label="Max recommended", dashes=[6,2])
-            pl = [p for p in max_plot]
-            plot_lines += pl
-            labels += [l.get_label() for l in pl]
-    
-
-        s = results[:,series_meta[0]]
-        left_plot = self.axes.plot(x, s, plot_colors[color_count], label=gtype)
-        self.axes.set_ylabel(gtype)
-        pl = [p for p in left_plot]
-        plot_lines += pl
-        labels += [l.get_label() for l in pl]
-        color_count += 1
-        if color_count > len(plot_colors):
-            color_count = 0
-            
-        self.axes.grid(True)
-        self.axes.legend(plot_lines, labels, loc='lower right')
-        self.fig.tight_layout()
-        self.canvas.draw()
+                self.display_text.hide()
         
+    def setupPlot(self, series_meta, results, title):
+        self.series_types = series_meta
+        self.results = results
+        self.title = title
+        
+        series_1 = self.series_types[0]
+        self.p1 = self.gv.plotItem
+        self.p1.setDefaultPadding(0.1)
+        self.p1.getAxis('bottom').setLabel("Time (h)", color='black', **{'font-size': '10pt'})
+        self.p1.showGrid(x=True, y=False, alpha=0.3)
+        
+        pen = pg.mkPen(color=(0,0,0), width=1)
+        self.p1.getAxis('left').setPen(pen)
+        self.p1.getAxis('bottom').setPen(pen)
+        self.p1.getAxis('left').enableAutoSIPrefix(False)
+        
+        self.p1.vb.sigResized.connect(self.updateViews)
+        self.p1.scene().sigMouseMoved.connect(self._mouseMoved)
+        self.updatePlot()
+        
+    def updatePlot(self):
+        self.p1.clear()
+        series_1 = self.series_types[0]
+        series_1_name = self.series_types[1]
+
+        self.p1.getAxis('left').setLabel(series_1_name, color='blue', **{'font-size': '10pt'})
+
+        tol_max = None
+        if series_1_name in ['Nc', 'Nu', 'Nd']:
+            if series_1_name == 'Nc' or series_1_name == 'Nu':
+                tol_max = [1.0 for i in self.results[:,1]]
+            else:
+                tol_max = [0.3 for i in self.results[:,1]]
+
+        self.p1.plot(
+            self.results[:,1], self.results[:,series_1],
+            pen=({'color': "b", 'width': 1}), antialias=True
+        )
+        if tol_max:
+            self.p1.addItem(pg.PlotCurveItem(
+                self.results[:,1], tol_max,
+                pen=({'color': pg.mkColor(161, 14, 41, 80), 'width': 2, 'style': Qt.DashLine})
+            ))
+        self.display_text = pg.TextItem(
+            text="", color=(0,0,0), anchor=(0,1), fill=self.back_color, border=pg.mkColor(0,0,0,100)
+        )
+        self.gv.addItem(self.display_text)
+        self.p1.vb.autoRange()
+        self.updateViews()
+        
+    def updateViews(self):
+        pass
+        # self.p2.setGeometry(self.p1.vb.sceneBoundingRect())
+        # self.p2.linkedViewChanged(self.p1.vb, self.p2.XAxis)
+    
+    def drawPlot(self, series_meta, results, title=""):
+        do_setup = False
+        if not series_meta: do_setup = True
+        elif results.any(): do_setup = True
+        
+        if do_setup:
+            self.setupPlot(series_meta, results, title)
+        else:
+            self.series_types = series_meta
+            self.results = results
+            self.title = title
+            self.updatePlot()
 
 class FmpStabilityGeometryGraphicsView(QGraphicsView):
     """GraphicsView to display the flow/stage for the Fmp stability check.

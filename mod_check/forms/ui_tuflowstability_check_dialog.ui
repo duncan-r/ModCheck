@@ -306,6 +306,16 @@
                      </property>
                     </spacer>
                    </item>
+                   <item>
+                    <widget class="QCheckBox" name="mbIndividualShowHoverCBox">
+                     <property name="text">
+                      <string>Show hover text</string>
+                     </property>
+                     <property name="checked">
+                      <bool>true</bool>
+                     </property>
+                    </widget>
+                   </item>
                   </layout>
                  </widget>
                 </widget>
@@ -321,6 +331,9 @@
              </item>
              <item>
               <layout class="QVBoxLayout" name="mbIndividualGraphLayout">
+               <property name="leftMargin">
+                <number>0</number>
+               </property>
                <item>
                 <widget class="PlotWidget" name="mbIndividualGraphicsView">
                  <property name="backgroundBrush">
@@ -469,6 +482,16 @@
                  </property>
                 </spacer>
                </item>
+               <item>
+                <widget class="QCheckBox" name="hpcShowHoverCBox">
+                 <property name="text">
+                  <string>Show hover text</string>
+                 </property>
+                 <property name="checked">
+                  <bool>true</bool>
+                 </property>
+                </widget>
+               </item>
               </layout>
              </widget>
             </widget>
@@ -483,7 +506,11 @@
           </layout>
          </item>
          <item>
-          <layout class="QVBoxLayout" name="hpcGraphLayout"/>
+          <layout class="QVBoxLayout" name="hpcGraphLayout">
+           <item>
+            <widget class="PlotWidget" name="hpcGraphicsView"/>
+           </item>
+          </layout>
          </item>
         </layout>
        </item>
