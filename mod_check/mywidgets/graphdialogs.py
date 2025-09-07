@@ -21,11 +21,47 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib import dates as mdates
 from matplotlib.dates import DateFormatter
 import numpy as np
+import math
 
 import pyqtgraph as pg
 
 from ..forms import ui_graph_dialog as graph_ui
 from ..forms import ui_text_dialog as text_ui
+
+
+def isDark(q_color):
+    r = q_color.red()
+    g = q_color.green()
+    b = q_color.blue()
+    hsp = math.sqrt(0.299 * (r * r) + 0.587 * (g * g) + 0.114 * (b * b))
+    if (hsp > 127.5):
+        return False
+    else:
+        return True
+    
+def getHighlightColor(is_dark, alpha=100):
+    if is_dark:
+        if alpha == False:
+            return (255, 255, 255)
+        else:
+            return (255, 255, 255, alpha)
+    else:
+        if alpha == False:
+            return (0, 0, 0)
+        else:
+            return (0, 0, 0, alpha)
+
+def getBackColor(is_dark, alpha=100):
+    if is_dark:
+        if alpha == False:
+            return (0, 0, 0)
+        else:
+            return (0, 0, 0, alpha)
+    else:
+        if alpha == False:
+            return (255, 255, 255)
+        else:
+            return (255, 255, 255, alpha)
 
 
 class LocalHelpDialog(QDialog, text_ui.Ui_TextDialog):
@@ -378,6 +414,9 @@ class FmpStabilityGeometryGraphicsView():
         self.gv = graphics_view
         self.back_color = QgsProject.instance().backgroundColor()
         self.gv.setBackground(self.back_color)
+        self.is_dark = isDark(self.back_color)
+        self.highlight_color = getHighlightColor(self.is_dark)
+        self.back_color = getBackColor(self.is_dark)
         self.show_hover = True
         self.node_name = ""
         self.geom_data = None
@@ -409,8 +448,9 @@ class FmpStabilityGeometryGraphicsView():
                 self.display_text.hide()
         
     def clearPlot(self, redraw=True):
-        if self.p1:
+        try:
             self.p1.clear()
+        except: pass
 
     def setupPlot(self, geom_data, node_name, stage):
         self.geom_data = geom_data
@@ -419,14 +459,15 @@ class FmpStabilityGeometryGraphicsView():
         
         self.p1 = self.gv.plotItem
         self.p1.setDefaultPadding(0.1)
-        self.p1.getAxis('bottom').setLabel("X (m)", color='black', **{'font-size': '10pt'})
-        self.p1.showGrid(x=True, y=False, alpha=0.3)
+        self.p1.getAxis('bottom').setLabel("X (m)", color=self.highlight_color, **{'font-size': '10pt'})
+        self.p1.showGrid(x=True, y=True, alpha=0.1)
+        self.p1.setContentsMargins(5,10,5,5)
 
-        pen = pg.mkPen(color=(0,0,0), width=1)
+        pen = pg.mkPen(color=self.highlight_color, width=1)
         self.p1.getAxis('left').setPen(pen)
         self.p1.getAxis('bottom').setPen(pen)
         self.p1.getAxis('left').enableAutoSIPrefix(False)
-        self.p1.getAxis('left').setLabel("Level (mAOD)", color='black', **{'font-size': '10pt'})
+        self.p1.getAxis('left').setLabel("Level (mAOD)", color=self.highlight_color, **{'font-size': '10pt'})
         self.p1.scene().sigMouseMoved.connect(self._mouseMoved)
         self.updatePlot()
         
@@ -508,7 +549,8 @@ class FmpStabilityGeometryGraphicsView():
             bed, water, brush=pg.mkBrush(color=(33, 33, 255, 60)),
         ))
         self.display_text = pg.TextItem(
-            text="", color=(0,0,0), anchor=(0,1), fill=self.back_color, border=pg.mkColor(0,0,0,100)
+            text="", color=self.highlight_color, anchor=(0,1), fill=self.back_color,
+            border=self.highlight_color
         )
         self.display_text.hide()
         self.gv.addItem(self.display_text)
@@ -532,6 +574,9 @@ class FmpStabilityGraphicsView():
         self.gv = graphics_view
         self.back_color = QgsProject.instance().backgroundColor()
         self.gv.setBackground(self.back_color)
+        self.is_dark = isDark(self.back_color)
+        self.highlight_color = getHighlightColor(self.is_dark)
+        self.back_color = getBackColor(self.is_dark)
         self.show_hover = True
         self.series_type = ""
         self.node_name = ""
@@ -554,11 +599,11 @@ class FmpStabilityGraphicsView():
             series_1_name = ''
             series_2_name = ''
             if self.series_type == 'Stage':
-                series_1 = self.results[0].to_numpy()
+                series_1 = self.results['stage'][0].to_numpy()
                 series_1_name = "Stage"
                 series_2_name = "Flow"
             else:
-                series_1 = self.results[1].to_numpy()
+                series_1 = self.results['flow'][0].to_numpy()
                 series_1_name = "Flow"
                 series_2_name = "Stage"
 
@@ -574,6 +619,14 @@ class FmpStabilityGraphicsView():
                 self.display_text.show()
             else:
                 self.display_text.hide()
+
+    def clearPlot(self, redraw=True):
+        try:
+            self.p2.clear()
+        except: pass
+        try:
+            self.p1.clear()
+        except: pass
         
     def setupPlot(self, time_data, results, derivs, timestep, series_type, 
                  node_name, show_derivs=False):
@@ -586,22 +639,23 @@ class FmpStabilityGraphicsView():
         
         self.p1 = self.gv.plotItem
         self.p1.setDefaultPadding(0.1)
-        self.p1.getAxis('bottom').setLabel("Time (h)", color='black', **{'font-size': '10pt'})
+        self.p1.getAxis('bottom').setLabel("Time (h)", color=self.highlight_color, **{'font-size': '10pt'})
         self.p2 = pg.ViewBox()
         self.p1.showAxis('right')
         self.p1.scene().addItem(self.p2)
         self.p1.getAxis('right').linkToView(self.p2)
         self.p2.setXLink(self.p1)
         
-        self.p1.showGrid(x=True, y=False, alpha=0.3)
+        self.p1.showGrid(x=True, y=False, alpha=0.1)
 
-        pen = pg.mkPen(color=(0,0,0), width=1)
+        pen = pg.mkPen(color=self.highlight_color, width=1)
         self.p1.getAxis('left').setPen(pen)
         self.p1.getAxis('bottom').setPen(pen)
         self.p1.getAxis('right').setPen(pen)
         self.p1.getAxis('left').enableAutoSIPrefix(False)
         self.p1.getAxis('right').enableAutoSIPrefix(False)
         
+        self.p1.setContentsMargins(5,10,5,5)
         self.p1.vb.sigResized.connect(self.updateViews)
         self.p1.scene().sigMouseMoved.connect(self._mouseMoved)
         self.updatePlot()
@@ -610,40 +664,65 @@ class FmpStabilityGraphicsView():
         self.p1.clear()
         self.p2.clear()
         
-        series_1 = None
-        series_2 = None
-        series_1_name = "Stage"
-        series_2_name = "Flow"
-        if self.series_type == 'Stage':
-            series_1 = self.results[0].to_numpy()
-            series_2 = self.results[1].to_numpy()
-        else:
-            series_1 = self.results[1].to_numpy()
-            series_2 = self.results[0].to_numpy()
-            series_1_name = "Flow"
-            series_2_name = "Stage"
-
+        stage_series = self.results['stage'][0].to_numpy()
+        flow_series = self.results['flow'][0].to_numpy()
+        stage_ds_series = None
+        if len(self.results['stage']) > 1:
+            stage_ds_series = self.results['stage'][1].to_numpy()
+        
         fail_times = ''
         if self.derivs['status'] == 'Failed':
             fail_times = '(First fail: {:.3f} - Last Fail: {:.3f})'.format(self.derivs['fail_times'][0], self.derivs['fail_times'][-1])
         status_text = '{} {}'.format(self.node_name, fail_times) #'Dy2 Fail = {}   :   {}'.format(derivs['status'], fail_times)
         self.title = status_text
 
-        self.p1.getAxis('left').setLabel(series_1_name, color='blue', **{'font-size': '10pt'})
-        self.p1.getAxis('right').setLabel(series_2_name, color='red', **{'font-size': '10pt'})
-        self.p1.plot(
-            self.time_data, series_1,
-            pen=({'color': "b", 'width': 1.5}), antialias=True
-        )
+        if stage_ds_series is not None:
+            self.p1.addLegend()
+
+        # Set the primary series based on whether we're checking stage or flow
+        # TODO: refactor to avoid duplicate code
+        if self.series_type == 'Stage':
+            self.p1.getAxis('left').setLabel('Stage', color='blue', **{'font-size': '10pt'})
+            self.p1.getAxis('right').setLabel('Flow', color='red', **{'font-size': '10pt'})
+            self.p1.plot(
+                self.time_data, stage_series,
+                pen=({'color': "b", 'width': 1.5}), antialias=True, title=self.title
+            )
+            self.p2.addItem(pg.PlotCurveItem(
+                self.time_data, flow_series,
+                pen=({'color': "r", 'width': 1.5}), antialias=True, hoverable=True
+            ))
+            if stage_ds_series is not None:
+                self.p1.addItem(pg.PlotCurveItem(
+                    self.time_data, stage_ds_series,
+                    pen=({'color': "g", 'width': 1.5}), antialias=True
+                ))
+        else:
+            self.p1.getAxis('left').setLabel('Flow', color='red', **{'font-size': '10pt'})
+            self.p1.getAxis('right').setLabel('Stage', color='blue', **{'font-size': '10pt'})
+            self.p1.plot(
+                self.time_data, flow_series,
+                pen=({'color': "b", 'width': 1.5}), antialias=True, title=self.title
+            )
+            self.p2.addItem(pg.PlotCurveItem(
+                self.time_data, stage_series,
+                pen=({'color': "r", 'width': 1.5}), antialias=True, hoverable=True
+            ))
+            if stage_ds_series is not None:
+                self.p2.addItem(pg.PlotCurveItem(
+                    self.time_data, stage_ds_series,
+                    pen=({'color': "g", 'width': 1.5}), antialias=True
+                ))
+
         self.p1.addItem(pg.InfiniteLine(
-            pos=self.timestep, angle=90, pen=({'color': pg.mkColor(161, 14, 41, 80), 'width': 2, 'style': Qt.DashLine})
-        ))
-        self.p2.addItem(pg.PlotCurveItem(
-            self.time_data, series_2,
-            pen=({'color': "r", 'width': 1.5}), antialias=True, hoverable=True
+            pos=self.timestep, angle=90, pen=({
+                'color': getHighlightColor(self.is_dark, alpha=70),
+                'width': 2, 'style': Qt.DashLine
+            })
         ))
         self.display_text = pg.TextItem(
-            text="", color=(0,0,0), anchor=(0,1), fill=self.back_color, border=pg.mkColor(0,0,0,100)
+            # text="", color=text_color, anchor=(1,0), fill=self.back_color, border=pg.mkColor(0,0,0,100)
+            text="", color=self.highlight_color, anchor=(1,0), fill=self.back_color, border=self.highlight_color
         )
         self.gv.addItem(self.display_text)
         self.display_text.hide()
@@ -654,11 +733,14 @@ class FmpStabilityGraphicsView():
         self.p2.setGeometry(self.p1.vb.sceneBoundingRect())
         self.p2.linkedViewChanged(self.p1.vb, self.p2.XAxis)
 
-    def drawPlot(self, time_data, results, derivs, timestep, series_type, 
-                 node_name, show_derivs=False):
+    def drawPlot(
+            self, time_data, results, derivs, timestep, series_type, 
+            node_name, show_derivs=False
+        ):
         if not self.series_type or not self.results:
             self.setupPlot(
-                time_data, results, derivs, timestep, series_type,  node_name, show_derivs=False
+                time_data, results, derivs, timestep, series_type,  node_name,
+                show_derivs=show_derivs
             )
         else:
             self.series_type = series_type

@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>FmpStabilityCheckDialog</class>
- <widget class="QDialog" name="FmpStabilityCheckDialog">
+ <class>StabilityCheck1DDialog</class>
+ <widget class="QDialog" name="StabilityCheck1DDialog">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1053</width>
+    <width>994</width>
     <height>749</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>FMP Stability Check</string>
+   <string>1D Stability Check</string>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout" stretch="0,0,8,0">
+  <layout class="QVBoxLayout" name="verticalLayout" stretch="0,0,0,8,0">
    <item>
     <widget class="QTabWidget" name="fileSelectionTabWidget">
      <property name="enabled">
@@ -27,34 +27,19 @@
      </property>
      <widget class="QWidget" name="datAndResultsTab">
       <attribute name="title">
-       <string>Dat and Results</string>
+       <string>FM</string>
       </attribute>
       <layout class="QGridLayout" name="gridLayout">
-       <item row="3" column="1">
-        <widget class="QProgressBar" name="loadResultsProgressBar">
-         <property name="value">
-          <number>0</number>
-         </property>
-        </widget>
-       </item>
        <item row="0" column="0">
         <widget class="QLabel" name="label_3">
+         <property name="minimumSize">
+          <size>
+           <width>110</width>
+           <height>0</height>
+          </size>
+         </property>
          <property name="text">
           <string>FMP .zzn results</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="0">
-        <widget class="QLabel" name="label_2">
-         <property name="text">
-          <string>FMP .dat file (optional)</string>
-         </property>
-        </widget>
-       </item>
-       <item row="3" column="0">
-        <widget class="QPushButton" name="reloadDatAndResultsBtn">
-         <property name="text">
-          <string>Load Results</string>
          </property>
         </widget>
        </item>
@@ -72,71 +57,78 @@
          </property>
         </widget>
        </item>
-      </layout>
-     </widget>
-     <widget class="QWidget" name="existingResultsTab">
-      <attribute name="title">
-       <string>Existing Results</string>
-      </attribute>
-      <layout class="QGridLayout" name="gridLayout_2">
-       <item row="0" column="1">
-        <widget class="QgsFileWidget" name="existingResultsDatFileWidget">
-         <property name="enabled">
-          <bool>true</bool>
-         </property>
-         <property name="filter">
-          <string>*.dat</string>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="0">
-        <widget class="QLabel" name="label_6">
-         <property name="text">
-          <string>Flow Results</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="1">
-        <widget class="QgsFileWidget" name="stageResultsFileWidget">
-         <property name="filter">
-          <string>*.csv</string>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="1">
-        <widget class="QgsFileWidget" name="flowResultsFileWidget">
-         <property name="filter">
-          <string>*.csv</string>
-         </property>
-        </widget>
-       </item>
        <item row="1" column="0">
-        <widget class="QLabel" name="label_5">
-         <property name="text">
-          <string>Stage Results</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="0">
-        <widget class="QLabel" name="label_7">
-         <property name="enabled">
-          <bool>true</bool>
-         </property>
+        <widget class="QLabel" name="label_2">
          <property name="text">
           <string>FMP .dat file (optional)</string>
          </property>
         </widget>
        </item>
-       <item row="2" column="2">
-        <widget class="QPushButton" name="loadExistingResultsBtn">
+      </layout>
+     </widget>
+     <widget class="QWidget" name="estryTab">
+      <attribute name="title">
+       <string>ESTRY</string>
+      </attribute>
+      <layout class="QGridLayout" name="gridLayout_2">
+       <item row="0" column="0">
+        <widget class="QLabel" name="label_4">
+         <property name="minimumSize">
+          <size>
+           <width>110</width>
+           <height>0</height>
+          </size>
+         </property>
          <property name="text">
-          <string>Load Results</string>
+          <string>TUFLOW .tpc file</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QgsFileWidget" name="estryResultsFileWidget">
+         <property name="filter">
+          <string>*.tpc</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="0">
+        <widget class="QLabel" name="label_5">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="text">
+          <string>1d_xs layer (NA)</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QgsMapLayerComboBox" name="estry1dXSLayerCBox">
+         <property name="enabled">
+          <bool>false</bool>
          </property>
         </widget>
        </item>
       </layout>
      </widget>
     </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_6">
+     <item>
+      <widget class="QPushButton" name="reloadDatAndResultsBtn">
+       <property name="text">
+        <string>Load Results</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QProgressBar" name="loadResultsProgressBar">
+       <property name="value">
+        <number>0</number>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout">
@@ -397,6 +389,11 @@
    <header>qgsfilewidget.h</header>
   </customwidget>
   <customwidget>
+   <class>QgsMapLayerComboBox</class>
+   <extends>QComboBox</extends>
+   <header>qgsmaplayercombobox.h</header>
+  </customwidget>
+  <customwidget>
    <class>PlotWidget</class>
    <extends>QGraphicsView</extends>
    <header>pyqtgraph</header>
@@ -407,7 +404,7 @@
   <connection>
    <sender>buttonBox</sender>
    <signal>accepted()</signal>
-   <receiver>FmpStabilityCheckDialog</receiver>
+   <receiver>StabilityCheck1DDialog</receiver>
    <slot>accept()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -423,7 +420,7 @@
   <connection>
    <sender>buttonBox</sender>
    <signal>rejected()</signal>
-   <receiver>FmpStabilityCheckDialog</receiver>
+   <receiver>StabilityCheck1DDialog</receiver>
    <slot>reject()</slot>
    <hints>
     <hint type="sourcelabel">
