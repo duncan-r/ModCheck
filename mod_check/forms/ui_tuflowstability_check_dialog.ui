@@ -192,7 +192,11 @@
               </layout>
              </widget>
              <widget class="QWidget" name="verticalLayoutWidget">
-              <layout class="QVBoxLayout" name="mbSummaryGraphLayout"/>
+              <layout class="QVBoxLayout" name="mbSummaryGraphLayout">
+               <item>
+                <widget class="PlotWidget" name="mbSummaryGraphicsView"/>
+               </item>
+              </layout>
              </widget>
             </widget>
            </item>

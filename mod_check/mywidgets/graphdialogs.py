@@ -62,6 +62,15 @@ def getBackColor(is_dark, alpha=100):
             return (255, 255, 255)
         else:
             return (255, 255, 255, alpha)
+        
+def rgbToHex(rgb_tuple):
+    # Strip off alpha channel if found
+    if len(rgb_tuple) > 3:
+        no_alpha = (rgb_tuple[0], rgb_tuple[1], rgb_tuple[2])
+        hex = '#%02x%02x%02x' % no_alpha
+        return hex
+    hex = '#%02x%02x%02x' % rgb_tuple
+    return hex
 
 
 class LocalHelpDialog(QDialog, text_ui.Ui_TextDialog):
@@ -117,56 +126,89 @@ class ModelFileDialog(QDialog, text_ui.Ui_TextDialog):
             index = regex.indexIn(self.textEdit.toPlainText(), pos)
             
             
-class MbCheckMultipleGraphicsView(QGraphicsView):
+class MbSummaryGraphicsView():
     """GraphicsView for displaying multiple mb/dvol series.
     """
     
-    def __init__(self):
-        QGraphicsView.__init__(self)
-        scene = QGraphicsScene()
-        self.setScene(scene)
-        self.fig = Figure()
-        self.axes = self.fig.gca()
-        self.axes2 = None
-        self.fig.tight_layout()
-        self.canvas = FigureCanvas(self.fig)
-        proxy_widget = scene.addWidget(self.canvas)
+    def __init__(self, graphics_view):
+        self.gv = graphics_view
+        self.back_color = QgsProject.instance().backgroundColor()
+        self.gv.setBackground(self.back_color)
+        self.is_dark = isDark(self.back_color)
+        self.highlight_color = getHighlightColor(self.is_dark, alpha=False)
+        self.back_color = getBackColor(self.is_dark)
+        self.series_types = []
+        self.results = None
+        self.title = ""
+        self.show_hover = True
+        self.dvol_color = pg.mkColor(25, 40, 207)
+        self.cme_color = pg.mkColor(217, 28, 44)
+        self.dvol_color_alpha = pg.mkColor(25, 40, 207, 90)
+        self.cme_color_alpha = pg.mkColor(217, 28, 44, 90)
         
-    def resetPlot(self):
-        if self.axes2 is not None:
-            self.axes2.clear()
-            self.axes2 = None
-        self.axes.clear()
-        self.fig.clear()
-        self.axes = self.fig.gca()
-        
-    def drawPlot(self, results, show_dvol):
-        """Update the graph plot."""
-        self.resetPlot()
+    def clearPlot(self):
+        try:
+            self.p1.clear()
+        except: pass
+        try:
+            self.p2.clear()
+        except: pass
 
+    def setupPlot(self, results, show_dvol):
+        self.results = results
+        self.show_dvol = show_dvol
+        
+        self.p1 = self.gv.plotItem
+        self.p1.getAxis('bottom').setLabel("Time (h)", color=self.highlight_color, **{'font-size': '10pt'})
+        self.p2 = pg.ViewBox()
+        self.p1.showAxis('right')
+        self.p1.scene().addItem(self.p2)
+        self.p1.getAxis('right').linkToView(self.p2)
+        self.p2.setXLink(self.p1)
+        
+        self.p1.showGrid(x=True, y=False, alpha=0.2)
+
+        pen = pg.mkPen(color=self.highlight_color, width=1)
+        self.p1.getAxis('left').setPen(pen)
+        self.p1.getAxis('bottom').setPen(pen)
+        self.p1.getAxis('right').setPen(pen)
+        self.p1.getAxis('left').enableAutoSIPrefix(False)
+        self.p1.getAxis('right').enableAutoSIPrefix(False)
+        
+        self.p1.setContentsMargins(5,10,5,5)
+        self.p1.vb.sigResized.connect(self.updateViews)
+        self.updatePlot()
+        
+    def updatePlot(self):
         # Get the time series with the largest range
         max_time = -1
         count = -1
-        for i, r in enumerate(results):
+
+        for i, r in enumerate(self.results):
             temp = max(r['data']['Time (h)'])
             if temp > max_time:
                 max_time = temp
                 count = i
-        x = results[count]['data']['Time (h)']
-        
-        self.axes.set_ylabel('CME (%)', color='m')
-        self.axes.set_xlabel('Time (h)')
-        if show_dvol:
-            self.axes2 = self.axes.twinx()
-        
+
         # Plot recommended cme boundary lines
+        x = self.results[count]['data']['Time (h)']
         cme_min = [1 for i in x]
         cme_max = [-1 for i in x]
-        mb_max_plot = self.axes.plot(x, cme_min, "-g", alpha=0.5, label="CME max recommended", dashes=[6,2])
-        mb_min_plot = self.axes.plot(x, cme_max, "-g", alpha=0.5, label="CME min recommended", dashes=[6,2])
-
+        self.p1.plot()
+        self.p1.getAxis('left').setLabel("CME %", color="#d91c2c", **{'font-size': '10pt'})
+        self.p1.getAxis('right').setLabel("dVol", color="#1928cf", **{'font-size': '10pt'})
+        self.p1.addItem(pg.InfiniteLine(
+            pos=cme_min, angle=0, name="CME min recommended", pen=({
+                'color': pg.mkColor(154, 28, 158, 95), 'width': 3, 'style': Qt.DashLine,
+            })
+        ))
+        self.p1.addItem(pg.InfiniteLine(
+            pos=cme_max, angle=0, name="CME max recommended", pen=({
+                'color': pg.mkColor(154, 28, 158, 95), 'width': 3, 'style': Qt.DashLine,
+            })
+        ))
         hl_index = -1
-        for i, r in enumerate(results):
+        for i, r in enumerate(self.results):
             if r['draw']:
                 # Store index of highlight section and skip
                 if r['highlight']:
@@ -175,32 +217,46 @@ class MbCheckMultipleGraphicsView(QGraphicsView):
 
                 x = r['data']['Time (h)']
                 cme = r['data']['Cum ME (%)']
-                mb_plot = self.axes.plot(x, cme, '-m', alpha=0.4, label="CME")
-                if show_dvol:
+                self.p1.addItem(pg.PlotDataItem(
+                    x, cme, name="CME",
+                    pen=({'color': self.cme_color_alpha, 'width': 1.5}), antialias=True
+                ))
+                if self.show_dvol:
                     dvol = r['data']['dVol']
-                    dvol_plot = self.axes2.plot(x, dvol, '-c', alpha=0.4, label="dVol")
-                    self.axes2.set_ylabel('dVol', color='c')
+                    self.p2.addItem(pg.PlotCurveItem(
+                        x, dvol, name="dVol",
+                        pen=({'color': self.dvol_color_alpha, 'width': 1.5}), antialias=True
+                    ))
         
         # Draw the series to highlight last so it shows up on top
         if hl_index > -1:
-            self.axes.set_title("Selected: {0}".format(results[hl_index]['name']))
-            x = results[hl_index]['data']['Time (h)']
-            cme = results[hl_index]['data']['Cum ME (%)']
-            mb_plot = self.axes.plot(x, cme, '-r', alpha=1, label="CME")
-            if show_dvol:
-                dvol = results[hl_index]['data']['dVol']
-                dvol_plot = self.axes2.plot(x, dvol, '-b', alpha=1, label="dVol")
-                self.axes2.set_ylabel('dVol')
+            x = self.results[hl_index]['data']['Time (h)']
+            cme = self.results[hl_index]['data']['Cum ME (%)']
+            self.p1.addItem(pg.PlotDataItem(
+                x, cme, name="CME",
+                pen=({'color': self.cme_color, 'width': 2}), antialias=True
+            ))
+            if self.show_dvol:
+                dvol = self.results[hl_index]['data']['dVol']
+                self.p2.addItem(pg.PlotCurveItem(
+                    x, dvol, name="dVol",
+                    pen=({'color': self.dvol_color, 'width': 2}), antialias=True
+                ))
 
-        # Add a legend describing the cme max tolerance boundary lines
-        plot_lines = mb_max_plot
-        labels = [l.get_label() for l in plot_lines]
-        self.axes.legend(plot_lines, labels, loc='lower right')
-
-        self.axes.grid(True)
-        self.fig.tight_layout()
-        self.canvas.draw()
-            
+    def updateViews(self):
+        self.p2.setGeometry(self.p1.vb.sceneBoundingRect())
+        self.p2.linkedViewChanged(self.p1.vb, self.p2.XAxis)
+    
+    def drawPlot(self, results, show_dvol):
+        self.clearPlot()
+        if not self.results:
+            self.setupPlot(results, show_dvol)
+        else:
+            self.results = results
+            self.show_dvol = show_dvol
+            self.clearPlot()
+            self.updatePlot()
+        
 
 class MbCheckIndividualGraphicsView():
     
@@ -208,6 +264,9 @@ class MbCheckIndividualGraphicsView():
         self.gv = graphics_view
         self.back_color = QgsProject.instance().backgroundColor()
         self.gv.setBackground(self.back_color)
+        self.is_dark = isDark(self.back_color)
+        self.highlight_color = getHighlightColor(self.is_dark, alpha=False)
+        self.back_color = getBackColor(self.is_dark)
         self.series_types = []
         self.results = None
         self.title = ""
@@ -242,20 +301,21 @@ class MbCheckIndividualGraphicsView():
         self.series_types = graph_series
         self.results = results
         self.title = title
+        highlight_hex = rgbToHex(self.highlight_color)
         
         series_1 = self.series_types[0]
         series_2 = self.series_types[1]
         
         self.p1 = self.gv.plotItem
-        self.p1.setDefaultPadding(0.1)
-        self.p1.getAxis('bottom').setLabel("Time (h)", color='black', **{'font-size': '10pt'})
+        # self.p1.setDefaultPadding(0.1)
+        self.p1.getAxis('bottom').setLabel("Time (h)", color=highlight_hex, **{'font-size': '10pt'})
         self.p2 = pg.ViewBox()
         self.p1.showAxis('right')
         self.p1.scene().addItem(self.p2)
         self.p1.getAxis('right').linkToView(self.p2)
         self.p2.setXLink(self.p1)
         
-        self.p1.showGrid(x=True, y=False, alpha=0.3)
+        self.p1.showGrid(x=True, y=False, alpha=0.2)
 
         pen = pg.mkPen(color=(0,0,0), width=1)
         self.p1.getAxis('left').setPen(pen)
@@ -264,6 +324,7 @@ class MbCheckIndividualGraphicsView():
         self.p1.getAxis('left').enableAutoSIPrefix(False)
         self.p1.getAxis('right').enableAutoSIPrefix(False)
         
+        self.p1.setContentsMargins(5,10,5,5)
         self.p1.vb.sigResized.connect(self.updateViews)
         self.p1.scene().sigMouseMoved.connect(self._mouseMoved)
         self.updatePlot()
@@ -283,8 +344,9 @@ class MbCheckIndividualGraphicsView():
             pen=({'color': "r", 'width': 1.5}), antialias=True, hoverable=True
         ))
         self.display_text = pg.TextItem(
-            text="", color=(0,0,0), anchor=(0,1), fill=self.back_color, border=pg.mkColor(0,0,0,100)
+            text="", color=self.highlight_color, anchor=(0,1), fill=self.back_color, border=self.highlight_color
         )
+        self.display_text.hide()
         self.gv.addItem(self.display_text)
         self.p1.vb.autoRange()
         self.updateViews()
@@ -311,6 +373,9 @@ class HpcCheckIndividualGraphicsView():
         self.gv = graphics_view
         self.back_color = QgsProject.instance().backgroundColor()
         self.gv.setBackground(self.back_color)
+        self.is_dark = isDark(self.back_color)
+        self.highlight_color = getHighlightColor(self.is_dark, alpha=False)
+        self.back_color = getBackColor(self.is_dark)
         self.series_types = []
         self.results = np.empty(1)
         self.title = ""
@@ -341,56 +406,62 @@ class HpcCheckIndividualGraphicsView():
         self.series_types = series_meta
         self.results = results
         self.title = title
+        highlight = rgbToHex(self.highlight_color)
         
         series_1 = self.series_types[0]
         self.p1 = self.gv.plotItem
         self.p1.setDefaultPadding(0.1)
-        self.p1.getAxis('bottom').setLabel("Time (h)", color='black', **{'font-size': '10pt'})
-        self.p1.showGrid(x=True, y=False, alpha=0.3)
+        self.p1.getAxis('bottom').setLabel("Time (h)", color=highlight, **{'font-size': '10pt'})
+        # self.p1.getAxis('bottom').setLabel("Time (h)", **{'font-size': '12pt', 'color': highlight})
+        self.p1.showGrid(x=True, y=False, alpha=0.2)
         
-        pen = pg.mkPen(color=(0,0,0), width=1)
+        pen = pg.mkPen(color=self.highlight_color, width=1)
         self.p1.getAxis('left').setPen(pen)
         self.p1.getAxis('bottom').setPen(pen)
         self.p1.getAxis('left').enableAutoSIPrefix(False)
         
+        self.p1.setContentsMargins(5,10,5,5)
         self.p1.vb.sigResized.connect(self.updateViews)
         self.p1.scene().sigMouseMoved.connect(self._mouseMoved)
         self.updatePlot()
         
     def updatePlot(self):
         self.p1.clear()
+        highlight = rgbToHex(self.highlight_color)
         series_1 = self.series_types[0]
         series_1_name = self.series_types[1]
 
-        self.p1.getAxis('left').setLabel(series_1_name, color='blue', **{'font-size': '10pt'})
 
         tol_max = None
         if series_1_name in ['Nc', 'Nu', 'Nd']:
             if series_1_name == 'Nc' or series_1_name == 'Nu':
-                tol_max = [1.0 for i in self.results[:,1]]
+                tol_max = 1.0
             else:
-                tol_max = [0.3 for i in self.results[:,1]]
+                tol_max = 0.3
 
         self.p1.plot(
             self.results[:,1], self.results[:,series_1],
             pen=({'color': "b", 'width': 1}), antialias=True
         )
+
+        self.p1.getAxis('left').setLabel(series_1_name, color=highlight, **{'font-size': '10pt'})
+        # self.p1.getAxis('left').setLabel(series_1_name, **{'font-size': '12pt', 'color': highlight})
         if tol_max:
-            self.p1.addItem(pg.PlotCurveItem(
-                self.results[:,1], tol_max,
-                pen=({'color': pg.mkColor(161, 14, 41, 80), 'width': 2, 'style': Qt.DashLine})
+            self.p1.addItem(pg.InfiniteLine(
+                pos=tol_max, angle=0, name="Max recommended", pen=({
+                    'color': pg.mkColor(154, 28, 158, 95), 'width': 3, 'style': Qt.DashLine,
+                })
             ))
         self.display_text = pg.TextItem(
-            text="", color=(0,0,0), anchor=(0,1), fill=self.back_color, border=pg.mkColor(0,0,0,100)
+            text="", color=self.highlight_color, anchor=(0,1), fill=self.back_color, border=self.highlight_color
         )
+        self.display_text.hide()
         self.gv.addItem(self.display_text)
         self.p1.vb.autoRange()
-        self.updateViews()
+        # self.updateViews()
         
     def updateViews(self):
         pass
-        # self.p2.setGeometry(self.p1.vb.sceneBoundingRect())
-        # self.p2.linkedViewChanged(self.p1.vb, self.p2.XAxis)
     
     def drawPlot(self, series_meta, results, title=""):
         do_setup = False
