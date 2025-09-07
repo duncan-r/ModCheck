@@ -17,7 +17,7 @@ import csv
 from pprint import pprint
 import itertools
 from math import sqrt
-from statistics import fmean
+from statistics import fmean, median
 
 from PyQt5.QtCore import *
 from qgis.core import *
@@ -28,6 +28,8 @@ from floodmodeller_api import DAT
 
 class CompareFmpTuflowChainage(QObject):
     status_signal = pyqtSignal(str)
+    progress_max_signal = pyqtSignal(int)
+    progress_val_signal = pyqtSignal(int)
     
     def __init__(self):
         super().__init__()
@@ -63,7 +65,10 @@ class CompareFmpTuflowChainage(QObject):
         if not len(nwk_layer.fields()) > 0:
             self.nwk_has_id = False
 
-        for feature in nwk_layer.getFeatures():
+        fcount = nwk_layer.featureCount()
+        self.progress_max_signal.emit(fcount)
+        for i, feature in enumerate(nwk_layer.getFeatures()):
+            self.progress_val_signal.emit(i)
             if self.nwk_has_id:
                 # fmp_id = feature['ID']
                 fmp_id = feature[0]
@@ -90,7 +95,6 @@ class CompareFmpTuflowChainage(QObject):
 
         return self.tuflow_chainage, self.total_tuflow_chainage
     
-    # def tuflow1dTo2dCellChainage(self, check_1d2d, cell_size):
     def tuflowHXChainage(self, fmp_chainage, node_layer, bc_layer, node_lookup, dx_tol):
         """Calcualte and compare difference between HX line lengths and FM node distance.
         
@@ -110,13 +114,6 @@ class CompareFmpTuflowChainage(QObject):
         
         TOLERANCE = 0.01
         same = lambda p1, p2, tol: sum((p2[i] - p1[i])**2 for i in range(len(p1))) <= tol**2
-        ####
-        # hx_length = lambda hx_feat: hx_feat.geometry().length()
-        # bc_layer = QgsProject.instance().mapLayersByName('2d_bc_ashton_v13')[0]
-        # node_layer = QgsProject.instance().mapLayersByName('1d_isis_nodes_ashton_v13_trimmed')[0]
-        # cn_features = {}
-        ####
-        
         
         cn_data = {}
         cn_lookup = []
@@ -124,13 +121,17 @@ class CompareFmpTuflowChainage(QObject):
         
         # Find the CN lines connected to each 1D node feature, then get the coordinates of
         # the end of the CN line not connected to the node (i.e. the one connected to the HX).
-        for f in node_layer.getFeatures():
+        node_count = node_layer.featureCount()
+        self.progress_max_signal.emit(node_count)
+        for i, f in enumerate(node_layer.getFeatures()):
             
             node_id = f[0]
             gis_nodes.append(node_id)
             node_geom = f.geometry()
             point = node_geom.asPoint()
-            self.status_signal.emit(f"Checking snapped CN lines for node: {node_id}")
+            # self.status_signal.emit(f"Checking snapped CN lines for node: {node_id}")
+            self.status_signal.emit(f"Checking snapped CN lines...")
+            self.progress_val_signal.emit(i)
              
             for cnf in bc_layer.getFeatures():
                 if cnf["Type"] != "CN":
@@ -172,8 +173,10 @@ class CompareFmpTuflowChainage(QObject):
         bc_features = bc_layer.getFeatures()
         hx_lines = [[f.id(), f.geometry().asMultiPolyline()] for f in bc_features if f[0] == 'HX']
         hx_count = len(hx_lines)
+        self.progress_max_signal.emit(hx_count)
         for i, hx in enumerate(hx_lines):
-            self.status_signal.emit(f"Calculating HX line lengths: {i}/{hx_count}")
+            self.status_signal.emit(f"Calculating HX line lengths...")
+            self.progress_val_signal.emit(i)
 
             feat = hx[1][0]
             fid = hx[0]
@@ -208,13 +211,15 @@ class CompareFmpTuflowChainage(QObject):
                 
                 prev_point = point
                 
+        self.progress_max_signal.emit(len(fmp_chainage))
         for i, fmp in enumerate(fmp_chainage):
             # name = fmp_chainage[a]['name']
             # fmchain = fmp_chainage[a]['chainage']
             name = fmp['name']
             fmchain = fmp['chainage']
             hx_avg = 0.0
-            self.status_signal.emit(f"Comparing with FM node: {name}")
+            self.status_signal.emit(f"Comparing with FM nodes...")
+            self.progress_val_signal.emit(i)
 
             if not name in gis_nodes:
                 self.comparison['missing'].append({
@@ -228,31 +233,47 @@ class CompareFmpTuflowChainage(QObject):
             # HX line. If FM is zero, it's zero.
             if not abs(fmchain) < 0.005:
                 try:
-                    hxchain = cn_data[name]['lengths']
+                    cns = cn_data[name] 
+                    hxchain = cns['lengths']
                     hx_avg = fmean(hxchain)
                     
                     # End HX lines (spills) might be connected as well, we don't care about them.
-                    # The length of the two 'side' HX lines should be similar, so take the 
-                    # average and check against a tolerance, if it falls outside, get rid of it.
-                    # TODO: This is a bit hacky, should probably check if the CN points both
-                    # have the same node name and remove length if it does.
-                    # TODO: Is mean the right choice, or median??
+                    # Sometimes we get zero length line included. I'm not entirely sure why, but
+                    # it's probably an issue with just assigning zero at zero distance FM node.
+                    # Better logic in the HX measure section might handle it.
                     if len(hxchain) > 2:
-                        used_hx = []
-                        for hx_length in hxchain:
-                            # if hx_length * 1.2 < hx_avg or hx_length * 0.8 < hx_avg:
-                            #     continue
-                            used_hx.append(hx_length)
+                        
+                        # Clear out zero length entries
+                        found_zero_length = False
+                        if len(cns['cn_end']) <= 2:
+                            keepers = []
+                            for l in hxchain:
+                                # Tolerance can be quite large. Shouldn't really get such short
+                                # chainage in FM anyway.
+                                if abs(l) < 0.1:
+                                    found_zero_length = True
+                                    continue
+                                keepers.append(l)
+                            hx_avg = fmean(keepers)
                             
-                        # Might fail the above check with an empty list
-                        try:
-                            hx_avg = fmean(used_hx)
-                        except: # Actually a "StatisticsError" (fix with an import)
-                            # TODO: Very, very cheap approach
-                            # Generally, the end HX is in index 1.
-                            # Do this properly, really!
-                            hx_avg = fmean([hxchain[0], hxchain[2]])
-                    
+                        # Could be an 'end' HX. Compare the lengths against the median of all
+                        # lengths to see if it's more than 20% out. Generally, the side HX lengths
+                        # are similar and the end HX would fall far short of the median 
+                        if not found_zero_length: 
+                            keepers = []
+                            hx_med = median(hxchain)
+                            for hx_length in hxchain:
+                                if hx_length * 1.2 < hx_med or hx_length * 0.8 > hx_med:
+                                    continue
+                                keepers.append(hx_length)
+
+                            # Might fail the above check with an empty list
+                            # At this point just give up and take the total average
+                            try:
+                                hx_avg = fmean(keepers)
+                            except Exception: # Actually a "StatisticsError" (fix with an import)
+                                hx_avg = fmean(hxchain)
+                                
                 except KeyError:
                     hx_chain = -1
                     self.comparison['missing'].append({
@@ -274,6 +295,7 @@ class CompareFmpTuflowChainage(QObject):
                 temp['status'] = 'PASS'
                 self.comparison['ok'].append(temp)
         
+        self.progress_val_signal.emit(0)
         return self.comparison, self.total_tuflow_chainage
     
     def compareChainage1dNwk(self, fmp_chainage, tuflow_chainage, dx_tol):    
@@ -281,7 +303,10 @@ class CompareFmpTuflowChainage(QObject):
         self.comparison = {'missing': [], 'fail': [], 'ok': []}
         tuflow_keys = tuflow_chainage.keys()
         
-        for node in fmp_chainage:
+        self.progress_max_signal.emit(len(fmp_chainage))
+        for i, node in enumerate(fmp_chainage):
+            self.progress_val_signal.emit(i)
+
             node_id = node['name']
             if not node_id in tuflow_keys:
                 # Check that the FMP node has chainage > 0. Otherwise it won't have
@@ -313,64 +338,9 @@ class CompareFmpTuflowChainage(QObject):
                 else:
                     temp['status'] = 'PASS'
                     self.comparison['ok'].append(temp)
-        return self.comparison
 
-    # def compareChainageHXCheck(self, fmp_chainage, tuflow_chainage, dx_tol):    
-    #     problem_nodes = {'no_nwk': [], 'mismatch': []}
-    #     self.comparison = {'missing': [], 'fail': [], 'ok': []}
-    #     tuflow_keys = tuflow_chainage.keys()
-    #
-    #     for node in fmp_chainage:
-    #         node_id = node['name']
-    #         if not node_id in tuflow_keys:
-    #             # Check that the FMP node has chainage > 0. Otherwise it won't have
-    #             # a nwk line anyway
-    #             if node['chainage'] > 0.0001 and node['category'] == 'river':
-    #                 problem_nodes['no_nwk'].append('{} ({})'.format(node_id, node['category']))
-    #                 self.comparison['missing'].append({
-    #                     'type': node['category'], 'name': node_id, 'chainage': node['chainage'],
-    #                     'nwk_line_length': -1, 'nwk_len_or_ana': -1, 'diff': -1, 'status': 'NOT FOUND'
-    #                 })
-    #         else:
-    #             # if tuflow_chainage[node_id][0] > 0.0000:
-    #             #     nwk_chain = tuflow_chainage[node_id][0]
-    #             # else:
-    #             #     nwk_chain = tuflow_chainage[node_id][1]
-    #             dist_full = tuflow_chainage[node_id]
-    #             dist_half = dist_full / 2
-    #             diff_full = abs(node['chainage'] - dist_full)
-    #             diff_half = abs(node['chainage'] - dist_half)
-    #             new_tol = dx_tol
-    #
-    #             # chain_diff = abs(node['chainage'] - nwk_chain)
-    #             # output_diff = node['chainage'] - nwk_chain
-    #             temp = {
-    #                 'type': node['category'], 'name': node_id, 'chainage': node['chainage'],
-    #                 'total_distance': dist_full, 'half_distance': dist_half,
-    #                 # 'nwk_line_length': tuflow_chainage[node_id][1], 
-    #                 # 'nwk_len_or_ana': tuflow_chainage[node_id][0], 
-    #                 'diff': diff_full, 'diff_half': diff_half,
-    #                 'comparison': '2 HX', 'status': 'NA',
-    #             }
-    #             if (dist_half - new_tol) <= diff_full <= (dist_half + new_tol):
-    #                 temp['comparison'] = '1 HX'
-    #                 temp['status'] = 'PASS'
-    #                 self.comparison['ok'].append(temp)
-    #
-    #             else:
-    #                 if diff_full > new_tol:
-    #                     temp['status'] = 'FAIL'
-    #                     self.comparison['fail'].append(temp)
-    #                 else:
-    #                     temp['status'] = 'PASS'
-    #                     self.comparison['ok'].append(temp)
-    #             # if chain_diff > dx_tol:
-    #             #     temp['status'] = 'FAIL'
-    #             #     self.comparison['fail'].append(temp)
-    #             # else:
-    #             #     temp['status'] = 'PASS'
-    #             #     self.comparison['ok'].append(temp)
-    #     return self.comparison
+        self.progress_val_signal.emit(0)
+        return self.comparison
 
     def loadFmpModel(self, dat_path):
         model = None

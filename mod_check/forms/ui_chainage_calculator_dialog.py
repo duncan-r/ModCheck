@@ -14,7 +14,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_ChainageCalculator(object):
     def setupUi(self, ChainageCalculator):
         ChainageCalculator.setObjectName("ChainageCalculator")
-        ChainageCalculator.resize(944, 708)
+        ChainageCalculator.resize(944, 714)
         self.gridLayout = QtWidgets.QGridLayout(ChainageCalculator)
         self.gridLayout.setObjectName("gridLayout")
         self.groupBox = QtWidgets.QGroupBox(ChainageCalculator)
@@ -133,11 +133,11 @@ class Ui_ChainageCalculator(object):
         self.compareChainageBtn.setObjectName("compareChainageBtn")
         self.horizontalLayout_6.addWidget(self.compareChainageBtn)
         self.nwkLineRadioButton = QtWidgets.QRadioButton(self.tuflowInputsGroupBox)
-        self.nwkLineRadioButton.setChecked(False)
+        self.nwkLineRadioButton.setChecked(True)
         self.nwkLineRadioButton.setObjectName("nwkLineRadioButton")
         self.horizontalLayout_6.addWidget(self.nwkLineRadioButton)
         self.hxLineRadioButton = QtWidgets.QRadioButton(self.tuflowInputsGroupBox)
-        self.hxLineRadioButton.setChecked(True)
+        self.hxLineRadioButton.setChecked(False)
         self.hxLineRadioButton.setObjectName("hxLineRadioButton")
         self.horizontalLayout_6.addWidget(self.hxLineRadioButton)
         self.label_5 = QtWidgets.QLabel(self.tuflowInputsGroupBox)
@@ -149,8 +149,10 @@ class Ui_ChainageCalculator(object):
         self.dxToleranceSpinbox.setShowClearButton(False)
         self.dxToleranceSpinbox.setObjectName("dxToleranceSpinbox")
         self.horizontalLayout_6.addWidget(self.dxToleranceSpinbox)
-        spacerItem3 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
-        self.horizontalLayout_6.addItem(spacerItem3)
+        self.progressBar = QtWidgets.QProgressBar(self.tuflowInputsGroupBox)
+        self.progressBar.setProperty("value", 0)
+        self.progressBar.setObjectName("progressBar")
+        self.horizontalLayout_6.addWidget(self.progressBar)
         self.verticalLayout_6.addLayout(self.horizontalLayout_6)
         self.gridLayout.addWidget(self.tuflowInputsGroupBox, 6, 0, 1, 2)
         self.groupBox_4 = QtWidgets.QGroupBox(ChainageCalculator)
@@ -268,7 +270,7 @@ class Ui_ChainageCalculator(object):
         self.gridLayout.setRowStretch(8, 1)
 
         self.retranslateUi(ChainageCalculator)
-        self.tuflowInputsTabWidget.setCurrentIndex(1)
+        self.tuflowInputsTabWidget.setCurrentIndex(0)
         self.outputsTabWidget.setCurrentIndex(1)
         self.buttonBox.accepted.connect(ChainageCalculator.accept) # type: ignore
         self.buttonBox.rejected.connect(ChainageCalculator.reject) # type: ignore
@@ -283,7 +285,7 @@ class Ui_ChainageCalculator(object):
         self.datFileWidget.setFilter(_translate("ChainageCalculator", "*.dat"))
         self.fmpOnlyGroupBox.setTitle(_translate("ChainageCalculator", "FMP Only?"))
         self.calcFmpChainageOnlyBtn.setText(_translate("ChainageCalculator", "Calculate FMP Chainage"))
-        self.label_4.setText(_translate("ChainageCalculator", "Use this if there is no nwk line layer available for comparison and you just want to output node distances from the FMP model"))
+        self.label_4.setText(_translate("ChainageCalculator", "Use this if there is no nwk line layer available for comparison or you just want to output node distances from the FMP model"))
         self.tuflowInputsGroupBox.setTitle(_translate("ChainageCalculator", "TUFLOW inputs"))
         self.label_3.setText(_translate("ChainageCalculator", "Use this approach for more accurate results"))
         self.tuflowInputsTabWidget.setTabText(self.tuflowInputsTabWidget.indexOf(self.tuflowNwkLineTab), _translate("ChainageCalculator", "1d_nwk"))

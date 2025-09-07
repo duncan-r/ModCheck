@@ -16,10 +16,6 @@ from ..tools import help, globaltools
 from ..tools import chainagecalculator as chain_calc
 from ..tools import settings as mrt_settings
 
-# DATA_DIR = './data'
-# TEMP_DIR = './temp'
-
-
 
 class ChainageCalculatorDialog(DialogBase, chaincalc_ui.Ui_ChainageCalculator):
     """Retrieve and compare chainage values from FMP and TUFLOW models.
@@ -37,6 +33,8 @@ class ChainageCalculatorDialog(DialogBase, chaincalc_ui.Ui_ChainageCalculator):
 
         self.chainage_calculator = chain_calc.CompareFmpTuflowChainage()
         self.chainage_calculator.status_signal.connect(self._updateStatus)
+        self.chainage_calculator.progress_max_signal.connect(self._setProgressMax)
+        self.chainage_calculator.progress_val_signal.connect(self._setProgressVal)
 
         self.buttonBox.clicked.connect(self.signalClose)
         self.calcFmpChainageOnlyBtn.clicked.connect(self.calculateFmpOnlyChainage)
@@ -69,6 +67,12 @@ class ChainageCalculatorDialog(DialogBase, chaincalc_ui.Ui_ChainageCalculator):
     def _updateStatus(self, status):
         self.statusLabel.setText(status)
         QApplication.processEvents()
+        
+    def _setProgressMax(self, value):
+        self.progressBar.setMaximum(value)
+
+    def _setProgressVal(self, value):
+        self.progressBar.setValue(value)
         
     def _tuflowInputsTabChanged(self, index):
         if index == 0:
