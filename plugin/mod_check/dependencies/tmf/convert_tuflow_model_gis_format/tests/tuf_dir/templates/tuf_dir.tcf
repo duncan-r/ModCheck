@@ -1,4 +1,0 @@
-MI Projection == ../model/mi/projection.mif
-GPKG Projection == ../model/gis/projection.gpkg
-Geometry Control File == ../model/tuf_dir.tgc
-BC Database == ../bc_dbase/bc_dbase.csv

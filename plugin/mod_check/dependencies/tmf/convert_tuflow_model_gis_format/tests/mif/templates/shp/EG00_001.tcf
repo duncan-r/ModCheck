@@ -1,6 +1,0 @@
-MI Projection == ..\model\gis\projection.mif
-SHP Projection == ..\model\gis\projection.shp
-MI Projection == ..\model\mi\projection.mif
-
-Read GIS Z Shape == ..\model\gis\2d_zsh_EG03_Rd_Crest_001_L.shp | ..\model\gis\2d_zsh_EG03_Rd_Crest_001_P.shp
-

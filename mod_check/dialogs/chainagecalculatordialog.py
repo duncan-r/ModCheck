@@ -50,6 +50,8 @@ class ChainageCalculatorDialog(DialogBase, chaincalc_ui.Ui_ChainageCalculator):
         self.exportComparisonCheckbox.stateChanged.connect(self.setExportIndividual)
         self.tuflowFmpComparisonTable.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tuflowFmpComparisonTable.customContextMenuRequested.connect(self._comparisonTableContext)
+        self.hxNodesLayerCBox.setFilters(QgsMapLayerProxyModel.PointLayer)
+        self.hxBCLayerCBox.setFilters(QgsMapLayerProxyModel.LineLayer)
 
 
         dat_path = mrt_settings.loadProjectSetting(

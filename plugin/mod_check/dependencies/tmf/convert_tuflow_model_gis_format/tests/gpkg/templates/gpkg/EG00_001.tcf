@@ -1,5 +1,0 @@
-Spatial Database == ..\model\gis\EG00_001.gpkg
-
-GIS FORMAT == GPKG                                  ! Specify SHP as the output format for all GIS files
-GRID Format == TIF
-GPKG Projection == projection     ! Sets the GIS projection for the TUFLOW Model
