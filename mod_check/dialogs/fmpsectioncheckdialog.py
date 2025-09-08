@@ -27,12 +27,9 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
 
         # Loaded section property details
         self.properties = None
-        # self.graphics_view = graphs.SectionPropertiesGraphicsView()
-        # self.graph_toolbar = NavigationToolbar(self.graphics_view.canvas, self)
         self.section_graphics_view = graphs.SectionPropertiesGraphicsView(self.sectionGraphicsView)
         self.resetPlotButton.clicked.connect(self._resetPlot)
         self.showHoverCBox.stateChanged.connect(self._updateShowHover)
-
 
         # Load existing settings
         dat_path = mrt_settings.loadProjectSetting(
@@ -52,13 +49,24 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
         self.bankDyToleranceSpinbox.valueChanged.connect(self._dyTolChange)
         self.negativeConveyanceTable.clicked.connect(self.conveyanceTableClicked)
         self.banktopCheckTable.clicked.connect(self.banktopTableClicked)
-        # self.graphLayout.addWidget(self.graphics_view)
-        # self.graphLayout.addWidget(self.graph_toolbar)
-        # self.splitter.setStretchFactor(0, 10)
         self.splitter.setStretchFactor(1, 10)
         
         self.active_node_id = ''
+        self.check_banktop_extremes_only = False
+        self.checkExtremesOnlyCBox.stateChanged.connect(lambda x: self.checkBankExtremesOnly(x))
 
+        self.negativeConveyanceTable.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.negativeConveyanceTable.customContextMenuRequested.connect(
+            lambda x: self._failedTableContext(x, 'conveyance')
+        )
+        self.banktopCheckTable.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.banktopCheckTable.customContextMenuRequested.connect(
+            lambda x: self._failedTableContext(x, 'banks')
+        )
+
+    def checkBankExtremesOnly(self, status):
+        self.check_banktop_extremes_only = status
+        
     def _kTolChange(self, value):
         mrt_settings.saveProjectSetting('section_ktol', value)
 
@@ -81,13 +89,62 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
         node_id = self.banktopCheckTable.item(item.row(), 0).text()
         self.active_node_id = node_id
         self.graphSection(node_id, 'bad_banks')
-        self.showSelectedNode(node_id)
+        # self.showSelectedNode(node_id)
 
     def conveyanceTableClicked(self, item):
         node_id = self.negativeConveyanceTable.item(item.row(), 0).text()
         self.active_node_id = node_id
         self.graphSection(node_id, 'conveyance')
-        self.showSelectedNode(node_id)
+        # self.showSelectedNode(node_id)
+        
+    def _failedTableContext(self, pos, caller):
+        """Add context menu to failed sections table.
+
+        Allow user to select and zoom to the chosen section in the map window.
+        """
+        if caller == 'conveyance':
+            active_table = self.negativeConveyanceTable
+        elif caller == 'banks':
+            active_table = self.banktopCheckTable
+        else:
+            return
+
+        index = active_table.itemAt(pos)
+        if index is None: return
+        menu = QMenu()
+        locate_section_action = menu.addAction("Locate Section")
+
+        # Get the action and do whatever it says
+        action = menu.exec_(active_table.viewport().mapToGlobal(pos))
+
+        if action == locate_section_action:
+            self.statusLabel.setText('')
+            row = active_table.currentRow()
+            id = active_table.item(row, 0).text()
+
+            # Find the nodes point feature with the given id, select and zoom to it
+            node_layer = self.fmpNodesLayerCbox.currentLayer()
+            if not node_layer:
+                self.statusLabel.setText('Cannot select node: no layer selected')
+                return
+            
+            try:
+                self.iface.mainWindow().findChild(QAction, 'mActionDeselectAll').trigger()
+                node_layer.removeSelection()
+                found_node = False
+                for f in node_layer.getFeatures():
+                    if f[0] == id:
+                        found_node = True
+                        node_layer.select(f.id())
+                        self.iface.mapCanvas().zoomToSelected(node_layer)
+                        break
+                
+                if not found_node:
+                    self.statusLabel.setText(
+                        'Cannot select node: node id ({0}) not in node layer'.format(id)
+                    )
+            except:
+                self.statusLabel.setText("Cannot select node: error reading node layer")
 
     def graphSection(self, node_id, caller):
         """
@@ -103,31 +160,31 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
                 node_id
             )
 
-    def showSelectedNode(self, node_id):
-        self.statusLabel.setText('')
-        node_layer = self.fmpNodesLayerCbox.currentLayer()
-        if not node_layer:
-            self.statusLabel.setText('Cannot select node: no layer selected')
-            return
-
-        try:
-            self.iface.mainWindow().findChild(QAction, 'mActionDeselectAll').trigger()
-            node_layer.removeSelection()
-            found_node = False
-            for f in node_layer.getFeatures():
-                id = f[0]
-                if id == node_id:
-                    found_node = True
-                    node_layer.select(f.id())
-                    self.iface.mapCanvas().zoomToSelected(node_layer)
-                    break
-
-            if not found_node:
-                self.statusLabel.setText(
-                    'Cannot select node: node id ({0}) not in nodes layer'.format(node_id)
-                )
-        except:
-            self.statusLabel.setText("Cannot select node: error reading nodes layer")
+    # def showSelectedNode(self, node_id):
+    #     self.statusLabel.setText('')
+    #     node_layer = self.fmpNodesLayerCbox.currentLayer()
+    #     if not node_layer:
+    #         self.statusLabel.setText('Cannot select node: no layer selected')
+    #         return
+    #
+    #     try:
+    #         self.iface.mainWindow().findChild(QAction, 'mActionDeselectAll').trigger()
+    #         node_layer.removeSelection()
+    #         found_node = False
+    #         for f in node_layer.getFeatures():
+    #             id = f[0]
+    #             if id == node_id:
+    #                 found_node = True
+    #                 node_layer.select(f.id())
+    #                 self.iface.mapCanvas().zoomToSelected(node_layer)
+    #                 break
+    #
+    #         if not found_node:
+    #             self.statusLabel.setText(
+    #                 'Cannot select node: node id ({0}) not in nodes layer'.format(node_id)
+    #             )
+    #     except:
+    #         self.statusLabel.setText("Cannot select node: error reading nodes layer")
 
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)
@@ -167,7 +224,8 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
             self.statusLabel.setText("Calculating section properties...")
             QApplication.processEvents()
             problem_sections = section_check.findProblemSections(
-                river_sections, k_tol=k_tol, dy_tol=dy_tol
+                river_sections, k_tol=k_tol, dy_tol=dy_tol,
+                check_bank_extremes_only=self.check_banktop_extremes_only
             )
             self.properties['problems'] = problem_sections
 

@@ -166,7 +166,10 @@ class CheckFmpSections(QObject):
                 
         return issues
 
-    def checkBankLocations(self, river_sections, issue_sections, dy_tol=0.1, **kwargs):
+    def checkBankLocations(
+            self, river_sections, issue_sections, dy_tol=0.1, 
+            check_bank_extremes_only=False, **kwargs
+        ):
         """
         """
         # bad_banks = {}
@@ -195,21 +198,122 @@ class CheckFmpSections(QObject):
             min_r = 9999
             max_l = 9999
             max_r = 9999
-            # Left section lower than banktop check
-            if max_index_l != xs_start:
-                max_l = river.active_data.loc[xs_start:max_index_l]['Y'].max()
-                min_l = river.active_data.loc[xs_start:max_index_l]['Y'].min()
-                drop_l = max_l - min_l
-                if drop_l > dy_tol:
-                    fail_l = True
             
-            # Right section lower than banktop check
-            if max_index_r != xs_end:
-                max_r = river.active_data.loc[max_index_r:xs_end]['Y'].max()
-                min_r = river.active_data.loc[max_index_r:xs_end]['Y'].min()
-                drop_r = max_r - min_r
-                if drop_r > dy_tol:
-                    fail_r = True
+            # More simplified approach that only checks if there are any points on the 
+            # left and right banks that are lower than the elevations at the extremes of
+            # the section. Won't pick up on depressions in the 'floodplain' parts of the
+            # section, but will identify poorly deactivated sections that leave a low spot
+            # outside of the banks
+            if check_bank_extremes_only:
+            
+                # Left section lower than banktop check
+                if max_index_l != xs_start:
+                    max_l = river.active_data.loc[xs_start:max_index_l]['Y'].max()
+                    min_l = river.active_data.loc[xs_start:max_index_l]['Y'].min()
+                    drop_l = max_l - min_l
+                    if drop_l > dy_tol:
+                        fail_l = True
+
+                # Right section lower than banktop check
+                if max_index_r != xs_end:
+                    max_r = river.active_data.loc[max_index_r:xs_end]['Y'].max()
+                    min_r = river.active_data.loc[max_index_r:xs_end]['Y'].min()
+                    drop_r = max_r - min_r
+                    if drop_r > dy_tol:
+                        fail_r = True
+                
+            # More in depth check of the banks that identifies depressions in the left and
+            # right parts of the section, outside of the banktops, but doesn't relay on the 
+            # extreme left/right being lower. However, it does mean that bifurcated channels,
+            # depressions within the channel itself, etc will get picked up - if greater than
+            # tolerance - so it may return more false positives.
+            #
+            # Stores a list of localised minimums and maximums and uses them to identify 
+            # depressions outside of - what it perceives to be - the main channel.
+            else:
+
+                # Left bank
+                lby = river.active_data.loc[xs_start:min_index]['Y'].tolist()
+                lbx = river.active_data.loc[xs_start:min_index]['X'].tolist()
+                sect_len = len(lbx) - 1
+                prev = None
+                max_y = -99999
+                rise_sum = 0
+                max_index = -1
+                local_minmax = [{'min': 99999, 'max': -99999, 'max_idx': -1}]
+                for i in range(0, sect_len):
+                    if prev is None:
+                        prev = lby[i]
+                        continue
+                
+                    if lby[i] < local_minmax[-1]['min']:
+                        local_minmax.append({'min': lby[i], 'max': -99999})
+                
+                    elif lby[i] > local_minmax[-1]['max']:
+                        local_minmax[-1]['max'] = lby[i]
+                        local_minmax[-1]['max_idx'] = i
+                        # If this is the highest elevation found on the bank, mark the index
+                        # of it for later lookup
+                        if lby[i] > max_y:
+                            max_y = lby[i]
+                            max_index = len(local_minmax) - 1
+                
+                    prev = lby[i]
+                
+                if max_index > -1:
+                    temp_drop = local_minmax[max_index]['max'] - local_minmax[max_index]['min']
+                    if temp_drop > dy_tol:
+                        drop_l = temp_drop
+                        max_index_l = local_minmax[max_index]['max_idx']
+                        min_l = local_minmax[max_index]['min']
+                        max_l = local_minmax[max_index]['max']
+                        fail_l = True
+                
+                
+                # Right bank
+                rby = river.active_data.loc[min_index:xs_end]['Y'].tolist()
+                rbx = river.active_data.loc[min_index:xs_end]['X'].tolist()
+                sect_len = len(rbx) - 1
+                prev = None
+                max_y = -99999
+                rise_sum = 0
+                max_index = -1
+                local_minmax = [{'min': 99999, 'max': -99999, 'max_idx': -1}]
+                
+                # Need to loop through backwards for this one so that we can properly
+                # identify that channel / floodplain separation.
+                for i in range(sect_len, 0, -1):
+                    real_index = i
+                    if prev is None:
+                        prev = rby[real_index]
+                        continue
+                
+                    if rby[real_index] < local_minmax[-1]['min']:
+                        local_minmax.append({'min': rby[real_index], 'max': -99999})
+                
+                    elif rby[i] > local_minmax[-1]['max']:
+                        local_minmax[-1]['max'] = rby[real_index]
+                        local_minmax[-1]['max_idx'] = real_index
+                        if rby[real_index] > max_y:
+                            max_y = rby[real_index]
+                            max_index = len(local_minmax) - 1
+                
+                    prev = rby[real_index]
+                
+                if max_index > -1:
+                    temp_drop = local_minmax[max_index]['max'] - local_minmax[max_index]['min']
+                    if temp_drop > dy_tol:
+                        drop_r = temp_drop
+
+                        # List was reversed, so translate back to the actual index
+                        # Get in relation to the active section (unreversed), then determine the
+                        # location within the full section (to account for pandas index numbers)
+                        max_index_r = sect_len - local_minmax[max_index]['max_idx']
+                        max_index_r = xs_end - max_index_r
+                        min_r = local_minmax[max_index]['min']
+                        max_r = local_minmax[max_index]['max']
+                        fail_r = True
+            
             
             if fail_l or fail_r:
                 bad_banks = {

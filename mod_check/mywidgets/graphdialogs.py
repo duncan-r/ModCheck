@@ -73,6 +73,69 @@ def rgbToHex(rgb_tuple):
     return hex
 
 
+def fitLevelToSectionData(x_vals, y_vals, peak_level):
+
+    def interpolate(x1, x2, y1, y2, water_level):
+            m = 1.0
+            # Check for div/0
+            if abs(x1 - x2) > 0.001:
+                m = (y1 - y2) / (x1 - x2)
+            else:
+                m = (y1 - y2) / 0.001
+            c = y1 - m * x1
+            x = (water_level - c) / m
+            return round(x, 3)
+
+    # Need to interpolate new points between bed geometry to account for the water
+    # level landed in between
+    peak_x = []
+    peak_y = []
+    x = x_vals
+    y = y_vals
+    for i, level in enumerate(y):
+        if i > 0:
+            # Left point dry, right point wet
+            if y[i-1] > peak_level and y[i] < peak_level:
+                new_x = interpolate(x[i-1], x[i], y[i-1], y[i], peak_level)
+                # New point
+                peak_x.append(new_x)
+                peak_y.append(peak_level)
+                # Existing point
+                peak_x.append(x[i])
+                peak_y.append(peak_level)
+                continue
+
+            # Left point wet, right point dry
+            elif y[i] > peak_level and y[i-1] < peak_level:
+                new_x = interpolate(x[i-1], x[i], y[i-1], y[i], peak_level)
+                peak_x.append(new_x)
+                peak_y.append(peak_level)
+                peak_x.append(x[i])
+                peak_y.append(y[i])
+                continue
+
+            # Point is wet (previous point wet is implied by previous logic)
+            elif y[i] <= peak_level:
+                peak_x.append(x[i])
+                peak_y.append(peak_level)
+                continue
+            
+            # Both points are dry
+            else:
+                peak_x.append(x[i])
+                peak_y.append(y[i])
+
+        # First point in the section is either wet or dry
+        else:
+            peak_x.append(x[i])
+            if peak_level > y[i]:
+                peak_y.append(peak_level)
+            else:
+                peak_y.append(y[i])
+
+    return peak_x, peak_y
+
+
 class LocalHelpDialog(QDialog, text_ui.Ui_TextDialog):
 
     def __init__(self, title='Help'):
@@ -991,15 +1054,17 @@ class SectionPropertiesGraphicsView():
         self.p1.addItem(active_bed)
 
         if self.section.bad_banks['fail_left'] and self.section.bad_banks['drop_left'] > 0:
-            lb_x = self.section.xs_x[self.section.bad_banks['xs_start']:(self.section.bad_banks['max_left_idx']+1)]
-            lb_y = self.section.xs_y[self.section.bad_banks['xs_start']:(self.section.bad_banks['max_left_idx']+1)]
-            lb_y_new = [y if y > self.section.bad_banks['max_left'] else self.section.bad_banks['max_left'] for y in lb_y]
+            bad_x = self.section.xs_x[self.section.bad_banks['xs_start']:(self.section.bad_banks['max_left_idx']+1)].values
+            bad_y = self.section.xs_y[self.section.bad_banks['xs_start']:(self.section.bad_banks['max_left_idx']+1)].values
+            lb_x, lb_y = fitLevelToSectionData(
+                bad_x, bad_y, self.section.bad_banks['max_left']
+            )
             bad_left = pg.PlotDataItem(
-                lb_x, lb_y_new, name='Bad banks',
+                lb_x, lb_y, name='Bad banks',
                 pen=({'color': "r", 'width': 1.2}), antialias=True
             )
             bed_left = pg.PlotDataItem(
-                lb_x, lb_y, 
+                bad_x, bad_y, 
                 pen=({'color': self.highlight_color, 'width': 0.5}), antialias=True
             )
             self.p1.addItem(bad_left)
@@ -1008,22 +1073,43 @@ class SectionPropertiesGraphicsView():
             ))
 
         if self.section.bad_banks['fail_right'] and self.section.bad_banks['drop_right'] > 0:
-            rb_x = self.section.xs_x[self.section.bad_banks['max_right_idx']:self.section.bad_banks['xs_end']+1]
-            rb_y = self.section.xs_y[self.section.bad_banks['max_right_idx']:self.section.bad_banks['xs_end']+1]
-            rb_y_new = [y if y > self.section.bad_banks['max_right'] else self.section.bad_banks['max_right'] for y in rb_y]
+            bad_x = self.section.xs_x[self.section.bad_banks['max_right_idx']:self.section.bad_banks['xs_end']+1].values
+            bad_y = self.section.xs_y[self.section.bad_banks['max_right_idx']:self.section.bad_banks['xs_end']+1].values
+            rb_x, rb_y = fitLevelToSectionData(
+                bad_x, bad_y, self.section.bad_banks['max_right']
+            )
+            # rb_y_new = [y if y > self.section.bad_banks['max_right'] else self.section.bad_banks['max_right'] for y in rb_y]
 
             bad_right = pg.PlotDataItem(
-                rb_x.values, rb_y_new, name='Bad banks',
+                rb_x, rb_y, name='Bad banks',
                 pen=({'color': "r", 'width': 1.2}), antialias=True
             )
             bed_right = pg.PlotDataItem(
-                rb_x.values, rb_y.values, 
+                bad_x, bad_y,
                 pen=({'color': self.highlight_color_alpha, 'width': 0.5}), antialias=True
             )
             self.p1.addItem(bad_right)
             self.p1.addItem(pg.FillBetweenItem(
                 bed_right, bad_right, brush=pg.mkBrush(color=(176, 11, 46, 60)),
             ))
+            
+            
+            # rb_x = self.section.xs_x[self.section.bad_banks['max_right_idx']:self.section.bad_banks['xs_end']+1]
+            # rb_y = self.section.xs_y[self.section.bad_banks['max_right_idx']:self.section.bad_banks['xs_end']+1]
+            # rb_y_new = [y if y > self.section.bad_banks['max_right'] else self.section.bad_banks['max_right'] for y in rb_y]
+            #
+            # bad_right = pg.PlotDataItem(
+            #     rb_x.values, rb_y_new, name='Bad banks',
+            #     pen=({'color': "r", 'width': 1.2}), antialias=True
+            # )
+            # bed_right = pg.PlotDataItem(
+            #     rb_x.values, rb_y.values, 
+            #     pen=({'color': self.highlight_color_alpha, 'width': 0.5}), antialias=True
+            # )
+            # self.p1.addItem(bad_right)
+            # self.p1.addItem(pg.FillBetweenItem(
+            #     bed_right, bad_right, brush=pg.mkBrush(color=(176, 11, 46, 60)),
+            # ))
         self.display_text = pg.TextItem(
             text="", color=self.highlight_color, anchor=(1,0), fill=self.back_color, border=self.highlight_color
         )
