@@ -18,10 +18,6 @@ from ..tools import fmpsectioncheck as fmpsection_check
 from ..tools import settings as mrt_settings
 from ..mywidgets import graphdialogs as graphs
 
-# DATA_DIR = './data'
-# TEMP_DIR = './temp'
-
-
 
 class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionPropertyCheckDialog):
 
@@ -31,8 +27,11 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
 
         # Loaded section property details
         self.properties = None
-        self.graphics_view = graphs.SectionPropertiesGraphicsView()
-        self.graph_toolbar = NavigationToolbar(self.graphics_view.canvas, self)
+        # self.graphics_view = graphs.SectionPropertiesGraphicsView()
+        # self.graph_toolbar = NavigationToolbar(self.graphics_view.canvas, self)
+        self.section_graphics_view = graphs.SectionPropertiesGraphicsView(self.sectionGraphicsView)
+        self.resetPlotButton.clicked.connect(self._resetPlot)
+        self.showHoverCBox.stateChanged.connect(self._updateShowHover)
 
 
         # Load existing settings
@@ -53,25 +52,40 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
         self.bankDyToleranceSpinbox.valueChanged.connect(self._dyTolChange)
         self.negativeConveyanceTable.clicked.connect(self.conveyanceTableClicked)
         self.banktopCheckTable.clicked.connect(self.banktopTableClicked)
-        self.graphLayout.addWidget(self.graphics_view)
-        self.graphLayout.addWidget(self.graph_toolbar)
-        self.splitter.setStretchFactor(0, 10)
+        # self.graphLayout.addWidget(self.graphics_view)
+        # self.graphLayout.addWidget(self.graph_toolbar)
+        # self.splitter.setStretchFactor(0, 10)
         self.splitter.setStretchFactor(1, 10)
+        
+        self.active_node_id = ''
 
     def _kTolChange(self, value):
         mrt_settings.saveProjectSetting('section_ktol', value)
 
     def _dyTolChange(self, value):
         mrt_settings.saveProjectSetting('section_dytol', value)
+        
+    def _updateShowHover(self, status):
+        self.section_graphics_view.show_hover = status
 
+    def _resetPlot(self):
+        if not self.active_node_id:
+            return
+        cur_tab = self.resultsTabWidget.currentIndex()
+        if cur_tab == 0:
+            self.graphSection(self.active_node_id, 'conveyance')
+        elif cur_tab == 1:
+            self.graphSection(self.active_node_id, 'bad_banks')
 
     def banktopTableClicked(self, item):
         node_id = self.banktopCheckTable.item(item.row(), 0).text()
+        self.active_node_id = node_id
         self.graphSection(node_id, 'bad_banks')
         self.showSelectedNode(node_id)
 
     def conveyanceTableClicked(self, item):
         node_id = self.negativeConveyanceTable.item(item.row(), 0).text()
+        self.active_node_id = node_id
         self.graphSection(node_id, 'conveyance')
         self.showSelectedNode(node_id)
 
@@ -79,12 +93,12 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
         """
         """
         if caller == 'conveyance':
-            self.graphics_view.drawConveyancePlot(
+            self.section_graphics_view.drawConveyancePlot(
                 self.properties['problems'][node_id],
                 node_id
             )
         elif caller == 'bad_banks':
-            self.graphics_view.drawBanktopsPlot(
+            self.section_graphics_view.drawBanktopsPlot(
                 self.properties['problems'][node_id],
                 node_id
             )
@@ -123,6 +137,12 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
     def _updateStatus(self, status):
         self.statusLabel.setText(status)
         QApplication.processEvents()
+    
+    def _updateProgressMax(self, value):
+        self.progressBar.setMaximum(value)
+
+    def _updateProgressVal(self, value):
+        self.progressBar.setValue(value)
 
     def loadSectionData(self):
         self.properties = {}
@@ -136,6 +156,8 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
         )
         section_check = fmpsection_check.CheckFmpSections()
         section_check.status_signal.connect(self._updateStatus)
+        section_check.progress_max_signal.connect(self._updateProgressMax)
+        section_check.progress_val_signal.connect(self._updateProgressVal)
         try:
             self.statusLabel.setText("Loading FMP model river sections ...")
             QApplication.processEvents()
@@ -152,8 +174,9 @@ class FmpSectionCheckDialog(DialogBase, fmpsectioncheck_ui.Ui_FmpSectionProperty
         except Exception as err:
             self.statusLabel.setText("FMP model load failed!")
             QMessageBox.warning(
-                self, "FMP dat file load error", err.args[0]
+                self, "FMP dat file load error", f"Failed to load .dat file\n{err.args[0]}"
             )
+            return
         
         # Conveyance issues table
         self.statusLabel.setText("Populating tables ...")

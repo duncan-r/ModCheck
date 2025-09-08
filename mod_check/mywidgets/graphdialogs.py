@@ -823,184 +823,217 @@ class FmpStabilityGraphicsView():
             self.updatePlot()
 
 
-# class FmpStabilityGraphicsView(QGraphicsView):
-#     """GraphicsView to display the flow/stage for the Fmp stability check.
-#     """
-#
-#     def __init__(self):
-#         QGraphicsView.__init__(self)
-#
-#         scene = QGraphicsScene()
-#         self.setScene(scene)
-#         self.fig = Figure()
-#         self.axes = self.fig.gca()
-#         self.axes2 = self.axes.twinx()
-#         self.fig.tight_layout()
-#         self.canvas = FigureCanvas(self.fig)
-#         proxy_widget = scene.addWidget(self.canvas)
-#
-#     def drawPlot(self, time_data, results, derivs, timestep, series_type, 
-#                  node_name, show_derivs=False):
-#         labels = []
-#         plot_lines = []
-#         self.axes2.clear()
-#         self.axes.clear()
-#         self.fig.clear()
-#         self.axes = self.fig.gca()
-#         self.axes2 = self.axes.twinx()
-#
-#         x = time_data
-#         self.axes.set_xlabel('Time (h)')
-#         fail_times = ''
-#         if derivs['status'] == 'Failed':
-#             fail_times = '(First fail: {:.3f} - Last Fail: {:.3f})'.format(derivs['fail_times'][0], derivs['fail_times'][-1])
-#         status_text = '{} {}'.format(node_name, fail_times) #'Dy2 Fail = {}   :   {}'.format(derivs['status'], fail_times)
-#         self.axes.set_title(status_text)
-#         self.axes.set_ylabel('Stage (mAOD)')
-#         self.axes2.set_ylabel('Flow (m3/s)')
-#
-#         if series_type == 'Stage':
-#             s1_plot = self.axes.plot(x, results[0], '-b')
-#             s2_plot = self.axes2.plot(x, derivs['f'], '-r')
-#         else:
-#             s1_plot = self.axes2.plot(x, derivs['f'], '-r')
-#             s2_plot = self.axes.plot(x, results[0], '-b')
-#
-#         time_x = [timestep, timestep]
-#         time_y = [min(results[0]), max(results[0])]
-#         time_plot = self.axes.plot(time_x, time_y, '-k', alpha=0.5, dashes=[6,2])
-#
-#         # User doesn't need derivative graphs, just for debugging
-#         if show_derivs:
-#             x2 = x[:-1]
-#             right_plot = self.axes2.plot(x2, derivs['dy'], '-g', alpha=0.5)
-#             x3 = x2[:-1]
-#             right_plot2 = self.axes2.plot(x3, derivs['dy2'], '-k', alpha=0.5)
-#
-#         self.fig.tight_layout()
-#         self.canvas.draw()
-        
-
-class SectionPropertiesGraphicsView(QGraphicsView):
+class SectionPropertiesGraphicsView():
     """GraphicsView to display section properties graphs.
     
     Contains methods for drawing conveyance and banktop issues.
     """
     
-    def __init__(self):
-        QGraphicsView.__init__(self)
-        scene = QGraphicsScene()
-        self.setScene(scene)
-        self.fig = Figure()
-        self.axes = self.fig.gca()
-        self.axes2 = self.axes.twinx()
-        self.fig.tight_layout()
-        self.canvas = FigureCanvas(self.fig)
-        proxy_widget = scene.addWidget(self.canvas)
+    def __init__(self, graphics_view):
+        self.gv = graphics_view
+        self.back_color = QgsProject.instance().backgroundColor()
+        self.gv.setBackground(self.back_color)
+        self.is_dark = isDark(self.back_color)
+        self.highlight_color = getHighlightColor(self.is_dark, alpha=False)
+        self.highlight_color_alpha = getHighlightColor(self.is_dark, alpha=100)
+        self.back_color = getBackColor(self.is_dark)
+        self.title = ""
+        self.show_hover = True
         
-    # def drawConveyancePlot(self, k_data, section_data, section_id):
-    def drawConveyancePlot(self, section, section_id):
-        """Plot the conveyance and cross section data provided.
+        self.cur_plot_type = ''
+        self.section = None
+        self.section_id = ''
         
-        Args:
-            section_data(dict): containing lists of the 'xvals', 'yvals',
-            'panels' and 'conveyance' data to be drawn on the graph.
-            section_id(str): the node id for this section.
-        """
-        self.axes2.clear()
-        self.axes.clear()
-        self.fig.clear()
-        self.axes = self.fig.gca()
-        # self.axes2 = self.axes.twinx()
+    def _mouseMoved(self, evt):
+        if not self.show_hover:
+            self.display_text.hide()
+            return
         
-        # section = k_data['section']
+        pos = evt
+        if self.p1.sceneBoundingRect().contains(pos):
+            mousePoint = self.p1.vb.mapSceneToView(pos)
+            index = int(mousePoint.x())
+            series_1 = self.section.xs_x.to_numpy()
+
+            if self.cur_plot_type == 'conveyance':
+                if index >= 0 and (index < len(series_1) or index < len(self.section.active_k['x'])):
+                    mousePoint2 = self.p2.mapSceneToView(pos)
+                    self.display_text.setText(
+                        "X = {x:.3f}\n{y1name} = {y1:.3f}\n{x2name} = {x2:.3f}".format(
+                            x=mousePoint.x(),
+                            y1name="Elevation", y1=mousePoint.y(),
+                            x2name="Conveyance", x2=mousePoint2.x(),
+                        )
+                    )
+                    self.display_text.setPos(mousePoint.x(), mousePoint.y())
+                    self.display_text.show()
+                else:
+                    self.display_text.hide()
+            else:
+                if index >= 0 and index < len(series_1):
+                    self.display_text.setText(
+                        "X = {x:.3f}\n{y1name} = {y1:.3f}\n".format(
+                            x=mousePoint.x(), y1name="Elevation", y1=mousePoint.y(),
+                        )
+                    )
+                    self.display_text.setPos(mousePoint.x(), mousePoint.y())
+                    self.display_text.show()
+                else:
+                    self.display_text.hide()
         
-        self.axes.set(
-            ylabel='Elevation (mAOD)',
-            xlabel='Chainage (m)',
-            title="Node Name: {0}".format(section_id)
+    def clearPlot(self):
+        try:
+            self.p2.clear()
+        except: pass
+        try:
+            self.p1.clear()
+        except: pass
+        self.gv.clear()
+
+    def setupConveyancePlot(self, section, section_id):
+        self.clearPlot()
+        self.section = section
+        self.section_id = section_id
+        highlight = rgbToHex(self.highlight_color)
+        
+        self.p1 = self.gv.plotItem
+        self.p1.setDefaultPadding(0.1)
+        self.p1.getAxis('bottom').setLabel("X (m)", color=highlight, **{'font-size': '10pt'})
+        self.p2 = pg.ViewBox()
+        self.p1.showAxis('top')
+        self.p1.scene().addItem(self.p2)
+        self.p1.getAxis('top').linkToView(self.p2)
+        self.p2.setYLink(self.p1)
+        self.p1.showGrid(x=False, y=True, alpha=0.2)
+        
+        pen = pg.mkPen(color=self.highlight_color, width=1)
+        self.p1.getAxis('left').setPen(pen)
+        self.p1.getAxis('bottom').setPen(pen)
+        self.p1.getAxis('top').setPen(pen)
+        self.p1.getAxis('left').enableAutoSIPrefix(False)
+        self.p1.getAxis('top').enableAutoSIPrefix(False)
+        
+        self.p1.setContentsMargins(5,10,5,5)
+        self.p1.vb.sigResized.connect(self.updateConveyanceViews)
+        self.p1.scene().sigMouseMoved.connect(self._mouseMoved)
+        
+        highlight = rgbToHex(self.highlight_color)
+
+        self.p1.plot()
+        for panel in self.section.panels:
+            self.p1.addItem(pg.InfiniteLine(
+                pos=panel['x'], angle=90, pen=({
+                    'color': 'b', 'width': 1.2, 'style': Qt.DashLine
+                })
+            ))
+            
+        self.p1.addItem(pg.PlotDataItem(
+            self.section.xs_x.values, self.section.xs_y.values, name='Section',
+            pen=({'color': self.highlight_color_alpha, 'width': 1.2, 'style': Qt.DashLine}), antialias=True
+        ))
+        self.p1.addItem(pg.PlotDataItem(
+            self.section.xs_active_x.values, self.section.xs_active_y.values, name='Active section',
+            pen=({'color': self.highlight_color, 'width': 1.5}), antialias=True
+        ))
+        
+        self.p2.addItem(pg.PlotDataItem(
+            self.section.active_k['x'], self.section.active_k['y'], name='Conveyance',
+            pen=({'color': "r", 'width': 1.5}), antialias=True
+        ))
+
+        self.p1.getAxis('left').setLabel("Elevation (mAOD)", color=highlight, **{'font-size': '10pt'})
+        self.p1.getAxis('top').setLabel('Conveyance', color=highlight, **{'font-size': '10pt'})
+        self.display_text = pg.TextItem(
+            text="", color=self.highlight_color, anchor=(1,0), fill=self.back_color, border=self.highlight_color
         )
+        self.gv.addItem(self.display_text)
+        self.display_text.hide()
+        self.p1.vb.autoRange()
+        self.updateConveyanceViews()
 
-        xs_plot = self.axes.plot(section.xs_x, section.xs_y, "-k", alpha=0.5, dashes=[6,2], label="Cross Section")
-        xs_plot_active = self.axes.plot(section.xs_active_x, section.xs_active_y, "-k", label="Cross Section Active")
-        p_plot = None
+    def updateConveyanceViews(self):
+        self.p2.setGeometry(self.p1.vb.sceneBoundingRect())
+        self.p2.linkedViewChanged(self.p1.vb, self.p2.YAxis)
 
-        for panel in section.panels:
-            panel_label = 'Panel {}'.format(section.panel_count)
-            p_plot = self.axes.plot(panel['x'], panel['y'], "-b", label=panel_label)
+    def drawConveyancePlot(self, section, section_id):
+        self.cur_plot_type = 'conveyance'
+        self.setupConveyancePlot(section, section_id)
 
-        self.axes2 = self.axes.twiny()
-        k_plot = self.axes2.plot(section.active_k['x'], section.active_k['y'], "-r", label="Conveyance")
-        self.axes2.set_xlabel('Conveyance (m3/s)', color='r')
+    def setupBanksPlot(self, section, section_id):
+        self.clearPlot()
+        self.section = section
+        self.section_id = section_id
+        highlight = rgbToHex(self.highlight_color)
         
-        plot_lines = xs_plot + xs_plot_active + k_plot
-        labels = [l.get_label() for l in plot_lines]
-        if p_plot is not None: 
-            plot_lines += p_plot
-            labels.append('Panels')
-        self.axes.legend(plot_lines, labels, loc='lower right')
+        self.p1 = self.gv.plotItem
+        self.p1.setDefaultPadding(0.1)
+        self.p1.getAxis('bottom').setLabel("X (m)", color=highlight, **{'font-size': '10pt'})
+        self.p1.showGrid(x=True, y=True, alpha=0.2)
+        
+        pen = pg.mkPen(color=self.highlight_color, width=1)
+        self.p1.getAxis('left').setPen(pen)
+        self.p1.getAxis('bottom').setPen(pen)
+        self.p1.getAxis('left').enableAutoSIPrefix(False)
+        self.p1.hideAxis('top')
+        
+        self.p1.setContentsMargins(5,10,5,5)
+        self.p1.scene().sigMouseMoved.connect(self._mouseMoved)
 
-        self.axes.grid(True)
-        self.fig.tight_layout()
-        self.canvas.draw()
+        self.p1.plot()
+        self.p1.addItem(pg.PlotDataItem(
+            self.section.xs_x.values, self.section.xs_y.values, name='Section',
+            pen=({'color': self.highlight_color_alpha, 'width': 1.2, 'style': Qt.DashLine}), antialias=True
+        ))
+        active_bed = pg.PlotDataItem(
+            self.section.xs_active_x.values, self.section.xs_active_y.values, name='Active section',
+            pen=({'color': self.highlight_color, 'width': 1.5}), antialias=True
+        )
+        self.p1.addItem(active_bed)
+
+        if self.section.bad_banks['fail_left'] and self.section.bad_banks['drop_left'] > 0:
+            lb_x = self.section.xs_x[self.section.bad_banks['xs_start']:(self.section.bad_banks['max_left_idx']+1)]
+            lb_y = self.section.xs_y[self.section.bad_banks['xs_start']:(self.section.bad_banks['max_left_idx']+1)]
+            lb_y_new = [y if y > self.section.bad_banks['max_left'] else self.section.bad_banks['max_left'] for y in lb_y]
+            bad_left = pg.PlotDataItem(
+                lb_x, lb_y_new, name='Bad banks',
+                pen=({'color': "r", 'width': 1.2}), antialias=True
+            )
+            bed_left = pg.PlotDataItem(
+                lb_x, lb_y, 
+                pen=({'color': self.highlight_color, 'width': 0.5}), antialias=True
+            )
+            self.p1.addItem(bad_left)
+            self.p1.addItem(pg.FillBetweenItem(
+                bed_left, bad_left, brush=pg.mkBrush(color=(176, 11, 46, 60)),
+            ))
+
+        if self.section.bad_banks['fail_right'] and self.section.bad_banks['drop_right'] > 0:
+            rb_x = self.section.xs_x[self.section.bad_banks['max_right_idx']:self.section.bad_banks['xs_end']+1]
+            rb_y = self.section.xs_y[self.section.bad_banks['max_right_idx']:self.section.bad_banks['xs_end']+1]
+            rb_y_new = [y if y > self.section.bad_banks['max_right'] else self.section.bad_banks['max_right'] for y in rb_y]
+
+            bad_right = pg.PlotDataItem(
+                rb_x.values, rb_y_new, name='Bad banks',
+                pen=({'color': "r", 'width': 1.2}), antialias=True
+            )
+            bed_right = pg.PlotDataItem(
+                rb_x.values, rb_y.values, 
+                pen=({'color': self.highlight_color_alpha, 'width': 0.5}), antialias=True
+            )
+            self.p1.addItem(bad_right)
+            self.p1.addItem(pg.FillBetweenItem(
+                bed_right, bad_right, brush=pg.mkBrush(color=(176, 11, 46, 60)),
+            ))
+        self.display_text = pg.TextItem(
+            text="", color=self.highlight_color, anchor=(1,0), fill=self.back_color, border=self.highlight_color
+        )
+        self.gv.addItem(self.display_text)
+        self.display_text.hide()
+        self.p1.vb.autoRange()
 
     def drawBanktopsPlot(self, section, section_id):
-        """Plot the bad banks and cross section data provided.
-
-        The left_drop and right_drop values are the difference between the
-        highest section elevation on the left and right sides and the extreme
-        left and right elevations (the misplaces bank elevation).
-        It doesn't pick up parts of the section that are lower than 'bank-top' where
-        the 'bank-top' is lower than the extreme. Possibly should?
-        
-        Args:
-            section(fmpsectioncheck.ProblemSection): class containing sections and bank
-                data for graphing.
-            section_id(str): the node id for this section.
-            
-        """
-        self.axes2.clear()
-        self.axes.clear()
-        self.fig.clear()
-        self.axes = self.fig.gca()
-        self.axes2 = self.axes.twinx()
-        
-        self.axes.set(
-            ylabel='Elevation (mAOD)',
-            xlabel='Chainage (m)',
-            title="Node Name: {0}".format(section_id)
-        )
-
-        xs_plot = self.axes.plot(section.xs_x, section.xs_y, "-k", alpha=0.5, dashes=[6,2], label="Cross Section")
-        fill_plot = self.axes.fill(np.NaN, np.NaN, 'r', alpha=0.5)
-        
-        if  section.bad_banks['fail_left'] and section.bad_banks['drop_left'] > 0:
-            line_x = section.xs_x[section.bad_banks['xs_start']:(section.bad_banks['max_left_idx']+1)]
-            line_y = section.xs_y[section.bad_banks['xs_start']:(section.bad_banks['max_left_idx']+1)]
-            line_elev = [section.bad_banks['max_left'] for i in line_x]
-            cutoff = line_y
-            self.axes.plot(
-                line_x, line_elev, '-r'
-            )
-            self.axes.fill_between(line_x, line_y, line_elev, where=line_elev>=cutoff, interpolate=True, alpha=0.5, color='r')
-        if section.bad_banks['fail_right'] and section.bad_banks['drop_right'] > 0:
-            line_x = section.xs_x[section.bad_banks['max_right_idx']:section.bad_banks['xs_end']+1]
-            line_y = section.xs_y[section.bad_banks['max_right_idx']:section.bad_banks['xs_end']+1]
-            line_elev = [section.bad_banks['max_right'] for i in line_x]
-            cutoff = line_y
-            self.axes.plot(
-                line_x, line_elev, '-r'
-            )
-            self.axes.fill_between(line_x, line_y, line_elev, where=line_elev>=cutoff, interpolate=True, alpha=0.5, color='r')
-
-        xs_plot_active = self.axes.plot(section.xs_active_x, section.xs_active_y, "-k", label="Cross Section Active")
-
-        self.axes.legend(
-            xs_plot + xs_plot_active + fill_plot, ['Cross Section', 'Cross Section Active', 'Poor Banks'], loc='lower right'
-        )
-        self.axes.grid(True)
-        self.fig.tight_layout()
-        self.canvas.draw()
+        self.cur_plot_type = 'banks'
+        self.setupBanksPlot(section, section_id)
 
 
 class AmaxGraphDialog(QDialog, graph_ui.Ui_GraphDialog):

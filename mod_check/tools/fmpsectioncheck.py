@@ -98,6 +98,8 @@ class ProblemData():
 # class CheckFmpSections(ti.ToolInterface):
 class CheckFmpSections(QObject):
     status_signal = pyqtSignal(str)
+    progress_max_signal = pyqtSignal(int)
+    progress_val_signal = pyqtSignal(int)
     
     def __init__(self):
         super().__init__()
@@ -126,15 +128,21 @@ class CheckFmpSections(QObject):
     def findProblemSections(self, river_sections, **kwargs):
         problems = self.calculateConveyance(river_sections, **kwargs)
         problems = self.checkBankLocations(river_sections, problems, **kwargs)
+        self.progress_val_signal.emit(0)
         return problems
 
     def calculateConveyance(self, river_sections, k_tol=10.0, **kwargs):
         """
         """
-        k_tol = -k_tol
+        self.status_signal.emit(f"Calculating conveyance curves...")
+        self.progress_max_signal.emit(len(river_sections))
+        counter = 0
+        k_tol = -k_tol # Mark k_tol negative
         issues = {}
         for name, river in river_sections.items():
-            self.status_signal.emit(f"Calculating conveyance for node {name}")
+            self.progress_max_signal.emit(counter)
+            counter += 1
+
             k = self.calculateActiveConveyance(river.active_data)
 
             # Duplicate k data, shift duplicate rows up by 1, find the difference,
@@ -162,8 +170,13 @@ class CheckFmpSections(QObject):
         """
         """
         # bad_banks = {}
+        self.status_signal.emit(f"Checking bank configurations...")
+        self.progress_max_signal.emit(len(river_sections))
+        counter = 0
         for name, river in river_sections.items():
-            self.status_signal.emit(f"Checking bank setup for node {name}")
+            self.progress_val_signal.emit(counter)
+            counter += 1
+
             # Index references are not updated for the new 'active' part of the df
             # Find the indexes so we can use a relative lookup
             # This feels hacky, assume there's a better way?
