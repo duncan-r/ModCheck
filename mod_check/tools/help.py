@@ -47,13 +47,37 @@ You can now use all of the functionality from the API in your QGIS Python consol
 CHECK_CHAINAGE = """
 Check FMP-TUFLOW Chainage allows you to extract the chainage (node distance) values from
 Flood Modeller and TUFLOW model nodes and compare them to ensure that they have similar 
-values. This is currently only possible when the TUFLOW model includes a 1d_nwk line,
-which is used to derive the distance between nodes in 2D (it is possible to extract
-the FMP chainage values without comparing see the "FMP Only" section below).
+values.
+
+Two approaches are available for identifying the chainage in TUFLOW:
+1. Checking the lengths (or len_or_ANA) of a 1d_nwk file containing node references.
+2. Checking the lengths of HX lines associated with 1d nodes.
+
+Option 1 is heavily preffered and will give the most accurate answer. Option 2 is
+available for models that do not include a 1d_nwk file (which is not a requirement
+for FM-TUFLOW unless WLLs are required).
+
+Option 2 (HX lines) does seem to provide a decent approximation in most cases. It
+works by finding CN and HX lines snapped to the 1D nodes and checking the distance,
+along the HX line, between the snapped nodes. Some checks are made to exclude
+'end' or spill HX lines, and then the distance along the two (if there are two)
+connecting lines is averaged. Averaging the distance generally provides a good
+approximation, because averaging removes the influence of meanders in the channel.
+BUT, HX lines do not and don't have to represent the thalweg, for example the 
+channel may widen along the reach leading to a notable difference in the length
+calculated when compared to the FM node distances.
+ 
+
+USAGE
+-----
 
 Select an FMP .dat file in the FMP Model section, select the TUFLOW 1d_nwk line layer
 in the TUFLOW inputs section, set the DX Tolerance value and click the 
 Compare TUFLOW / FMP Chainage button.
+
+If using the HX approach, the 1d_nd (or 1d_nodes or whatever it has been called)
+layer is required to match FM nodes, a 2d_bc layer containing the HX and CN 
+lines is required as the second input. 
 
 The DX Tolerance value sets the limit at which a difference in the FMP and TUFLOW 
 chainage values is considered acceptable. Any differences less than the tolerance
@@ -84,6 +108,8 @@ The 2D TUFLOW chainage will report both the geometric line length along the
 1d_nwk line layer section and the Len_or_ANA value. If a Len_or_ANA value is
 provided it will be used to calculate the chainage difference, if not the
 line geometry will be used.
+
+If using the HX approach, the Len_or_ANA values will always be "-1".
 
 FMP Only:
 If there is no 1d_nwk line available for the TUFLOW model you can tick the 
@@ -333,19 +359,29 @@ of +-1%; the recommended tolerance for CME.
 The rate of change in volume (dVol) is graphed on the secondary (right) y axis.
 """
 
-CHECK_FMP_STABILITY = """
-(BETA) Autocheck for FMP stage/flow time series instabilities.
+CHECK_1D_STABILITY = """
+(BETA) Autocheck for FMP or ESTRY stage/flow time series instabilities.
 
-Generate stage and flow result outputs from an FMP model and plot the time series data. 
-Sections are validated to try and identify time series that show indications of 
-instability within the series.
+Generate stage and flow result outputs from an FMP or ESTRY model and plot the 
+time series data. Sections are validated to try and identify time series that show 
+indications of instability within the time series.
 
-Converting results (Dat and Results tab):
-- Set the FMP .dat file location (optional).
+FM
+---
+
+On the "FM" tab:
 - Select the .zzn results file you want to check.
+- Set the FMP .dat file location (optional).
 - Set the validation series to either "Stage" or "Flow".
 - Click the "Load Results" button.
 - The binary results data will be loaded into time series for viewing.
+
+On the "ESTRY" tab:
+- Select the .tpc results file that you want to check.
+- The 1d_xs layer has been deactivated and will be implemented in a future release.
+- Set the validation series to either "Stage" or "Flow".
+- Click the "Load Results" button.
+- The results data will be loaded into time series for viewing.
 
 The instability checks can take a while for larger models. Progress is shown via a
 progress bar next to the "Load Results" button. Validation can be taken against
@@ -597,7 +633,7 @@ HELP_LOOKUP = {
     'Check FMP Sections': FMP_SECTIONS,
     'ReFH Check': REFH_CHECK,
     'Check TUFLOW MB': CHECK_TUFLOW_MB,
-    'Check FMP Stability': CHECK_FMP_STABILITY,
+    'Check 1D Stability': CHECK_1D_STABILITY,
     'Model File Audit': FILE_AUDIT,
     # 'NRFA Station Viewer': NRFA_STATIONS,
 }
