@@ -5,12 +5,14 @@
 #####################################
 
 build_for_git.bat
+export_exclude_list.txt
 
 *.egg
 !mod_check/dependencies/*.egg
 !plugin/mod_check/dependencies/*.egg
-plugin/mod_check.zip
-plugin/mod_check.7z
+plugin/
+#plugin/mod_check.zip
+#plugin/mod_check.7z
 floodmodeller-api-main.7z
 
 #####################################
