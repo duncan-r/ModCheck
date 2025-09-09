@@ -95,6 +95,50 @@ class CompareFmpTuflowChainage(QObject):
 
         return self.tuflow_chainage, self.total_tuflow_chainage
     
+    def compareChainage1dNwk(self, fmp_chainage, tuflow_chainage, dx_tol):    
+        problem_nodes = {'no_nwk': [], 'mismatch': []}
+        self.comparison = {'missing': [], 'fail': [], 'ok': []}
+        tuflow_keys = tuflow_chainage.keys()
+        
+        self.progress_max_signal.emit(len(fmp_chainage))
+        for i, node in enumerate(fmp_chainage):
+            self.progress_val_signal.emit(i)
+
+            node_id = node['name']
+            if not node_id in tuflow_keys:
+                # Check that the FMP node has chainage > 0. Otherwise it won't have
+                # a nwk line anyway
+                if node['chainage'] > 0.0001 and node['category'] == 'river':
+                    problem_nodes['no_nwk'].append('{} ({})'.format(node_id, node['category']))
+                    self.comparison['missing'].append({
+                        'type': node['category'], 'name': node_id, 'chainage': node['chainage'],
+                        'line_length': -1, 'nwk_len_or_ana': -1, 'diff': -1, 'status': 'NOT FOUND'
+                    })
+            else:
+                # If Len_or_ANA value > 0 (default) use that, otherwise use line length
+                if tuflow_chainage[node_id][0] > 0.0000:
+                    nwk_chain = tuflow_chainage[node_id][0]
+                else:
+                    nwk_chain = tuflow_chainage[node_id][1]
+
+                chain_diff = abs(node['chainage'] - nwk_chain)
+                output_diff = node['chainage'] - nwk_chain
+                temp = {
+                    'type': node['category'], 'name': node_id, 'chainage': node['chainage'],
+                    'line_length': tuflow_chainage[node_id][1], 
+                    'nwk_len_or_ana': tuflow_chainage[node_id][0], 'diff': output_diff,
+                    'status': 'NA',
+                }
+                if chain_diff > dx_tol:
+                    temp['status'] = 'FAIL'
+                    self.comparison['fail'].append(temp)
+                else:
+                    temp['status'] = 'PASS'
+                    self.comparison['ok'].append(temp)
+
+        self.progress_val_signal.emit(0)
+        return self.comparison
+    
     def tuflowHXChainage(self, fmp_chainage, node_layer, bc_layer, node_lookup, dx_tol):
         """Calcualte and compare difference between HX line lengths and FM node distance.
         
@@ -297,50 +341,6 @@ class CompareFmpTuflowChainage(QObject):
         
         self.progress_val_signal.emit(0)
         return self.comparison, self.total_tuflow_chainage
-    
-    def compareChainage1dNwk(self, fmp_chainage, tuflow_chainage, dx_tol):    
-        problem_nodes = {'no_nwk': [], 'mismatch': []}
-        self.comparison = {'missing': [], 'fail': [], 'ok': []}
-        tuflow_keys = tuflow_chainage.keys()
-        
-        self.progress_max_signal.emit(len(fmp_chainage))
-        for i, node in enumerate(fmp_chainage):
-            self.progress_val_signal.emit(i)
-
-            node_id = node['name']
-            if not node_id in tuflow_keys:
-                # Check that the FMP node has chainage > 0. Otherwise it won't have
-                # a nwk line anyway
-                if node['chainage'] > 0.0001 and node['category'] == 'river':
-                    problem_nodes['no_nwk'].append('{} ({})'.format(node_id, node['category']))
-                    self.comparison['missing'].append({
-                        'type': node['category'], 'name': node_id, 'chainage': node['chainage'],
-                        'line_length': -1, 'nwk_len_or_ana': -1, 'diff': -1, 'status': 'NOT FOUND'
-                    })
-            else:
-                # If Len_or_ANA value > 0 (default) use that, otherwise use line length
-                if tuflow_chainage[node_id][0] > 0.0000:
-                    nwk_chain = tuflow_chainage[node_id][0]
-                else:
-                    nwk_chain = tuflow_chainage[node_id][1]
-
-                chain_diff = abs(node['chainage'] - nwk_chain)
-                output_diff = node['chainage'] - nwk_chain
-                temp = {
-                    'type': node['category'], 'name': node_id, 'chainage': node['chainage'],
-                    'line_length': tuflow_chainage[node_id][1], 
-                    'nwk_len_or_ana': tuflow_chainage[node_id][0], 'diff': output_diff,
-                    'status': 'NA',
-                }
-                if chain_diff > dx_tol:
-                    temp['status'] = 'FAIL'
-                    self.comparison['fail'].append(temp)
-                else:
-                    temp['status'] = 'PASS'
-                    self.comparison['ok'].append(temp)
-
-        self.progress_val_signal.emit(0)
-        return self.comparison
 
     def loadFmpModel(self, dat_path):
         model = None

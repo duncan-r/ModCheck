@@ -60,6 +60,7 @@ class Ui_ChainageCalculator(object):
         self.calcFmpChainageOnlyBtn.setObjectName("calcFmpChainageOnlyBtn")
         self.horizontalLayout.addWidget(self.calcFmpChainageOnlyBtn)
         self.label_4 = QtWidgets.QLabel(self.fmpOnlyGroupBox)
+        self.label_4.setEnabled(False)
         self.label_4.setObjectName("label_4")
         self.horizontalLayout.addWidget(self.label_4)
         spacerItem = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
@@ -164,13 +165,13 @@ class Ui_ChainageCalculator(object):
         self.fmpTotalChainageLabel = QtWidgets.QLabel(self.groupBox_4)
         self.fmpTotalChainageLabel.setObjectName("fmpTotalChainageLabel")
         self.horizontalLayout_4.addWidget(self.fmpTotalChainageLabel)
-        self.verticalLayout_4.addLayout(self.horizontalLayout_4)
         self.horizontalLayout_5 = QtWidgets.QHBoxLayout()
         self.horizontalLayout_5.setObjectName("horizontalLayout_5")
         self.tuflowTotalChainageLabel = QtWidgets.QLabel(self.groupBox_4)
         self.tuflowTotalChainageLabel.setObjectName("tuflowTotalChainageLabel")
         self.horizontalLayout_5.addWidget(self.tuflowTotalChainageLabel)
-        self.verticalLayout_4.addLayout(self.horizontalLayout_5)
+        self.horizontalLayout_4.addLayout(self.horizontalLayout_5)
+        self.verticalLayout_4.addLayout(self.horizontalLayout_4)
         self.outputsTabWidget = QtWidgets.QTabWidget(self.groupBox_4)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         sizePolicy.setHorizontalStretch(0)
@@ -271,7 +272,7 @@ class Ui_ChainageCalculator(object):
 
         self.retranslateUi(ChainageCalculator)
         self.tuflowInputsTabWidget.setCurrentIndex(0)
-        self.outputsTabWidget.setCurrentIndex(1)
+        self.outputsTabWidget.setCurrentIndex(0)
         self.buttonBox.accepted.connect(ChainageCalculator.accept) # type: ignore
         self.buttonBox.rejected.connect(ChainageCalculator.reject) # type: ignore
         QtCore.QMetaObject.connectSlotsByName(ChainageCalculator)

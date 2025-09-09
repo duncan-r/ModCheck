@@ -25,7 +25,8 @@ class ChainageCalculatorDialog(DialogBase, chaincalc_ui.Ui_ChainageCalculator):
 
     If a nwk_line shape file is available for the TUFLOW model it will compare
     the length values of the nwk_line to check that there is consistency 
-    between the FMP and TUFLOW model chainages.
+    between the FMP and TUFLOW model chainages. If not, a 2d_bc file containing
+    HX and CN lines can be used to approximate the distance.
     """
 
     def __init__(self, dialog_name, iface, project):
@@ -39,20 +40,22 @@ class ChainageCalculatorDialog(DialogBase, chaincalc_ui.Ui_ChainageCalculator):
         self.buttonBox.clicked.connect(self.signalClose)
         self.calcFmpChainageOnlyBtn.clicked.connect(self.calculateFmpOnlyChainage)
         self.compareChainageBtn.clicked.connect(self.compareTuflowFmpChainage)
-        # self.fmpOnlyCheckbox.stateChanged.connect(self.compareFmpOnlyChange)
         self.fmpOnlyGroupBox.clicked.connect(lambda x: self.compareFmpOnlyChange(x, 'fmp'))
         self.tuflowInputsGroupBox.clicked.connect(lambda x: self.compareFmpOnlyChange(x, 'tuflow'))
         self.tuflowInputsTabWidget.currentChanged.connect(self._tuflowInputsTabChanged)
+
         self.exportResultsBtn.clicked.connect(self.exportChainageResults)
         self.exportAllCheckbox.stateChanged.connect(self.setExportAll)
         self.exportFmpCheckbox.stateChanged.connect(self.setExportIndividual)
         self.exportReachCheckbox.stateChanged.connect(self.setExportIndividual)
         self.exportComparisonCheckbox.stateChanged.connect(self.setExportIndividual)
+
         self.tuflowFmpComparisonTable.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tuflowFmpComparisonTable.customContextMenuRequested.connect(self._comparisonTableContext)
+
+        self.estryNwkLayerCBox.setFilters(QgsMapLayerProxyModel.LineLayer)
         self.hxNodesLayerCBox.setFilters(QgsMapLayerProxyModel.PointLayer)
         self.hxBCLayerCBox.setFilters(QgsMapLayerProxyModel.LineLayer)
-
 
         dat_path = mrt_settings.loadProjectSetting(
             'dat_file', self.project.readPath('./temp')
@@ -63,8 +66,6 @@ class ChainageCalculatorDialog(DialogBase, chaincalc_ui.Ui_ChainageCalculator):
         self.dxToleranceSpinbox.valueChanged.connect(self.dxTolValueChanged)
         self.dxToleranceSpinbox.setValue(dx_tol)
 
-        # Populate estry nwk layer combo (line layers only)
-        self.estryNwkLayerCBox.setFilters(QgsMapLayerProxyModel.LineLayer)
         
     def _updateStatus(self, status):
         self.statusLabel.setText(status)
@@ -96,6 +97,7 @@ class ChainageCalculatorDialog(DialogBase, chaincalc_ui.Ui_ChainageCalculator):
         action = menu.exec_(self.tuflowFmpComparisonTable.viewport().mapToGlobal(pos))
 
         if action == locate_section_action:
+            self._updateStatus("")
             row = self.tuflowFmpComparisonTable.currentRow()
             id = self.tuflowFmpComparisonTable.item(row, 2).text()
 
@@ -112,12 +114,15 @@ class ChainageCalculatorDialog(DialogBase, chaincalc_ui.Ui_ChainageCalculator):
                         f['ID'] == id
                     except KeyError:
                         f_lookup = 0
+                        self._updateStatus("Unable to find name in nodes layer")
                     tested_fname = True
 
                 if f[f_lookup] == id:
                     nwk_layer.select(f.id())
                     self.iface.mapCanvas().zoomToSelected(nwk_layer)
                     break
+            else:
+                self._updateStatus("Unable to find name in nodes layer")
 
     def fileChanged(self, path, caller):
         mrt_settings.saveProjectSetting(caller, path)
@@ -146,14 +151,18 @@ class ChainageCalculatorDialog(DialogBase, chaincalc_ui.Ui_ChainageCalculator):
         if caller == 'fmp': 
             if is_checked:
                 self.tuflowInputsGroupBox.setChecked(False)
+                self.calcFmpChainageOnlyBtn.setEnabled(True)
             else:
                 self.tuflowInputsGroupBox.setChecked(True)
+                # self.calcFmpChainageOnlyBtn.setEnabled(False)
 
         elif caller == 'tuflow':
             if is_checked:
                 self.fmpOnlyGroupBox.setChecked(False)
+                # self.calcFmpChainageOnlyBtn.setEnabled(False)
             else:
                 self.fmpOnlyGroupBox.setChecked(True)
+                self.calcFmpChainageOnlyBtn.setEnabled(True)
 
     def calculateFmpOnlyChainage(self):
         """Calculate only the FMP model chainage values.
@@ -180,7 +189,7 @@ class ChainageCalculatorDialog(DialogBase, chaincalc_ui.Ui_ChainageCalculator):
         else:
             self.statusLabel.setText('Calculating FMP Chainage...')
             QApplication.processEvents()
-            fmp_chainage, reach_chainage = self.chainage_calculator.fmpChainage(dat_path)
+            fmp_chainage, reach_chainage, _ = self.chainage_calculator.fmpChainage(dat_path)
             self._showFmpChainageResults(fmp_chainage, reach_chainage)
             self.statusLabel.setText('FMP Chainage calculation complete')
 
@@ -215,18 +224,27 @@ class ChainageCalculatorDialog(DialogBase, chaincalc_ui.Ui_ChainageCalculator):
             return
 
         dx_tol = self.dxToleranceSpinbox.value()
-        self.statusLabel.setText('Calculating FMP chainage (1/3) ...')
-        QApplication.processEvents()
-        fmp_chainage, reach_chainage, _ = self.chainage_calculator.fmpChainage(dat_path)
-        self.statusLabel.setText('Calculating TUFLOW nwk line chainage (2/3) ...')
-        QApplication.processEvents()
-        tuflow_chainage, total_tuflow_chainage = self.chainage_calculator.tuflowChainage(nwk_layer)
-        self.statusLabel.setText('Comparing FMP-TUFLOW chainage (3/3) ...')
-        QApplication.processEvents()
-        chainage_compare = self.chainage_calculator.compareChainage1dNwk(
-            fmp_chainage, tuflow_chainage, dx_tol
-        )
-        self.statusLabel.setText('Chainage compare complete')
+        
+        try:
+            self.statusLabel.setText('Calculating FMP chainage (1/3) ...')
+            QApplication.processEvents()
+            fmp_chainage, reach_chainage, _ = self.chainage_calculator.fmpChainage(dat_path)
+            self.statusLabel.setText('Calculating TUFLOW nwk line chainage (2/3) ...')
+            QApplication.processEvents()
+            tuflow_chainage, total_tuflow_chainage = self.chainage_calculator.tuflowChainage(nwk_layer)
+            self.statusLabel.setText('Comparing FMP-TUFLOW chainage (3/3) ...')
+            QApplication.processEvents()
+            chainage_compare = self.chainage_calculator.compareChainage1dNwk(
+                fmp_chainage, tuflow_chainage, dx_tol
+            )
+            self.statusLabel.setText('Chainage compare complete')
+        except Exception as err:
+            self._setProgressval(0)
+            self.statusLabel.setText('Chainage comparison failed')
+            QMessageBox.warning(
+                self, "Chainage comparison failed", "Error in model read: {}".format(err.args[0])
+            )
+            
 
         self._showFmpChainageResults(fmp_chainage, reach_chainage)
         self._showCompareChainageResults(chainage_compare, total_tuflow_chainage)
@@ -256,33 +274,31 @@ class ChainageCalculatorDialog(DialogBase, chaincalc_ui.Ui_ChainageCalculator):
         #         self, "No 1d_to_2d_check Layer Provider", "Please select a 1d_to_2d_check layer or choose FMP only"
         #     )
         #     return
-        # cell_size = self.check1dTo2dSpinbox.value()
         nodes_layer = self.hxNodesLayerCBox.currentLayer()
         bc_layer = self.hxBCLayerCBox.currentLayer()
         dx_tol = self.dxToleranceSpinbox.value()
 
-        self.statusLabel.setText('Calculating FMP chainage (1/2) ...')
-        QApplication.processEvents()
-        fmp_chainage, reach_chainage, node_lookup = self.chainage_calculator.fmpChainage(dat_path)
+        try:
+            self.statusLabel.setText('Calculating FMP chainage (1/2) ...')
+            QApplication.processEvents()
+            fmp_chainage, reach_chainage, node_lookup = self.chainage_calculator.fmpChainage(dat_path)
 
-        self.statusLabel.setText('Calculating TUFLOW nwk line chainage (2/2) ...')
-        QApplication.processEvents()
-        # tuflow_chainage, total_tuflow_chainage = self.chainage_calculator.tuflowHXChainage(
-        chainage_compare, total_tuflow_chainage = self.chainage_calculator.tuflowHXChainage(
-            # check_1d_to_2d_layer, cell_size
-            fmp_chainage, nodes_layer, bc_layer, node_lookup, dx_tol
-        )
+            self.statusLabel.setText('Calculating TUFLOW nwk line chainage (2/2) ...')
+            QApplication.processEvents()
+            chainage_compare, total_tuflow_chainage = self.chainage_calculator.tuflowHXChainage(
+                fmp_chainage, nodes_layer, bc_layer, node_lookup, dx_tol
+            )
 
-        # self.statusLabel.setText('Comparing FMP-TUFLOW chainage (3/3) ...')
-        # QApplication.processEvents()
-        # chainage_compare = self.chainage_calculator.compareChainageHX(
-        #     fmp_chainage, tuflow_chainage, dx_tol
-        # )
-        self.statusLabel.setText('Chainage compare complete')
-
-        self._showFmpChainageResults(fmp_chainage, reach_chainage)
-        self._showCompareChainageResults(chainage_compare, total_tuflow_chainage)
-        self.outputsTabWidget.setCurrentIndex(1)
+            self.statusLabel.setText('Chainage compare complete')
+            self._showFmpChainageResults(fmp_chainage, reach_chainage)
+            self._showCompareChainageResults(chainage_compare, total_tuflow_chainage)
+            self.outputsTabWidget.setCurrentIndex(1)
+            
+        except Exception as err:
+            QMessageBox.warning(
+                self, "Chainage comparison failed", 
+                "Unknown calculation error. Check node and 2d_bc layers are correct types\nError: {}".format(err.args[0]) 
+            )
 
     def _showFmpChainageResults(self, unit_chainage, reach_chainage):
         """Populate the FMP chainage tables with the results."""
@@ -333,6 +349,7 @@ class ChainageCalculatorDialog(DialogBase, chaincalc_ui.Ui_ChainageCalculator):
             status_item.setText(status)
             if status == 'FAILED' or status == 'NOT FOUND':
                 status_item.setBackground(QColor(239, 175, 175)) # Light Red
+                status_item.setForeground(QColor(0, 0, 0)) # Black
 
             diff = '{:.2f}'.format(details['diff'])
             fmp_chainage = '{:.2f}'.format(details['chainage'])

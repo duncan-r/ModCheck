@@ -95,6 +95,9 @@
         </item>
         <item>
          <widget class="QLabel" name="label_4">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
           <property name="text">
            <string>Use this if there is no nwk line layer available for comparison or you just want to output node distances from the FMP model</string>
           </property>
@@ -324,16 +327,16 @@
           </property>
          </widget>
         </item>
-       </layout>
-      </item>
-      <item>
-       <layout class="QHBoxLayout" name="horizontalLayout_5">
         <item>
-         <widget class="QLabel" name="tuflowTotalChainageLabel">
-          <property name="text">
-           <string>Total Tuflow Chainage:</string>
-          </property>
-         </widget>
+         <layout class="QHBoxLayout" name="horizontalLayout_5">
+          <item>
+           <widget class="QLabel" name="tuflowTotalChainageLabel">
+            <property name="text">
+             <string>Total Tuflow Chainage:</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </item>
        </layout>
       </item>
@@ -346,7 +349,7 @@
          </sizepolicy>
         </property>
         <property name="currentIndex">
-         <number>1</number>
+         <number>0</number>
         </property>
         <widget class="QWidget" name="fmpChainageTab">
          <attribute name="title">
