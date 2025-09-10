@@ -16,6 +16,7 @@ import os
 import sys
 import csv
 import json
+import copy
 from pprint import pprint
 from PyQt5 import QtCore
 import re
@@ -29,6 +30,7 @@ from tmf.tuflow_model_files import TCF
 from tmf.tuflow_model_files.inp.file import FileInput
 from tmf.tuflow_model_files.inp.gis import GisInput
 from tmf.tuflow_model_files.inp.setting import SettingInput
+import tuflow
 
 
 class WorkspaceFile():
@@ -329,180 +331,180 @@ class FileChecker(QtCore.QObject):
 
         
 
-class ResultHolder():    
-    """
-    """
-    
-    def __init__(self):
-        self.model_root = ''
-        self.parent = ''
-        self.seen_parents = []
-        self.missing = {}
-        self.ignored_files = []
-        self.file_tree = []
-#         self.found = {}
-
-        self._summary = {'model_files': 0, 'other_files': 0, 'ignored_files': 0, 'total_files': 0}
-        self.results = {'missing': [], 'found': [], 'found_ief': []}
-        self.results_meta = {'summary': None, 'ignored': None, 'checked': None}
-
-    @property
-    def summary(self):
-        return self._summary
-
-    @summary.setter
-    def summary(self, summary):
-        self._summary = summary
-        self._summary['total_files'] = self.getFileTotal()
-        
-    def formatFileTree(self, include_files=True, format_as_text=True, include_full_paths=False):
-        output_list = []
-        fullpath_list = []
-        for f in self.file_tree:
-            if not f['is_folder']:
-                if include_files:
-                    output_list.append('{}{}\n'.format(f['indent'], f['path']))
-                    fullpath_list.append(f['fullpath'])
-                else:
-                    fullpath_list.append('')
-            else:
-                if include_files:
-                    output_list.append('{}\n'.format(f['indent'][:-4]))
-                    fullpath_list.append('')
-                output_list.append('{}{}/\n'.format(f['indent'], f['path']))
-                fullpath_list.append('')
-                
-        output = None
-        fullpaths = None
-        if format_as_text:
-            output = ''.join(output_list)
-            fullpaths = '\n'.join(fullpath_list)
-
-        if include_full_paths:
-            return output, fullpaths
-        else:
-            del fullpath_list
-            return output
-
-    def saveFileTree(self, save_path, include_files=True):
-        output = self.formatFileTree(include_files=include_files)
-        with open(save_path, 'w', newline='\n') as outfile:
-            outfile.write(output)
-    
-    def addMissing(self, path, line, found=''):
-        if path in self.missing:
-            if not self.parent in self.missing[path]['parent']:
-                self.missing[path]['parent'].append(self.parent)
-                self.missing[path]['line'].append(line)
-        else:
-            self.missing[path] = {'parent': [self.parent], 'line': [line], 'found': found}
-    
-    def setFound(self, path, found):
-        try:
-            self.missing[path]['found'] = found
-        except KeyError:
-            raise 
-        
-    def summaryText(self):
-        return 'Model Files: {0:<10}\nOther Files: {1:<10}\nIgnored Files: {2:<10}\nTotal Files: {3:<10}'.format(
-            self._summary['model_files'], self._summary['other_files'], 
-            self._summary['ignored_files'], self._summary['total_files']
-        )
-        
-    def getFileTotal(self):
-        return self._summary['model_files'] + self._summary['other_files'] + self._summary['ignored_files']
-
-    def processResults(self):
-        self.results = {'missing': [], 'found': [], 'found_ief': []}
-        self.results_meta['summary'] = self.summary
-        self.results_meta['ignored'] = self.ignored_files
-        self.results_meta['checked'] = self.seen_parents
-
-        for f, details in self.missing.items():
-            info = {'file': [], 'parents': []}
-            psplit = os.path.split(f)
-            filename = psplit[1] if len(psplit) > 1 else f
-            all_ief = True
-            for i, parent in enumerate(details['parent']):
-                if not parent[-3:] == 'ief':
-                    all_ief = False
-                info['parents'].append([parent, details['line'][i]])
-
-            if details['found']:
-                info['file'] = [filename, details['found'], f]
-                if all_ief:
-                    self.results['found_ief'].append(info)
-                else:
-                    self.results['found'].append(info)
-            else:
-                info['file'] = [filename, f]
-                self.results['missing'].append(info)
-                
-    def exportResults(self, save_path):
-        """
-        """
-        with open(save_path, 'w', newline='\n') as outfile:
-            outfile.write('\n###########################')
-            outfile.write('\n# FILE SEARCH SUMMARY')
-            outfile.write('\n###########################\n\n')
-            outfile.write('Root folder: {0}\n'.format(self.model_root))
-            outfile.write(self.summaryText())
-
-            outfile.write('\n\nFILES THAT WERE IGNORED\n')
-            if self.ignored_files:
-                outfile.write('\n'.join([i.filepath for i in self.ignored_files]))
-            else:
-                outfile.write('\nNo files were ignored')
-
-            outfile.write('\n\nMISSING FILES\n')
-            if self.results['missing']:
-                outfile.write('\n'.join(m['file'][0] for m in self.results['missing']))
-            else:
-                outfile.write('\nNo missing files')
-
-            outfile.write('\n\nFOUND FILES (Incorrect paths)\n')
-            if self.results['found'] or self.results['found_ief']:
-                outfile.write('\n'.join(f['file'][0] for f in self.results['found']))
-                outfile.write('\n'.join(f['file'][0] for f in self.results['found_ief']))
-            else:
-                outfile.write('\nNo misreferenced files')
-                
-            outfile.write('\n\nMODEL FILES CHECKED\n')
-            outfile.write('\n'.join([p for p in self.seen_parents]))
-            
-            outfile.write('\n\n\n###########################')
-            outfile.write('\n# DETAILED RESULTS')
-            outfile.write('\n###########################\n')
-
-            outfile.write('\n\nMISSING FILES\n')
-            if self.results['missing']:
-                for m in self.results['missing']:
-                    outfile.write('\n{0:<20}{1}'.format('File:', m['file'][0]))
-                    outfile.write('\n{0:<20}{1}'.format('Path:', m['file'][1]))
-                    outfile.write('\nReferenced by parent files:\n')
-                    outfile.write('\n'.join(['Line ({0})\t {1}'.format(p[1], p[0]) for p in m['parents']]))
-                    outfile.write('\n')
-            else:
-                outfile.write('\nNo missing files')
-
-            outfile.write('\n\n\nFOUND FILES (Incorrect paths)\n')
-            if self.results['found'] or self.results['found_ief']:
-                for f in self.results['found']:
-                    outfile.write('\n{0:<20}{1}'.format('File:', f['file'][0]))
-                    outfile.write('\n{0:<20}{1}'.format('Original Path:', f['file'][2]))
-                    outfile.write('\n{0:<20}{1}'.format('Found Path:', f['file'][1]))
-                    outfile.write('\nReferenced by parent files:\n')
-                    outfile.write('\n'.join(['Line ({0})\t {1}'.format(p[1], p[0]) for p in f['parents']]))
-                    outfile.write('\n')
-                for f in self.results['found_ief']:
-                    outfile.write('\n{0:<20}{1}'.format('File:', f['file'][0]))
-                    outfile.write('\n{0:<20}{1}'.format('Original Path:', f['file'][2]))
-                    outfile.write('\n{0:<20}{1}'.format('Found Path:', f['file'][1]))
-                    outfile.write('\nReferenced by parent files:\n')
-                    outfile.write('\n'.join(['Line ({0})\t {1}'.format(p[1], p[0]) for p in f['parents']]))
-                    outfile.write('\n')
-            else:
-                outfile.write('\nNo misreferenced files')
+# class ResultHolder():    
+#     """
+#     """
+#
+#     def __init__(self):
+#         self.model_root = ''
+#         self.parent = ''
+#         self.seen_parents = []
+#         self.missing = {}
+#         self.ignored_files = []
+#         self.file_tree = []
+# #         self.found = {}
+#
+#         self._summary = {'model_files': 0, 'other_files': 0, 'ignored_files': 0, 'total_files': 0}
+#         self.results = {'missing': [], 'found': [], 'found_ief': []}
+#         self.results_meta = {'summary': None, 'ignored': None, 'checked': None}
+#
+#     @property
+#     def summary(self):
+#         return self._summary
+#
+#     @summary.setter
+#     def summary(self, summary):
+#         self._summary = summary
+#         self._summary['total_files'] = self.getFileTotal()
+#
+#     def formatFileTree(self, include_files=True, format_as_text=True, include_full_paths=False):
+#         output_list = []
+#         fullpath_list = []
+#         for f in self.file_tree:
+#             if not f['is_folder']:
+#                 if include_files:
+#                     output_list.append('{}{}\n'.format(f['indent'], f['path']))
+#                     fullpath_list.append(f['fullpath'])
+#                 else:
+#                     fullpath_list.append('')
+#             else:
+#                 if include_files:
+#                     output_list.append('{}\n'.format(f['indent'][:-4]))
+#                     fullpath_list.append('')
+#                 output_list.append('{}{}/\n'.format(f['indent'], f['path']))
+#                 fullpath_list.append('')
+#
+#         output = None
+#         fullpaths = None
+#         if format_as_text:
+#             output = ''.join(output_list)
+#             fullpaths = '\n'.join(fullpath_list)
+#
+#         if include_full_paths:
+#             return output, fullpaths
+#         else:
+#             del fullpath_list
+#             return output
+#
+#     def saveFileTree(self, save_path, include_files=True):
+#         output = self.formatFileTree(include_files=include_files)
+#         with open(save_path, 'w', newline='\n') as outfile:
+#             outfile.write(output)
+#
+#     def addMissing(self, path, line, found=''):
+#         if path in self.missing:
+#             if not self.parent in self.missing[path]['parent']:
+#                 self.missing[path]['parent'].append(self.parent)
+#                 self.missing[path]['line'].append(line)
+#         else:
+#             self.missing[path] = {'parent': [self.parent], 'line': [line], 'found': found}
+#
+#     def setFound(self, path, found):
+#         try:
+#             self.missing[path]['found'] = found
+#         except KeyError:
+#             raise 
+#
+#     def summaryText(self):
+#         return 'Model Files: {0:<10}\nOther Files: {1:<10}\nIgnored Files: {2:<10}\nTotal Files: {3:<10}'.format(
+#             self._summary['model_files'], self._summary['other_files'], 
+#             self._summary['ignored_files'], self._summary['total_files']
+#         )
+#
+#     def getFileTotal(self):
+#         return self._summary['model_files'] + self._summary['other_files'] + self._summary['ignored_files']
+#
+#     def processResults(self):
+#         self.results = {'missing': [], 'found': [], 'found_ief': []}
+#         self.results_meta['summary'] = self.summary
+#         self.results_meta['ignored'] = self.ignored_files
+#         self.results_meta['checked'] = self.seen_parents
+#
+#         for f, details in self.missing.items():
+#             info = {'file': [], 'parents': []}
+#             psplit = os.path.split(f)
+#             filename = psplit[1] if len(psplit) > 1 else f
+#             all_ief = True
+#             for i, parent in enumerate(details['parent']):
+#                 if not parent[-3:] == 'ief':
+#                     all_ief = False
+#                 info['parents'].append([parent, details['line'][i]])
+#
+#             if details['found']:
+#                 info['file'] = [filename, details['found'], f]
+#                 if all_ief:
+#                     self.results['found_ief'].append(info)
+#                 else:
+#                     self.results['found'].append(info)
+#             else:
+#                 info['file'] = [filename, f]
+#                 self.results['missing'].append(info)
+#
+#     def exportResults(self, save_path):
+#         """
+#         """
+#         with open(save_path, 'w', newline='\n') as outfile:
+#             outfile.write('\n###########################')
+#             outfile.write('\n# FILE SEARCH SUMMARY')
+#             outfile.write('\n###########################\n\n')
+#             outfile.write('Root folder: {0}\n'.format(self.model_root))
+#             outfile.write(self.summaryText())
+#
+#             outfile.write('\n\nFILES THAT WERE IGNORED\n')
+#             if self.ignored_files:
+#                 outfile.write('\n'.join([i.filepath for i in self.ignored_files]))
+#             else:
+#                 outfile.write('\nNo files were ignored')
+#
+#             outfile.write('\n\nMISSING FILES\n')
+#             if self.results['missing']:
+#                 outfile.write('\n'.join(m['file'][0] for m in self.results['missing']))
+#             else:
+#                 outfile.write('\nNo missing files')
+#
+#             outfile.write('\n\nFOUND FILES (Incorrect paths)\n')
+#             if self.results['found'] or self.results['found_ief']:
+#                 outfile.write('\n'.join(f['file'][0] for f in self.results['found']))
+#                 outfile.write('\n'.join(f['file'][0] for f in self.results['found_ief']))
+#             else:
+#                 outfile.write('\nNo misreferenced files')
+#
+#             outfile.write('\n\nMODEL FILES CHECKED\n')
+#             outfile.write('\n'.join([p for p in self.seen_parents]))
+#
+#             outfile.write('\n\n\n###########################')
+#             outfile.write('\n# DETAILED RESULTS')
+#             outfile.write('\n###########################\n')
+#
+#             outfile.write('\n\nMISSING FILES\n')
+#             if self.results['missing']:
+#                 for m in self.results['missing']:
+#                     outfile.write('\n{0:<20}{1}'.format('File:', m['file'][0]))
+#                     outfile.write('\n{0:<20}{1}'.format('Path:', m['file'][1]))
+#                     outfile.write('\nReferenced by parent files:\n')
+#                     outfile.write('\n'.join(['Line ({0})\t {1}'.format(p[1], p[0]) for p in m['parents']]))
+#                     outfile.write('\n')
+#             else:
+#                 outfile.write('\nNo missing files')
+#
+#             outfile.write('\n\n\nFOUND FILES (Incorrect paths)\n')
+#             if self.results['found'] or self.results['found_ief']:
+#                 for f in self.results['found']:
+#                     outfile.write('\n{0:<20}{1}'.format('File:', f['file'][0]))
+#                     outfile.write('\n{0:<20}{1}'.format('Original Path:', f['file'][2]))
+#                     outfile.write('\n{0:<20}{1}'.format('Found Path:', f['file'][1]))
+#                     outfile.write('\nReferenced by parent files:\n')
+#                     outfile.write('\n'.join(['Line ({0})\t {1}'.format(p[1], p[0]) for p in f['parents']]))
+#                     outfile.write('\n')
+#                 for f in self.results['found_ief']:
+#                     outfile.write('\n{0:<20}{1}'.format('File:', f['file'][0]))
+#                     outfile.write('\n{0:<20}{1}'.format('Original Path:', f['file'][2]))
+#                     outfile.write('\n{0:<20}{1}'.format('Found Path:', f['file'][1]))
+#                     outfile.write('\nReferenced by parent files:\n')
+#                     outfile.write('\n'.join(['Line ({0})\t {1}'.format(p[1], p[0]) for p in f['parents']]))
+#                     outfile.write('\n')
+#             else:
+#                 outfile.write('\nNo misreferenced files')
 
 
 ignore_file_exts = ['log', 'doc', 'xlsx', 'pdf', 'xf4', 'txt', 'dbf', 'shx', 'prj']
@@ -589,10 +591,137 @@ class SomeFile(object):
 
     def isIgnoreFile(self):
         return self.ignoreFile
+    
+    
+    
+def read_xs_file(fpath, gpkg_layer=None):
+    vec = None
+    if gpkg_layer is not None:
+        xs_layer = fpath + f"|{gpkg_layer}"
+        vec = QgsVectorLayer(xs_layer, "XS Layer", "ogr")
+    else:
+        vec = QgsVectorLayer(fpath, "XS Layer", "ogr")
+        
+    xs_attributes = []
+    features = vec.getFeatures()
+    for feat in features():
+        attrs = feat.attributes()
+        xs_attributes.append({
+            'source': attrs[0],
+            'type': attrs[1],
+            'flags': attrs[2],
+            'column1': attrs[3],
+            'column2': attrs[3],
+            'column3': attrs[3],
+        })
+    return xs_attributes
 
 
-
-
+TUFLOW_DEFAULTS = {
+    'GIS Format': {'default': '', 'value': '', 'options': '', 'description': ''},
+    # 'GRID Format': {'default': 'FLT', 'value': '', 'options': '', 'description': ''},
+    'GIS Projection Check': {'default': 'WARNING', 'value': '', 'options': '', 'description': ''},
+    'Snap Tolerance': {'default': '0.001', 'value': '', 'options': '', 'description': ''},
+    'Units': {'default': 'METRIC', 'value': '', 'options': '', 'description': ''},
+    '2D Solution Scheme': {'default': 'CLASSIC', 'value': '', 'options': '', 'description': ''},
+    'Number Iterations': {'default': '2', 'value': '', 'options': '', 'description': ''},
+    'First Sweep Direction': {'default': 'POSITIVE', 'value': '', 'options': 'AUTOMATIC | POSITIVE', 'description': ''},
+    'Mass Balance Output': {'default': 'ON', 'value': '', 'options': 'ON | OFF', 'description': ''},
+    'Mass Balance Output Interval (s)': {'default': '900.', 'value': '', 'options': 'ON | OFF', 'description': ''},
+    'Mass Balance Corrector': {'default': 'OFF', 'value': '', 'options': 'ON | OFF', 'description': 'Not recommended for 2012 release or later'},
+    'HARDWARE': {'default': 'CPU', 'value': '', 'options': '', 'description': ''},
+    'BC Event Name': {'default': '', 'value': '', 'options': '', 'description': ''},
+    'BC Event Source': {'default': '', 'value': '', 'options': '', 'description': '<source_text> | <source_name>'},
+    'BC Zero Flow': {'default': 'OFF', 'value': '', 'options': 'OFF | START | END | START AND END', 'description': ''},
+    'Bed Resistance Values': {'default': 'MANNING n', 'value': '', 'options': 'MANNING n | MANNING M | CHEZY', 'description': ''},
+    'Bed Resistance Cell Sides': {'default': 'INTERROGATE', 'value': '', 'options': 'AVERAGE M | AVERAGE n | MAXIMUM n | MAXIMUM M | INTERROGATE', 'description': ''},
+    'Change Zero Material Values to One': {'default': 'OFF', 'value': '', 'options': 'ON | OFF', 'description': ''},
+    'Bed Resistance Depth Interpolation': {'default': 'SPLINE n', 'value': '', 'options': 'SPLINE n | LINEAR n | LINEAR M', 'description': ''},
+    'Layered FLC Default Approach': {'default': 'PORTION', 'value': '', 'options': 'PORTION | CUMULATE', 'description': ''},
+    'Grid Output Cell Size': {'default': 'Not Specified', 'value': '', 'options': '', 'description': ''},
+    'Grid Output Origin': {'default': 'AUTOMATIC', 'value': '', 'options': '', 'description': ''},
+    'Maximums Approach': {'default': 'METHOD B', 'value': '', 'options': '', 'description': ''},
+    'Map Cutoff Depth (m)': {'default': '-1.', 'value': '', 'options': '', 'description': ''},
+    'Maximum Velocity Cutoff Depth (m)': {'default': '0.1', 'value': '', 'options': '', 'description': ''},
+    'BSS Cutoff Depth (m)': {'default': '0.1', 'value': '', 'options': '', 'description': ''},
+    'Time Output Cutoff [Depths | VxD]': {'default': 'OFF', 'value': '', 'options': '', 'description': ''},
+    'ZP Hazard Cutoff Depths': {'default': '0.01 0.01 0.01', 'value': '', 'options': '', 'description': ''},
+    'Map Output Corner Interpolation': {'default': 'METHOD C', 'value': '', 'options': '', 'description': ''},
+    'Meshparts': {'default': 'OFF', 'value': '', 'options': 'ON | OFF', 'description': ''},
+    'UK Hazard Formula': {'default': 'D*(V+0.5)+DF', 'value': '', 'options': 'D*(V+1.5) | D*(V+0.5)+DF', 'description': ''},
+    'UK Hazard Land Use': {'default': 'CONSERVATIVE', 'value': '', 'options': 'PASTURE | WOODLAND | URBAN | CONSERVATIVE | NOT SET', 'description': ''},
+    'XMDF Output Compression': {'default': '1', 'value': '', 'options': '', 'description': ''},
+    'Start Time Series Output (PO and LPO) (h)': {'default': '0.', 'value': '', 'options': '', 'description': 'Time in hours'},
+    'CSV Time': {'default': 'HOURS', 'value': '', 'options': 'HOURS | DAYS', 'description': ''},
+    'CSV Maximum Number Columns': {'default': 'UNLIMITED', 'value': '', 'options': '', 'description': ''},
+    'PO Approach': {'default': 'METHOD B', 'value': '', 'options': '', 'description': ''},
+    'Write PO Online': {'default': 'ON', 'value': '', 'options': 'ON | OFF', 'description': ''},
+    'Maximums and Minimums Time Series': {'default': 'ON', 'value': '', 'options': 'ON | OFF', 'description': ''},
+    'Time Series Null Value': {'default': 'Cell Elevation', 'value': '', 'options': '', 'description': ''},
+    'Wetting and Drying': {'default': 'ON METHOD B', 'value': '', 'options': 'ON | ON NO SIDE CHECKS | OFF', 'description': ''},
+    'Cell Side Checks': {'default': 'METHOD B', 'value': '', 'options': '', 'description': ''},
+    'Supercritical': {'default': 'ON', 'value': '', 'options': 'ON | OFF', 'description': ''},
+    'Froude Check': {'default': '1.', 'value': '', 'options': '', 'description': ''},
+    'Free Overfall': {'default': 'ON', 'value': '', 'options': 'ON | ON WITHOUT WEIRS | OFF', 'description': ''},
+    'Free Overfall Factor': {'default': '0.6', 'value': '', 'options': '', 'description': ''},
+    'Global Weir Factor': {'default': '1.', 'value': '', 'options': '', 'description': ''},
+    'Shallow Depth Weir Factor Multiplier': {'default': '1.', 'value': '', 'options': '', 'description': ''},
+    'Shallow Depth Weir Factor Cut Off Depth (m)': {'default': '0.0001', 'value': '', 'options': '', 'description': ''},
+    'Shallow Depth Stability Approach': {'default': 'METHOD B', 'value': '', 'options': '', 'description': ''},
+    'Shallow Depth Stability Factor': {'default': '0.', 'value': '', 'options': '', 'description': ''},
+    'Shallow Depth Stability Cutoff (m)': {'default': '0.', 'value': '', 'options': '', 'description': ''},
+    'Negative Depth In Water Level Output': {'default': 'REMOVE', 'value': '', 'options': '', 'description': ''},
+    'Negative Depth Approach': {'default': 'METHOD B', 'value': '', 'options': '', 'description': ''},
+    'Negative Depth Values': {'default': '-0.1, 0., 1., 1.', 'value': '', 'options': '', 'description': ''},
+    'Viscosity Formulation': {'default': 'WU', 'value': '', 'options': 'CONSTANT | SMAGORINSKY | WU', 'description': ''},
+    '[Smagorinsky & Constant] Viscosity Coefficients': {'default': '0.5, 0.05', 'value': '', 'options': '', 'description': ''},
+    'Viscosity Approach': {'default': 'METHOD B', 'value': '', 'options': '', 'description': ''},
+    'Water Level Checks': {'default': 'ON', 'value': '', 'options': 'ON | OFF', 'description': ''},
+    'HX Dry 1D Node Test': {'default': 'OFF', 'value': '', 'options': 'ON | OFF', 'description': ''},
+    'Distribute HX Flows': {'default': 'OFF', 'value': '', 'options': 'ON | OFF', 'description': 'Only applies to ESTRY'},
+    'Unused HX and SX Connections': {'default': 'ERROR', 'value': '', 'options': 'ERROR | WARNING', 'description': ''},
+    'Adjust Head at Estry Interface': {'default': 'OFF', 'value': '', 'options': 'ON | ON VARIABLE | OFF', 'description': ''},
+    'Oblique Boundary Method': {'default': 'ON', 'value': '', 'options': '', 'description': ''},
+    'Boundary Treatment': {'default': 'METHOD A', 'value': '', 'options': '', 'description': ''},
+    'HQ Boundary Approach': {'default': 'METHOD C', 'value': '', 'options': '', 'description': ''},
+    'HQ Weighting Factor': {'default': '1.', 'value': '', 'options': '', 'description': ''},
+    'Boundary Viscosity Factor': {'default': '1.', 'value': '', 'options': '', 'description': ''},
+    'Rainfall Boundaries': {'default': 'STEPPED', 'value': '', 'options': '', 'description': ''},
+    'Rainfall Boundary Factor': {'default': '1.', 'value': '', 'options': '', 'description': ''},
+    'Rainfall Gauges': {'default': 'UNLIMITED PER CELL', 'value': '', 'options': '', 'description': ''},
+    'Line Cell Selection': {'default': 'METHOD D', 'value': '', 'options': '', 'description': ''},
+    'Link 2D2D Approach': {'default': 'METHOD D', 'value': '', 'options': '', 'description': ''},
+    'Link 2D2D Distribute Flow': {'default': 'ON', 'value': '', 'options': '', 'description': ''},
+    'Link 2D2D Adjust Velocity Head Factor': {'default': '0.', 'value': '', 'options': '', 'description': ''},
+    'Link 2D2D Weighting Factor': {'default': '1.', 'value': '', 'options': '', 'description': ''},
+    'Link 2D2D Global Stability Factor': {'default': '1.', 'value': '', 'options': '', 'description': ''},
+    'Reveal 1D Nodes': {'default': 'OFF', 'value': '', 'options': '', 'description': ''},
+    'Inside Region': {'default': 'METHOD B', 'value': '', 'options': '', 'description': ''},
+    'SA Minimum Depth': {'default': '-99999.', 'value': '', 'options': '', 'description': ''},
+    'SA Proportion to Depth': {'default': 'ON', 'value': '', 'options': 'ON | OFF', 'description': ''},
+    'SX ZC Check': {'default': 'ON', 'value': '', 'options': 'ON | OFF | <value>', 'description': ''},
+    'SX Head Adjustment': {'default': 'OFF', 'value': '', 'options': 'ON | OFF', 'description': ''},
+    'SX Flow Distribution Cutoff Depth': {'default': 'AUTO', 'value': '', 'options': '', 'description': ''},
+    'SX Head Distribution Cutoff Depth': {'default': 'AUTO', 'value': '', 'options': '', 'description': ''},
+    'SX Storage Approach': {'default': '1D NODE AVERAGE', 'value': '', 'options': '', 'description': ''},
+    'SX Storage Factor': {'default': '1., 20.', 'value': '', 'options': '', 'description': ''},
+    'HX Additional FLC': {'default': '0.', 'value': '', 'options': '', 'description': ''},
+    'HX ZC Check': {'default': 'ON', 'value': '', 'options': 'ON | OFF', 'description': ''},
+    'Zpt Range Check': {'default': '-9998., 99998.', 'value': '', 'options': '', 'description': ''},
+    'ISIS Link Approach': {'default': 'METHOD A', 'value': '', 'options': '', 'description': ''},
+    'Assign Flow to Upstream 1D Node': {'default': 'ON', 'value': '', 'options': 'ON | OFF', 'description': 'Used for ISIS/FMP Link only'},
+    'Latitude': {'default': '0.', 'value': '', 'options': '', 'description': 'Degress from Equator'},
+    'Check Inside Grid': {'default': 'ERROR', 'value': '', 'options': '', 'description': ''},
+    'Write X1D Check File': {'default': 'OFF', 'value': '', 'options': 'ON | OFF', 'description': ''},
+    'VG Z Adjustment': {'default': 'MAX ZC', 'value': '', 'options': 'ZC | MAX ZC | ZH', 'description': ''},
+    'Density of Air': {'default': '1.25', 'value': '', 'options': '', 'description': ''},
+    'Density of Water': {'default': '1025.', 'value': '', 'options': '', 'description': ''},
+    'Wind/Wave Shallow Depths': {'default': '0.2, 1.', 'value': '', 'options': '', 'description': ''},
+    'Blockage Matrix': {'default': 'OFF', 'value': '', 'options': '', 'description': ''},
+    'Default': {},
+    'Non_Default': {},
+}
+TUFLOW_DEFAULTS_KEYS = TUFLOW_DEFAULTS.keys()
 
 def read_tlf_file(filepath):
     """
@@ -600,53 +729,68 @@ def read_tlf_file(filepath):
      - Assumes any control file that has a 'csv' extension is a BCDbase.
        Obviously won't be true when we support csv for TMF files!!
        (see control_type_setter function).
+       
+    This is not great at the moment. Lots of updates to handle things like the differences
+    between quadtree and non-quadtree format .tlf files. A lot of this could be handled
+    better / faster with some additional regexes. Probably want to do a fast first path to
+    pick things up and then filter/handle additional requirements after. Very slow to run
+    a lot these checks for every line. A lot of slower stuff is only hit after an initial
+    regex check, which helps, but more can be done.
     
     """
-    
+    tuflow_non_defaults = {}
     
     # REGEX SEARCH PATTERNS
-    CONTROL_FILE_PATTERN = '[\\|/][\w~]+\.(tcf|ecf|tgc|tbc|tmf|tef|trf|tlf)'
-    
-    # This one needs some explaining :)
-    # Match the 'path', then the 'extension' (gis file types), then an optional match for
-    # geopackage layers, 'geolayer' at the end of the line
-    # Shapefile example: Opening GIS Layer: D:\Models\MoretonOnLugg\Hydraulics\model\tuflow\model\gis\2d_bc_hx_MOL_005_L.shp
-    # Geopackage example: Opening GIS Layer: Y:\PROJECTS\AEG4706_Backwell_03\TUFLOW\model\gis\AEG4706_Backwell_TBC.gpkg >> 2d_bc_4706_DSBDY_001_L
-    # GIS_FILE_PATTERN = 'Opening GIS.+:\s(?P<path>.+)\.(?P<extension>shp|mif|gpkg)(\s>>\s)?(?P<geolayer>.+)?'
+    CONTROL_FILE_PATTERN = '==\s(?P<path>.+)\.(?P<extension>tcf|ecf|tgc|tbc|tmf|tef|trf|tlf|trd|tsoilf)'
     
     # Need the closing one, because sometimes the 'Opening GIS' doesn't include the gpkg layer name
-    GIS_FILE_PATTERN = 'Closing GIS.+\[(?P<path>.+)\.(?P<extension>shp|mif|gpkg)(\]\.{0,3})?(\s>>\s)?(?P<geolayer>.+)?(\]\.{0,3})'
-   
-    # GIS_FILE_PATTERN = '[\\|/][\w~]+\.shp|mif|mid|gpkg\s>>\s.+$'
-    # GPKG_FILE_PATTERN = 'Opening GIS.+:\s(?P<db>.+gpkg)\s>>\s(?P<layer>.+$)'
+    # Match the 'path', then the 'extension' (gis file types), then an optional match for
+    # geopackage layers (geolayer) at the end of the line
+    # Example GPKG:    Closing GIS Layer 2 [Y:\PROJECTS\AEG4706_Backwell_03\TUFLOW\model\gis\AEG4706_Backwell_TCF.gpkg >> 2d_po_4706_008_L]...
+    # Example SHP/MIF: Closing GIS Layer 2 [D:\Models\MoretonOnLugg\Hydraulics\model\tuflow\model\gis\2d_bc_hx_MOL_005_L.shp]...
+    GIS_FILE_PATTERN = 'Closing GIS.+\[(?P<path>.+)\.(?P<extension>shp|mif|mid|tab|gpkg)(\]\.{0,3})?(\s>>\s)?(?P<geolayer>.+)?(\]\.{0,3})'
+
     GIS_FILTER_PATTERN = '_mmH|Q|V|ccA|_TS|_PLOT\.|messages|check.*'
     VARIABLE_PATTERN = '^\s*Set Variable[\s\w~]+==\s\w+'
     
+    is_quadtree = False
     control_files = []
-    gis_files = []
-    gpkg_files = []
+    gis_files = {'tcf': [], 'tgc': [], 'tbc': [], 'xs': [], 'outputs': []}
+    # gis_files = []
+    # tgc_files = []
+    # tbc_files = []
+    # xs_files = []
     params = {}
     variables = {}
+    found_files = {'tcf': [], 'tgc': [], 'tbc': []}
     checks = {'checks': {}, 'warnings': {}, 'errors': {}}
 
-    def reading_tgc_match(line):
-        if 'Reading Geometry File' in line:
+    def reading_xs_match(line):
+        if 'Looking for ESTRY table links' in line:
             return True
         return False
 
-    def ending_tgc_match(line):
-        if 'Finished Reading Geometry File' in line:
+    def reading_tgc_match(line):
+        if 'tgc>>' in line:
             return True
         return False
 
     def reading_tbc_match(line):
-        if 'opening bc control file' in line.lower():
-            return True
+        if is_quadtree:
+            if 'processing .tbc to determine' in line.lower():
+                return True
+        else:
+            if 'opening bc control file' in line.lower():
+                return True
         return False
 
     def ending_tbc_match(line):
-        if 'deallocating temporary memory' in line.lower():
-            return True
+        if is_quadtree:
+            if 'allocating memory (ram)' in line.lower():
+                return True
+        else:
+            if 'deallocating temporary memory' in line.lower():
+                return True
         return False
 
     def control_file_match(regex, line):
@@ -654,37 +798,18 @@ def read_tlf_file(filepath):
         """
         rmatch = re.search(regex, line)
         if rmatch:
-            # Remove the leading slash
-            cmatch = rmatch.group(0)[1:]
-            if cmatch not in control_files:
-                control_files.append(cmatch)
+            cmatch = rmatch.group(0)
+            fpath = rmatch.group('path')
+            fext = rmatch.group('extension')
+            combined = f"{fpath}.{fext}"
+            if combined not in control_files:
+                control_files.append(combined)
+
             return True
         return False
     
-    def old_gis_file_match(regex, line, is_tgc, is_tbc):
-        """Check if line contains a shp/mif file.
-        """
-        if 'Opening GIS Layer:' not in line:
-            return False
-
-        rmatch = re.search(regex, line)
-        if rmatch:
-
-            # Remove the leading slash
-            cmatch = rmatch.group(0)[1:]
-            if cmatch not in gis_files:
-                if is_tgc:
-                    gis_files.append([cmatch, 'TGC'])
-                elif is_tbc:
-                    gis_files.append([cmatch, 'TBC'])
-                else:
-                    gis_files.append([cmatch, 'TCF'])
-            return True
-        return False
-
-    # GIS_FILE_PATTERN = 'Opening GIS.+:\s(?P<path>.+)\.(?P<extension>shp|mif|gpkg)(\s>>\s)?(?P<geolayer>.+)?'
-    def gis_file_match(regex, line, is_tgc, is_tbc):
-        """Check if line contains a gpkg file.
+    def gis_file_match(regex, line, is_tgc, is_tbc, in_xs):
+        """Check if line contains a gis file.
         """
         if 'Closing GIS Layer' not in line:
             return False
@@ -692,8 +817,7 @@ def read_tlf_file(filepath):
         rmatch = re.search(regex, line)
         if rmatch:
 
-            # Remove the leading slash
-            cmatch = rmatch.group(0)#[1:]
+            cmatch = rmatch.group(0)
             fpath = rmatch.group('path')
             fext = rmatch.group('extension')
             geolayer = rmatch.group('geolayer')
@@ -701,23 +825,33 @@ def read_tlf_file(filepath):
             # CHECK: This isn't great, as, I think, not all mid's have mif's?
             if fext in ['mid', 'tab']:
                 fext = 'mif'
+                
+            lookup = fpath+str(geolayer)
+                
+            if in_xs:
+                if not lookup in found_files['tcf']:
+                    # xs_files.append([fpath, 'TCF', fext, geolayer])
+                    gis_files['xs'].append([fpath, 'TCF', fext, geolayer])
+                    gis_files['tcf'].append([fpath, 'TCF', fext, geolayer])
+                    found_files['tcf'].append(lookup)
             
-            # if layer not in gis_files:
-            # if layer not in gis:
-            if is_tgc:
-                gis_files.append([fpath, 'TGC', fext, geolayer])
-                # gis_files.append([layer, 'TGC', db])
+            if is_tgc > 0:
+                if not lookup in found_files['tgc']:
+                    gis_files['tgc'].append([fpath, 'TGC', fext, geolayer])
+                    found_files['tgc'].append(lookup)
             elif is_tbc:
-                gis_files.append([fpath, 'TBC', fext, geolayer])
-                # gis_files.append([layer, 'TGC', db])
+                if not lookup in found_files['tbc']:
+                    gis_files['tbc'].append([fpath, 'TBC', fext, geolayer])
+                    found_files['tbc'].append(lookup)
             else:
-                gis_files.append([fpath, 'TCF', fext, geolayer])
-                # gis_files.append([layer, 'TCF', db])
+                if not lookup in found_files['tcf']:
+                    gis_files['tcf'].append([fpath, 'TCF', fext, geolayer])
+                    found_files['tcf'].append(lookup)
             return True
         return False
 
     def variable_match(regex, line):
-        """Check if line contains a shp/mif file.
+        """Check if line contains a TUFLOW variable.
         """
         rmatch = re.search(regex, line)
         if rmatch:
@@ -729,50 +863,50 @@ def read_tlf_file(filepath):
         return False
     
     def gis_file_filter(regex, gis_files):
-        """Removes check, results and messages files from list.
+        """Final pass filter to make sure files are in the correct place.
+        
+        Checks that there aren't duplicates across the file stores and
+        removes check, results and messages files from tcf and tgc.
+        Removed results etc are put into an 'outputs' store.
         """
         filtered_files = []
-        found_files = []
-        for s in gis_files:
+        tcf_files = []
+        for s in gis_files['tcf']:
             layer = s[0]
             geolayer = s[3]
+            lookup = layer+str(geolayer)
             
-            if geolayer is not None:
+            if not lookup in found_files['tgc'] and not lookup in found_files['tbc']:
+                if not geolayer is None:
+                    if re.search(gis_filter_regex, geolayer):
+                        gis_files['outputs'].append([s[0], s[1], s[2], s[3]])
+                    else:
+                        tcf_files.append([s[0], s[1], s[2], s[3]])
+                else:
+                    if re.search(gis_filter_regex, layer):
+                        gis_files['outputs'].append([s[0], s[1], s[2], s[3]])
+                    else:
+                        tcf_files.append([s[0], s[1], s[2], s[3]])
+
+        tgc_files = []
+        for s in gis_files['tgc']:
+            layer = s[0]
+            geolayer = s[3]
+            if not geolayer is None:
                 if re.search(gis_filter_regex, geolayer):
-                    continue
-                if layer+geolayer not in found_files:
-                    found_files.append(layer+geolayer)
-                    filtered_files.append([s[0], s[1], s[3], s[2]])
+                    gis_files['outputs'].append([s[0], '', s[2], s[3]])
+                else:
+                    tgc_files.append([s[0], s[1], s[2], s[3]])
             else:
                 if re.search(gis_filter_regex, layer):
-                    continue
-                if layer not in found_files:
-                    found_files.append(layer)
-                    filtered_files.append([s[0], s[1], s[3], s[2]])
+                    gis_files['outputs'].append([s[0], '', s[2], s[3]])
+                else:
+                    tgc_files.append([s[0], s[1], s[2], s[3]])
             
-            
-            # if re.search(gis_filter_regex, layer):
-            #     continue
-            # # Probably don't need the gf seach (above) for gpkg but I don't think it will hurt?
-            # if geolayer is not None and re.search(gis_filter_regex, geolayer):
-            #     continue
-            # # ext = os.path.splitext(gf)[1][1:].upper()
-            # # if ext == 'TAB' or ext == 'MID':
-            # #     ext = 'MIF'
-            #
-            # # Check the gpkg layer name rather than the db path
-            # if geolayer is not None and geolayer not in found_files:
-            #     found_files.append(geolayer)
-            #     # continue
-            #
-            # # Other wise check the shp/mif path
-            # elif layer in found_files:
-            #     found_files.append(layer)
-            #     # continue
-            #
-            # # filtered_files.append([gf, ext, s[1]])
-            # # filtered_files.append([s[0], s[1], s[2], ext])
-            # filtered_files.append([s[0], s[1], s[3], s[2]])
+                
+        filtered_files = gis_files
+        filtered_files['tcf'] = tcf_files
+        filtered_files['tgc'] = tgc_files
         return filtered_files
             
     def control_type_setter(control_files): 
@@ -780,9 +914,17 @@ def read_tlf_file(filepath):
         """
         output = []
         for c in control_files:
-            ext = os.path.splitext(c)[1][1:].upper()
-            if ext == 'CSV':
+            control = Path(c)
+            ext = control.suffix.upper()
+            if ext == '.CSV':
                 ext = 'BCDBase'
+
+            # We find multiple .trds (list most files), but some of them only include the name
+            # and not the path. Get rid if it's only the name
+            if ext == '.TRD':
+                if len(control.parts) < 2:
+                    continue
+
             output.append([c, ext])
         return output
     
@@ -810,31 +952,12 @@ def read_tlf_file(filepath):
             try:
                 output[lookup[c]] = v
             except KeyError:
-                pass
+                output[k] = v
         return output
     
     def order_params_items(params):
-        # lookup = {
-        #     'build': 'build',
-        #     'executable': 'executable',
-        #     'simulation started': 'run_start',
-        #     'output folder': 'result_folder',
-        #     'write check files': 'check_folder',
-        #     'log folder': 'log_folder',
-        #     'gis format': 'gis_format',
-        #     'grid format': 'grid_format',
-        #     'bc event source': 'event_source',
-        #     'start time (h)': 'start_time',
-        #     'end time (h)': 'end_time',
-        #     '2d domain cell sizes': 'cell_sizes',
-        #     '2d domain timesteps': 'timesteps_2d',
-        #     'hardware': 'hardware',
-        #     'gpu device ids': 'gpu_ids',
-        #     '2d solution scheme': 'solution_scheme_2d',
-        # }
         output = {
             '2D Domains': [],
-            # '2D Solution Scheme': 'Unknown',
         }
         for k, v in params.items():
             if k.lower() == 'start 2d domain':
@@ -842,8 +965,6 @@ def read_tlf_file(filepath):
             else:
                 output[k] = v
 
-        # if '2D Solution Scheme' in params.keys():
-        #     output['2D Solution Scheme'] = params['2D Solution Scheme'].split('!')[0].strip()            
         return output
 
     def format_checks(checks):
@@ -858,8 +979,6 @@ def read_tlf_file(filepath):
                 scenarios.append({f'{k}': f'{v}'})
             else:
                 variables.append({f'<<{k}>>:' f'{v}'})
-        # scenarios = ', '.join(scenarios)
-        # variables = ', '.join(variables)
         return variables, scenarios 
 
 
@@ -870,19 +989,18 @@ def read_tlf_file(filepath):
         'start 2d domain', '2d solution', 'gis format', 'write check files', 'hardware',
         'gpu device ids',
     ]
-    
-    
     control_file_regex = re.compile(CONTROL_FILE_PATTERN)
     gis_file_regex = re.compile(GIS_FILE_PATTERN)
-    # gpkg_file_regex = re.compile(GPKG_FILE_PATTERN)
     gis_filter_regex = re.compile(GIS_FILTER_PATTERN)
     variable_regex = re.compile(VARIABLE_PATTERN)
 
     summary_lines = []
     with open(filepath, 'r') as infile:
         in_summary = False
-        in_tgc = False
+        in_tgc = 0
         in_tbc = False
+        in_xs = False
+        # is_quadtree = False
 
         for line in infile.readlines():
             line = line.replace('\\', '/')
@@ -894,16 +1012,20 @@ def read_tlf_file(filepath):
                 if line == '': continue
                 summary_lines.append(line)
                 continue
+            
+            if reading_xs_match(line):
+                in_xs = True
 
             if reading_tgc_match(line):
-                in_tgc = True
+                pipe_count = 1
+                if '|' in line:
+                    pipe_count = len(line.split('|'))
+                in_tgc = pipe_count
                 in_tbc = False
-            if ending_tgc_match(line):
-                in_tgc = False
 
             if reading_tbc_match(line):
                 in_tbc = True
-                in_tgc = False
+                in_tgc = 0
             if ending_tbc_match(line):
                 in_tbc = False
             
@@ -918,13 +1040,13 @@ def read_tlf_file(filepath):
             if control_file_match(control_file_regex, line):
                 continue
             
-            # Pick up GPKG gis files
-            # More specific, so needs to be above the gis_file_match
-            # if gpkg_file_match(gpkg_file_regex, line, in_tgc, in_tbc):
-            #     continue
-            
             # Pick up gis files (shp, mif) - will need geodb support at some point
-            if gis_file_match(gis_file_regex, line, in_tgc, in_tbc):
+            if gis_file_match(gis_file_regex, line, in_tgc, in_tbc, in_xs):
+                # Found the cross section (table links) command. The following GIS file will
+                # be the section data, so we can reset the flag
+                in_xs = False
+                if in_tgc > 0:
+                    in_tgc -= 1
                 continue
 
             # Pick up 'Set Variable' commands
@@ -933,10 +1055,6 @@ def read_tlf_file(filepath):
 
             # Collect check and warning messages
             if line.startswith('XY:') or line.startswith('NoXY:'):
-                # def find_number(message):
-                #     split_msg = message.split('-')[0].split(':')[1].strip().split()
-                #     import pdb;pdb.set_trace()
-                #     return split_msg[1]
 
                 val = line
                 if 'http' in line:
@@ -953,19 +1071,16 @@ def read_tlf_file(filepath):
                         checks['checks'][check_code] = {'count': 1, 'message': val}
                     else:
                         checks['checks'][check_code]['count'] += 1
-                    # checks['checks'].append({'code': check_code, 'message': val})
                 elif ': WARNING' in line:
                     if check_code not in checks['warnings'].keys():
                         checks['warnings'][check_code] = {'count': 1, 'message': val}
                     else:
                         checks['warnings'][check_code]['count'] += 1
-                    # checks['warnings'].append({'code': check_code, 'message': val})
                 elif ': ERROR' in line:
                     if check_code not in checks['errors'].keys():
                         checks['errors'][check_code] = {'count': 1, 'message': val}
                     else:
                         checks['errors'][check_code]['count'] += 1
-                    # checks['errors'].append({'code': check_code, 'message': val})
             
             # Special case because it doesn't get picked up with the '==' check. It's because
             # there are multiple '==' in this one, but a a general check for it was cocking
@@ -975,6 +1090,10 @@ def read_tlf_file(filepath):
                 command, var = line.split('==', 1)
                 if '!' in var:
                     var = var.split('!')[0].strip()
+                else:
+                    var = var.strip()
+                if 'quadtree' in var.lower():
+                    is_quadtree = True
                 params['2D Solution Scheme'] = var
 
             # Find parameters set with the '==' command
@@ -990,6 +1109,19 @@ def read_tlf_file(filepath):
 
                 elif command.lower() in param_lookup:
                     params[command] = var
+                
+                elif command in TUFLOW_DEFAULTS_KEYS:
+                    for c in TUFLOW_DEFAULTS_KEYS:
+                        if command == c:
+                            # found_variable = True
+                            var = var.split('!')[0].strip()
+
+                            # Create a separate default and non default dict to hold the outputs so that
+                            # they can be ordered in the table easily
+                            if var != TUFLOW_DEFAULTS[c]['default']:
+                                tuflow_non_defaults[c] = TUFLOW_DEFAULTS[c]
+                                tuflow_non_defaults[c]['value'] = var
+                    
             
             # Handle the other stuff that we want.
             # This can be improved a bit, but it's mostly stuff that is hard to 
@@ -1038,10 +1170,10 @@ def read_tlf_file(filepath):
     for line in summary_lines:
         if line.startswith('Log File:'):
             split = line.replace("\s", "").split()[2] # Format is Log\sFile:\s+ThePathWeWant
-            print('\n\nLog file found')
+            # print('\n\nLog file found')
             log_path = Path(split)
             summary['resolved_name'] = log_path.stem
-            print(summary['resolved_name'])
+            # print(summary['resolved_name'])
             # if '/' in split:
             #     summary['resolved_name'] = split.split('/')[-1]
             #     print('Is forward slash')
@@ -1092,7 +1224,7 @@ def read_tlf_file(filepath):
 
         elif line.startswith('Final Cumulative ME'):
             split = line.split(':')[1].strip()
-            summary['cme'] = split
+            summary['final_cme'] = split
 
     # Create the output dictionary
     variables, scenarios = format_variables(variables)
@@ -1101,135 +1233,16 @@ def read_tlf_file(filepath):
         'entry_tcf': entry_tcf,
         'control': control_type_setter(control_files), 
         'gis': gis_file_filter(gis_filter_regex, gis_files),
-        # 'gpkg': gpkg_files,
+        # 'gis': gis_files,
         'params': order_params_items(params),
         'variables': variables,
         'scenarios': scenarios,
-        'summary': order_summary_items(summary),
+        # 'summary': order_summary_items(summary),
+        'summary': summary,
         'check_messages': format_checks(checks),
+        'tuflow_non_defaults': tuflow_non_defaults,
     }
 
-    # print()
-    print('Control files:')
-    for c in final_files['control']:
-        print(c)
-    #
-    print()
-    print('Params')
-    for c, v in final_files['params'].items():
-        print('{} : {}'.format(c, v))
-    #
-    print()
-    print('Variables')
-    print(final_files['variables'])
-    print(final_files['scenarios'])
-    # for c, v in final_files['variables'].items():
-    #     print('{} : {}'.format(c, v))
-    #
-    print()
-    print('Summary')
-    for c, v in final_files['summary'].items():
-        print('{} : {}'.format(c, v))
-
-    print('Check messages')
-    pprint(final_files['check_messages'])
-    
     return final_files
 
-# final_files = {
-#         'entry_tcf': entry_tcf,
-#         'control': control_type_setter(control_files), 
-#         'gis': gis_file_filter(gis_filter_regex, gis_files),
-#         'params': params,
-#         'variables': variables,
-#         'summary': summary,
-#     }
 
-
-# def load_data_into_db(data, entry_id):
-#     print('\nLoading into database')
-#     log_entry = models.TuflowLogEntry.objects.get(id=entry_id)
-#     log_entry.tcf = data['entry_tcf']
-#     log_entry.se_vals = data['scenarios']
-#     log_entry.save()
-#
-#     tuflow_settings = []
-#     for k, v in data['params'].items():
-#         tuflow_settings.append(
-#             models.TuflowSetting(log_entry=log_entry, command=k, value=v)
-#         )
-#     models.TuflowSetting.objects.bulk_create(tuflow_settings)
-#
-#     warnings = int(data['summary'].get('warnings_prior', -1))
-#     warnings_during = int(data['summary'].get('warnings_during', -1))
-#     if warnings_during != -1:
-#         if warnings == -1:
-#             warnings += 1
-#         warnings += warnings_during
-#
-#     checks = int(data['summary'].get('checks_prior', -1))
-#     checks_during = int(data['summary'].get('checks_during', -1))
-#     if checks_during != -1:
-#         if checks == -1:
-#             checks += 1
-#         checks += checks_during
-#
-#     diagnostics = models.TuflowDiagnostics(
-#         log_entry=log_entry,
-#         resolved_name=data['summary'].get('resolved_name', 'NA'),
-#         run_time=data['summary'].get('run_time', 'NA'),
-#         simulation_status=data['summary'].get('simulation_status', 'NA'),
-#         negative_depths_1d=float(data['summary'].get('negative_depths_1d', -1)),
-#         negative_depths_2d=float(data['summary'].get('negative_depths_2d', -1)),
-#         cme_gt_5=data['summary'].get('cme_gt_5', 'NA'),
-#         cme_whole=data['summary'].get('cme_whole', 'NA'),
-#         warnings=warnings,
-#         checks=checks,
-#         final_cme=data['summary'].get('cme', 'NA'),
-#         hcn_repeated_timesteps=int(data['summary'].get('hcn_repeated_timesteps', -1)),
-#         nan_repeated_timesteps=int(data['summary'].get('nan_repeated_timesteps', -1)),
-#         nan_warnings=int(data['summary'].get('nan_warnings', -1)),
-#     )
-#     if data['check_messages']:
-#         diagnostics.check_messages = data['check_messages']
-#     diagnostics.save()
-#
-#     control_files = []
-#     for c in data['control']:
-#         control = models.TuflowControlFile.objects.get_or_create(
-#             control_type=c[1],
-#             name=c[0],
-#             description='',
-#         )
-#         control_files.append(control)
-#
-#     sub_files = []
-#     for s in data['gis']:
-#         sub = models.TuflowSubFile.objects.get_or_create(
-#             control_type=s[2],
-#             gis_type=s[1],
-#             name=s[0],
-#             command='NA',
-#             description='',
-#         )
-#         sub_files.append(sub)
-#
-#     for c in control_files:
-#         runcontrol = models.TuflowEntryControlFile(
-#             log_entry=log_entry,
-#             control_file=c[0],
-#             new_file=c[1],
-#         )
-#         runcontrol.save()
-#
-#     for s in sub_files:
-#         runsub = models.TuflowEntrySubFile(
-#             log_entry=log_entry,
-#             sub_file=s[0],
-#             new_file=s[1],
-#         )
-#         runsub.save()
-
-# if __name__ == '__main__':
-#     filepath = os.path.join(BASE_DIR, 'temp', 'ShornBrook_BAS_0030_010.tlf')
-#     data = read_file(filepath)
