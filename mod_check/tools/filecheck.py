@@ -2,15 +2,16 @@
 @summary: Search model files and check all files exist.
 
 @author: Duncan R.
-@organization: Ermeview Environmental Ltd
 @created 23rd March 2021
-@copyright: Ermeview Environmental Ltd
+@copyright: Duncan Runnacles 2025
 @license: LGPL v2
 
-Credit to Matthew Shallcross who wrote the majority of this functionality.
+TODO:
+Bit of a mess of different functions that have been pulled together from multiple places.
+Some of it is redundent, a lot of it needs refactoring to setup some nice clean data
+structures and a consistent interface.
+For now, just get it done and working, then come back and fix up.
 '''
-
-
 
 import os
 import sys
@@ -33,58 +34,58 @@ from tmf.tuflow_model_files.inp.setting import SettingInput
 import tuflow
 
 
-class WorkspaceFile():
-    
-    def __init__(self, path):
-        self.rawpath = path
-        self.path = Path(path)
-        self.missing = 'Yes'
-        
-    @property
-    def fullpath(self):
-        return self.path.absolute()
-
-    @property
-    def name(self):
-        return self.path.name
-
-    @property
-    def extension(self):
-        return self.path.suffix
-
-
-class Workspace():
-    
-    def __init__(self, workspace):
-        self.workspace = workspace
-        
-    def readWorkspaceFile(self):
-        wpath = self.workspace.filepath
-        
-        with open(wpath) as infile:
-            xml = infile.read()
-
-        files = [] 
-
-        root = etree.fromstring(xml)
-        for primaries in root.getchildren():
-            if primaries.tag == "projectlayers":
-                for maplayers in primaries.getchildren():
-                    for maptags in maplayers.getchildren():
-                        if maptags.tag == 'datasource':
-                            text = maptags.text
-                            files.append(WorkspaceFile(text))
-                    
-        return files
-        
-
-def loadWorkspaceFiles(workspaces):
-    workspace_files = {}
-    for workspace in workspaces:
-        w = Workspace(workspace)
-        files = w.readWorkspaceFile()
-        workspace_files[workspace.name] = files
-    return workspace_files
+# class WorkspaceFile():
+#
+#     def __init__(self, path):
+#         self.rawpath = path
+#         self.path = Path(path)
+#         self.missing = 'Yes'
+#
+#     @property
+#     def fullpath(self):
+#         return self.path.absolute()
+#
+#     @property
+#     def name(self):
+#         return self.path.name
+#
+#     @property
+#     def extension(self):
+#         return self.path.suffix
+#
+#
+# class Workspace():
+#
+#     def __init__(self, workspace):
+#         self.workspace = workspace
+#
+#     def readWorkspaceFile(self):
+#         wpath = self.workspace.filepath
+#
+#         with open(wpath) as infile:
+#             xml = infile.read()
+#
+#         files = [] 
+#
+#         root = etree.fromstring(xml)
+#         for primaries in root.getchildren():
+#             if primaries.tag == "projectlayers":
+#                 for maplayers in primaries.getchildren():
+#                     for maptags in maplayers.getchildren():
+#                         if maptags.tag == 'datasource':
+#                             text = maptags.text
+#                             files.append(WorkspaceFile(text))
+#
+#         return files
+#
+#
+# def loadWorkspaceFiles(workspaces):
+#     workspace_files = {}
+#     for workspace in workspaces:
+#         w = Workspace(workspace)
+#         files = w.readWorkspaceFile()
+#         workspace_files[workspace.name] = files
+#     return workspace_files
 
 
 class IefSubfile():
@@ -150,16 +151,28 @@ def loadIefFiles(fm_files):
             iefs[str(ief_path.name)] = ief
     
     return iefs
+
+
+class FmRun():
+    
+    def __init__(self):
+        pass
+
+
+class TuflowRun():
+    
+    def __init__(self):
+        pass
     
 
-class FileChecker(QtCore.QObject):
+class FileFinder(QtCore.QObject):
     status_signal = QtCore.pyqtSignal(str)
     
     def __init__(self):
         super().__init__()
         
     def auditModelFiles(self, model_root):
-        self.status_signal.emit('Auditing model files ...')
+        self.status_signal.emit('Finding model files ...')
 
         errors = {}
         error_count = 0
@@ -174,7 +187,9 @@ class FileChecker(QtCore.QObject):
         # self.status_signal.emit('Categorising results ...')
         # result_holder = ResultHolder()
         # result_holder.ignored_files = ignore_files
-        return iefs, {
+        
+        tlfs = self.extractTlfs(log_files)
+        return iefs, tlfs, {
             'tuflow_model': tuflow_model_files, 'fm_model': fm_model_files, 'gis': gis_files, 
             'log': log_files, 'csv': csv_files, 'result': result_files, 
             'workspace': workspace_files, 'other': other_files, 'ignore': ignore_files, 
@@ -182,7 +197,7 @@ class FileChecker(QtCore.QObject):
         }
         
         
-        self.status_signal.emit('Checking paths ...')
+        # self.status_signal.emit('Checking paths ...')
         
         
         # for f in audit.getModelFiles():
@@ -223,6 +238,14 @@ class FileChecker(QtCore.QObject):
         # result_holder.file_tree = file_tree
         # self.status_signal.emit('Check complete')
         # return result_holder
+        
+    def extractTlfs(self, log_files):
+        output = []
+        for l in log_files:
+            suffixes = l.filepath.suffixes
+            if '.tlf' in suffixes and not '.hpc' in suffixes:
+                output.append(l)
+        return output
 
     def categorise(self, model_root):
         '''
@@ -507,10 +530,10 @@ class FileChecker(QtCore.QObject):
 #                 outfile.write('\nNo misreferenced files')
 
 
-ignore_file_exts = ['log', 'doc', 'xlsx', 'pdf', 'xf4', 'txt', 'dbf', 'shx', 'prj']
+ignore_file_exts = ['log', 'doc', 'pdf', 'xf4', 'xf8', 'txt', 'dbf', 'shx', 'prj', 'iml', 'feb', 'ext', 'pxy', 'hdr', 'id', 'ext']
 tuflow_model_file_exts = ['tcf', 'tgc', 'tbc', 'tef', 'ecf', 'trd', 'tsoil', 'tmf']
 fm_model_file_exts = ['ief', 'ied', 'iic']
-gis_file_exts = ['shp', 'mif', 'mid', 'asc', 'flt', 'tif', 'tiff', 'xml', 'sqlite']
+gis_file_exts = ['shp', 'mif', 'mid', 'asc', 'flt', 'tif', 'tiff', 'xml', 'sqlite', 'tin']
 log_file_exts = ['tlf', 'tsf']
 result_file_exts = ['xmdf', 'sup', '2dm', 'eof', 'dat', 'zzd', 'zzn', 'zzs']
 workspace_file_exts = ['qgs']#, 'wor']
@@ -519,13 +542,14 @@ class SomeFile(object):
         Class for any file found in the model structure
     '''
     def __init__(self, filepath):
-        self.filepath = filepath
+        self.raw_path = filepath
+        self.filepath = Path(filepath)
 
         # basepath and file name
-        self.path, self.name = os.path.split(filepath)
+        # self.path, self.name = os.path.split(filepath)
         
         # File extension (converted to lower case)
-        self.fileExt = self.name.rsplit('.',1)[-1].lower()
+        # self.fileExt = self.name.rsplit('.',1)[-1].lower()
         
         # Regular expressions
         self.empty_re = re.compile('._empty_[LPRlpr]\.(shp|mif|mid|sql|sqlite)$')
@@ -542,6 +566,26 @@ class SomeFile(object):
         self.logFile = self.fileExt in log_file_exts
         self.csvFile = self.fileExt == 'csv'
         self.workspaceFile = self.fileExt in workspace_file_exts
+        
+    @property
+    def path(self):
+        return self.filepath.resolve()
+
+    @property
+    def name(self):
+        return self.filepath.stem
+
+    @property
+    def fileExt(self):
+        return self.filepath.suffix[1:].lower()
+
+    @property
+    def parent1(self):
+        return self.filepath.parent()
+
+    @property
+    def parent2(self):
+        return self.filepath.parent().parent()
         
     def __str__(self):
         return f"[{self.fileExt.upper()}] {self.name}"
@@ -755,13 +799,9 @@ def read_tlf_file(filepath):
     
     is_quadtree = False
     control_files = []
-    gis_files = {'tcf': [], 'tgc': [], 'tbc': [], 'xs': [], 'outputs': []}
-    # gis_files = []
-    # tgc_files = []
-    # tbc_files = []
-    # xs_files = []
     params = {}
     variables = {}
+    gis_files = {'tcf': [], 'tgc': [], 'tbc': [], 'xs': [], 'outputs': []}
     found_files = {'tcf': [], 'tgc': [], 'tbc': []}
     checks = {'checks': {}, 'warnings': {}, 'errors': {}}
 
@@ -919,7 +959,7 @@ def read_tlf_file(filepath):
             if ext == '.CSV':
                 ext = 'BCDBase'
 
-            # We find multiple .trds (list most files), but some of them only include the name
+            # We find multiple .trds (like most files), but some of them only include the name
             # and not the path. Get rid if it's only the name
             if ext == '.TRD':
                 if len(control.parts) < 2:
@@ -1083,7 +1123,7 @@ def read_tlf_file(filepath):
                         checks['errors'][check_code]['count'] += 1
             
             # Special case because it doesn't get picked up with the '==' check. It's because
-            # there are multiple '==' in this one, but a a general check for it was cocking
+            # there are multiple '==' in this one, but a a general check for it was messing
             # other stuff up. 
             # TODO: come back and deal with this properly!
             if line.startswith('2D Solution Scheme =='):
@@ -1233,7 +1273,6 @@ def read_tlf_file(filepath):
         'entry_tcf': entry_tcf,
         'control': control_type_setter(control_files), 
         'gis': gis_file_filter(gis_filter_regex, gis_files),
-        # 'gis': gis_files,
         'params': order_params_items(params),
         'variables': variables,
         'scenarios': scenarios,

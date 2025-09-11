@@ -56,13 +56,16 @@ sys.path.append(dependency_path)
 
 
 from .dialogs.help import HelpPageDialog
-from .dialogs.fmtuflowvariablescheckdialog import FmpTuflowVariablesCheckDialog
-from .dialogs.filecheckdialog import FileCheckDialog
 from .dialogs.fmpsectioncheckdialog import FmpSectionCheckDialog
 from .dialogs.chainagecalculatordialog import ChainageCalculatorDialog
 from .dialogs.fmptuflowwidthcheckdialog import FmpTuflowWidthCheckDialog
 from .dialogs.tuflowstabilitycheckdialog import TuflowStabilityCheckDialog
 from .dialogs.stabilitycheck1ddialog import StabilityCheck1DDialog
+from .dialogs.modelvarsfilescheckdialog import ModelVarsFilesCheckDialog
+
+# TODO: Remove when combined version is working (ModelVarsFilesCheckDialog)
+from .dialogs.fmtuflowvariablescheckdialog import FmpTuflowVariablesCheckDialog
+from .dialogs.filecheckdialog import FileCheckDialog
 
 
 class Menu:
@@ -100,6 +103,7 @@ class Menu:
             # 'Model_Assessment': {'dialog': None, 'class': AssessmentDialog},
             'TUFLOW_Stability_Check': {'dialog': None, 'class': TuflowStabilityCheckDialog},
             'FMP_Section_Check': {'dialog': None, 'class': FmpSectionCheckDialog},
+            'Model_VarsFiles_Check': {'dialog': None, 'class': ModelVarsFilesCheckDialog},
         }
 
         # submenu example: Chainage submenu
@@ -160,6 +164,11 @@ class Menu:
         self.filecheck_action = QAction(icon, "Audit Model Files", self.iface.mainWindow())
         self.filecheck_action.triggered.connect(self.check_files)
         self.iface.addPluginToMenu("&ModCheck", self.filecheck_action)
+
+        # Check variables and files for a model folder
+        self.model_varsfiles_check_action = QAction(icon, "Model Vars and Files Check", self.iface.mainWindow())
+        self.model_varsfiles_check_action.triggered.connect(self.check_model_varsfiles)
+        self.iface.addPluginToMenu("&ModCheck", self.model_varsfiles_check_action)
         
         # # NRFA Station viewer
         # self.nrfa_stationviewer_action = QAction(icon, "View NRFA Station Info", self.iface.mainWindow())
@@ -178,6 +187,7 @@ class Menu:
         self.iface.removePluginMenu("&ModCheck", self.check_1d_stability_action)
         # self.iface.removePluginMenu("&ModCheck", self.nrfa_stationviewer_action)
         self.iface.removePluginMenu("&ModCheck", self.filecheck_action)
+        self.iface.removePluginMenu("&ModCheck", self.model_varsfiles_check_action)
         
     def launchDialog(self, dialog_name):
         dialog_class = self.dialogs[dialog_name]['class']
@@ -219,6 +229,9 @@ class Menu:
     
     def get_runsummary(self):
         self.launchDialog('Model_Variables_Check')
+
+    def check_model_varsfiles(self):
+        self.launchDialog('Model_VarsFiles_Check')
 
     # def model_assessment(self):
     #     self.launchDialog('Model_Assessment')
