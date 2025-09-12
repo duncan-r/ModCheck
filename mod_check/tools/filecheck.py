@@ -87,6 +87,92 @@ import tuflow
 #         workspace_files[workspace.name] = files
 #     return workspace_files
 
+# class ZzdFileCheck(ti.ToolInterface): 
+#
+#     def __init__(self, project, zzd_path):
+#         super().__init__()
+#         self.project = project
+#         self.zzd_path = zzd_path
+#
+#     def run_tool(self):
+#         super()
+#         return self.loadZzdContents()
+    
+def loadZzd(zzd_path):
+    """
+    """
+    details = {
+        'Run name': {'value': '', 'description': 'Name of the run'},
+        'Run date': {'value': '', 'description': 'Date that simulation was run'},
+        'Dat file': {'value': '', 'description': 'FMP .dat file used for run'},
+        'Version': {'value': '', 'description': 'FMP software version used'},
+        'TUFLOW links': {'value': '', 'description': 'Number of links/connections to TUFLOW used'},
+        'Unconverged timesteps': {'value': '', 'description': 'Number of unconverged timesteps (high is bad: check for timing around peak)'},
+        'Proportion unconverged': {'value': '', 'description': 'Percentage of run unconverged (high is bad)'},
+        'Mass balance (Peak volume)': {'value': '', 'description': 'Mass balance error as % of total volume in simulation'},
+        'Mass balance (Inflow volume)': {'value': '', 'description': 'Mass balance error as % of total inflow volume from boundaries'},
+    }
+    warnings = {'warning': {}, 'error': {}}
+
+    with open(zzd_path, 'r') as zzd_file:
+        lines = zzd_file.readlines()
+        line_count = 0
+        for line in lines:
+            if 'FILE=' in line:
+                split_line = line.replace('  ', '')
+                split_line = line.split()
+                details['Run name']['value'] = split_line[0].strip()
+                split_line = line.split('FILE=')
+                split_line = split_line[1].split(' ')
+                details['Dat file']['value'] = split_line[0].strip()
+                split_line = line.split('VER=')
+                details['Version']['value'] = split_line[1].strip()
+            elif line.startswith('Simulation started'):
+                split_line = line.split(' at ')
+                details['Run date']['value'] = split_line[1].strip()
+                
+            elif '*** warning' in line:
+                warning_type = line[12:18]
+                if not warning_type in warnings['warning'].keys():
+                    warnings['warning'][warning_type] = {'count': 1, 'info': ''}
+                    info = lines[line_count + 2]
+                    if lines[line_count + 3].strip() != '':
+                        info += ' ' + lines[line_count + 3].strip()
+                    warnings['warning'][warning_type]['info'] = info
+                else:
+                    warnings['warning'][warning_type]['count'] += 1
+            elif '*** error' in line:
+                error_type = line[12:18]
+                if not error_type in warnings['error'].keys():
+                    warnings['error'][error_type] = {'count': 1, 'info': ''}
+                    info = lines[line_count + 2]
+                    if lines[line_count + 3].strip() != '':
+                        info += ' ' + lines[line_count + 3].strip()
+                    warnings['error'][error_type]['info'] = info
+                else:
+                    warnings['error'][error_type]['count'] += 1
+                
+            elif 'Number of links to TUFLOW' in line:
+                split_line = line.split(':')
+                details['TUFLOW links']['value'] = split_line[1].strip()
+            elif 'Number of unconverged timesteps' in line:
+                split_line = line.split(':')
+                details['Unconverged timesteps']['value'] = split_line[1].strip()
+            elif 'Proportion of simulation unconverged' in line:
+                split_line = line.split(':')
+                details['Proportion unconverged']['value'] = split_line[1].strip()
+            elif 'Mass balance error:' in line:
+                split_line = line.split(':')
+                details['Mass balance (Peak volume)']['value'] = split_line[1].strip()
+            elif 'Mass balance error [2]:' in line:
+                split_line = line.split(':')
+                details['Mass balance (Inflow volume)']['value'] = split_line[1].strip()
+
+            line_count += 1
+    
+    combo_warnings = warnings['error'] | warnings['warning']
+    return details, combo_warnings
+
 
 class IefSubfile():
     
@@ -94,6 +180,7 @@ class IefSubfile():
         self.rawpath = path
         self.path = Path(path)
         self.missing = 'Yes'
+        self.resolved_path = None
         
     @property
     def fullpath(self):
@@ -107,11 +194,56 @@ class IefSubfile():
     def extension(self):
         return self.path.suffix
 
+    @property
+    def ftype(self):
+        return self.path.suffix[1:].upper()
+    
+    def __str__(self):
+        return self.path.name
+
 class IefFile():
     
     def __init__(self, ief):
         self.ief = ief
         self._files = []
+        self.diagnostics = {'details': {}, 'warnings': {}}
+        self.params = {'changed': {}, 'default': {}} 
+        self._variables = {
+            'Slot': {'var_name': 'Priessmann Slot', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Inserts an infinitesimally small slot in sections: not usually required for high flow models'},
+            'FroudeLower': {'var_name': 'Froude Lower Limit', 'value_default': ['value', '0.75'], 'description': 'Affects the way that supercritical flow is approximated by phasing out dA/dx between values'},
+            'FroudeUpper': {'var_name': 'Froude Upper Limit', 'value_default': ['value', '0.9'], 'description': 'Affects the way that supercritical flow is approximated by phasing out dA/dx between values'},
+            'PivotalChoice': {'var_name': 'Pivotal Choice', 'value_default': ['value', '0.1'], 'description': 'Specifies the degree of matrix pivoting: expert use only is recommended'},
+            'MatrixDummy': {'var_name': 'Matrix Dummy', 'value_default': ['value', '0'], 'description': 'Helps to maintain the matrix solution structure: expert use only (sometimes helps with many moving structures - small changes only)'},
+            'NewMatrixDummy': {'var_name': 'Global Matrix Dummy', 'value_default': ['value', '0'], 'description': 'Same as Matrix Dummy but applied to the main calculation engine.'},
+            'Temperature': {'var_name': 'Temperature', 'value_default': ['value', '10'], 'description': 'Temperate of the water'},
+            'Dflood': {'var_name': 'dflood', 'value_default': ['value', '3'], 'description': 'Height of glass walling applied to river sections'},
+            'Htol': {'var_name': 'htol', 'value_default': ['value', '0.01'], 'description': 'Stage tolerance: how much stage can vary between time steps (both absolute and relative)'},
+            'Qtol': {'var_name': 'qtol', 'value_default': ['value', '0.01'], 'description': 'Flow tolerance: how much flow can vary between time steps (both absolute and relative)'},
+            'Minitr': {'var_name': 'minitr', 'value_default': ['value', '2'], 'description': 'Minimum number of iterations at each timestep'},
+            'Maxitr': {'var_name': 'maxitr', 'value_default': ['value', '6'], 'description': 'Maximum number of iterations allowed at each timestep (prime numbers are recommended)'},
+            'Theta': {'var_name': 'theta', 'value_default': ['value', '0.7'], 'description': 'Preissmann box weighting factor: fully implicit at 1.0 (justified changes include tidal models and many pumps, etc)'},
+            'Alpha': {'var_name': 'alpha', 'value_default': ['value', '0.7'], 'description': 'Under relaxation parameter: sets weighting towards the previous iterations result (value of 1.0 is no relaxation)'},
+            'Sconmx': {'var_name': 'sconmx', 'value_default': ['value', '100'], 'description': 'Maximum piezometric head above symmetrical conduit soffit'},
+            'Dltmax': {'var_name': 'dltmax', 'value_default': ['value', '1'], 'description': 'Maximum transition gradient for lateral spills (dQ/dh)'},
+            'Dilmax': {'var_name': 'dilmax', 'value_default': ['value', '1000'], 'description': 'Maximum transition gradient for inline spills (dQ/dh)'},
+            'Swop': {'var_name': 'swop', 'value_default': ['value', '0.001'], 'description': 'Determines when to apply "special case" equations to spill units'},
+            'Weight': {'var_name': 'Weight', 'value_default': ['value', '0.1'], 'description': 'Under relaxation parameter applied to spills'},
+            'SpillThreshold': {'var_name': 'Spill Threshold', 'value_default': ['value', '1E-6'], 'description': 'Difference in adjacent water levels at spill at which 0 flow applied'},
+            'Dfloodb': {'var_name': 'dfloodb', 'value_default': ['value', '10'], 'description': 'Height of glass walling applied to bridge sections'},
+            'Pcmxvd': {'var_name': 'pcmxvd', 'value_default': ['value', '2'], 'description': 'Dummy point interpolation percentage for calculating cross section properties'},
+            'Pswide': {'var_name': 'pswide', 'value_default': ['value', '0'], 'description': 'Width of triangular priessmann slot'},
+            'Psdeep': {'var_name': 'psdeep', 'value_default': ['value', '0'], 'description': 'Depth of triangular preissmann slot'},
+            'DHLinearise': {'var_name': 'Orifice Linearisation Head', 'value_default': ['value', '0'], 'description': 'Can help prevent oscillations at low head differences in orifice units'},
+            'BottomSlotDepth': {'var_name': 'Bottom Slot Depth', 'value_default': ['value', '0'], 'description': 'Depth of bottom slot in conduit units'},
+            'BottomSlotdh': {'var_name': 'Bottom Slot dh', 'value_default': ['value', '0'], 'description': 'Height of bottom slot above invert in conduit units'},
+            'TopSlotHeight': {'var_name': 'Top Slot Height', 'value_default': ['value', '0'], 'description': 'Height of top slot in conduit units'},
+            'TopSlotdh': {'var_name': 'Top Slot dh', 'value_default': ['value', '0'], 'description': 'Depth of top slot below soffit in conduit units'},
+            '2DScheme': {'var_name': '2D Scheme', 'check_value': '0', 'value_default': ['value', 'No'], 'description': 'Whether a 2D scheme (like TUFLOW) is being used'},
+            '2DTimestep': {'var_name': '2D Timestep', 'value_default': ['value', ''], 'description': '2D Timestep - may also be set and/or overriden in the 2D model'},
+            'LaunchDoublePrecisionVersion': {'var_name': 'Double Precision FMP', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Whether double precision FMP is being used'},
+            '2DDoublePrecision': {'var_name': 'Double Precision TUFLOW', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Whether double precision 2D model (like TUFLOW) is being used'},
+            '2DOptions': {'var_name': '2D Run Options', 'value_default': ['value', ''], 'description': 'Run options (scenarios/events) for 2D scheme'},
+        }
         
     @property
     def filepath(self):
@@ -126,6 +258,7 @@ class IefFile():
     def findFiles(self):
         dat = IefSubfile(self.ief.Datafile)
         results = IefSubfile(self.ief.Results + '.zzn')
+        results = IefSubfile(self.ief.Results + '.zzd')
         ieds = [IefSubfile(i) for i in self.ief.EventData.values()]
         tcf = getattr(self.ief, '2DFile', None)
         ics = getattr(self.ief, 'InitialConditions', None)
@@ -139,6 +272,36 @@ class IefFile():
         
         return all_files
     
+    def checkParams(self):
+
+        for variable, variable_dict in self._variables.items():
+            ief_value = getattr(self.ief, variable, None)
+            has_checkval = True if 'checkval' in variable_dict.keys() else False
+            check_value = variable_dict['value_default'][0] if not has_checkval else variable_dict['checkval']
+            used_value = variable_dict['value_default'][0] if not variable_dict['value_default'][0] == 'value' else ief_value
+            
+            if ief_value is not None and not ief_value == check_value:
+                self.params['changed'][variable_dict['var_name']] = {
+                    'name': variable, 'value': used_value, 
+                    'default': variable_dict['value_default'][1],
+                    'description': variable_dict['description'],
+                }
+            else:
+                self.params['default'][variable_dict['var_name']] = {
+                    'name': variable, 'value': used_value, 
+                    'default': variable_dict['value_default'][1],
+                    'description': variable_dict['description'],
+                }
+                
+    def loadDiagnostics(self):
+        has_zzd = False
+        for f in self.files:
+            if f.extension.upper() == '.ZZD':
+                has_zzd = True
+                if f.resolved_path and f.resolved_path.is_file():
+                    details, warnings = loadZzd(f.fullpath)
+                    self.diagnostics['details'] = details
+                    self.diagnostics['warnings'] = warnings
     
 
 def loadIefFiles(fm_files):
@@ -148,7 +311,11 @@ def loadIefFiles(fm_files):
             ief_path = Path(fm.filepath)
             ief = IEF(ief_path)
             ief = IefFile(ief)
-            iefs[str(ief_path.name)] = ief
+
+            ief.checkParams()
+            ief.loadDiagnostics()
+
+            iefs[str(ief_path.stem)] = ief
     
     return iefs
 
