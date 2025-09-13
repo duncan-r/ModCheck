@@ -28,7 +28,6 @@ from PyQt5.Qt import pyqtSignal
 
 from . import globaltools as gt
 from floodmodeller_api import IEF
-from tools.filecheck import FoundFiles
 # from tmf.tuflow_model_files import TCF
 # from tmf.tuflow_model_files.inp.file import FileInput
 # from tmf.tuflow_model_files.inp.gis import GisInput
@@ -107,6 +106,7 @@ def loadZzd(zzd_path):
         'Run date': {'value': '', 'description': 'Date that simulation was run'},
         'Dat file': {'value': '', 'description': 'FMP .dat file used for run'},
         'Version': {'value': '', 'description': 'FMP software version used'},
+        'Run completed': {'value': '', 'description': 'Success status of the simulation'},
         'TUFLOW links': {'value': '', 'description': 'Number of links/connections to TUFLOW used'},
         'Unconverged timesteps': {'value': '', 'description': 'Number of unconverged timesteps (high is bad: check for timing around peak)'},
         'Proportion unconverged': {'value': '', 'description': 'Percentage of run unconverged (high is bad)'},
@@ -114,12 +114,16 @@ def loadZzd(zzd_path):
         'Mass balance (Inflow volume)': {'value': '', 'description': 'Mass balance error as % of total inflow volume from boundaries'},
     }
     warnings = {'warning': {}, 'error': {}}
-
+    run_completed = False
     with open(zzd_path, 'r') as zzd_file:
         lines = zzd_file.readlines()
         line_count = 0
         for line in lines:
-            if 'FILE=' in line:
+            low_line = line.lower()
+            if 'run completed' in line:
+                run_completed = True
+
+            elif 'FILE=' in line:
                 split_line = line.replace('  ', '')
                 split_line = line.split()
                 details['Run name']['value'] = split_line[0].strip()
@@ -132,7 +136,7 @@ def loadZzd(zzd_path):
                 split_line = line.split(' at ')
                 details['Run date']['value'] = split_line[1].strip()
                 
-            elif '*** warning' in line:
+            elif '*** warning' in low_line:
                 warning_type = line[12:18]
                 if not warning_type in warnings['warning'].keys():
                     warnings['warning'][warning_type] = {'count': 1, 'info': ''}
@@ -142,7 +146,7 @@ def loadZzd(zzd_path):
                     warnings['warning'][warning_type]['info'] = info
                 else:
                     warnings['warning'][warning_type]['count'] += 1
-            elif '*** error' in line:
+            elif '*** error' in low_line:
                 error_type = line[12:18]
                 if not error_type in warnings['error'].keys():
                     warnings['error'][error_type] = {'count': 1, 'info': ''}
@@ -153,285 +157,389 @@ def loadZzd(zzd_path):
                 else:
                     warnings['error'][error_type]['count'] += 1
                 
-            elif 'Number of links to TUFLOW' in line:
+            elif 'number of links to tuflow' in low_line:
                 split_line = line.split(':')
                 details['TUFLOW links']['value'] = split_line[1].strip()
-            elif 'Number of unconverged timesteps' in line:
+            elif 'number of unconverged timesteps' in low_line:
                 split_line = line.split(':')
                 details['Unconverged timesteps']['value'] = split_line[1].strip()
-            elif 'Proportion of simulation unconverged' in line:
+            elif 'proportion of simulation unconverged' in low_line:
                 split_line = line.split(':')
                 details['Proportion unconverged']['value'] = split_line[1].strip()
-            elif 'Mass balance error:' in line:
+            elif 'mass balance error:' in low_line:
                 split_line = line.split(':')
                 details['Mass balance (Peak volume)']['value'] = split_line[1].strip()
-            elif 'Mass balance error [2]:' in line:
+            elif 'mass balance error [2]:' in low_line:
                 split_line = line.split(':')
                 details['Mass balance (Inflow volume)']['value'] = split_line[1].strip()
 
             line_count += 1
     
+    details['Run completed']['value'] = 'Yes' if run_completed else 'No'
     combo_warnings = warnings['error'] | warnings['warning']
     return details, combo_warnings
 
 
-class IefSubfile():
+class IefFile():
     
     def __init__(self, path):
         self.rawpath = path
-        self.path = Path(path)
+        self.filepath = Path(path)
         self.missing = 'Yes'
         self.resolved_path = None
         
     @property
     def fullpath(self):
-        return self.path.absolute()
+        return self.filepath.absolute()
 
     @property
     def name(self):
-        return self.path.name
+        return self.filepath.name
 
     @property
     def extension(self):
-        return self.path.suffix
+        return self.filepath.suffix
 
     @property
     def ftype(self):
-        return self.path.suffix[1:].upper()
+        return self.filepath.suffix[1:].upper()
     
     def __str__(self):
-        return self.path.name
+        return self.filepath.name
 
-class IefFile():
-
-    def __init__(self, ief):
-        self.ief = ief
-        self._files = []
-        self.diagnostics = {'details': {}, 'warnings': {}}
-        self.params = {'changed': {}, 'default': {}} 
-        self._variables = {
-            'Slot': {'var_name': 'Priessmann Slot', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Inserts an infinitesimally small slot in sections: not usually required for high flow models'},
-            'FroudeLower': {'var_name': 'Froude Lower Limit', 'value_default': ['value', '0.75'], 'description': 'Affects the way that supercritical flow is approximated by phasing out dA/dx between values'},
-            'FroudeUpper': {'var_name': 'Froude Upper Limit', 'value_default': ['value', '0.9'], 'description': 'Affects the way that supercritical flow is approximated by phasing out dA/dx between values'},
-            'PivotalChoice': {'var_name': 'Pivotal Choice', 'value_default': ['value', '0.1'], 'description': 'Specifies the degree of matrix pivoting: expert use only is recommended'},
-            'MatrixDummy': {'var_name': 'Matrix Dummy', 'value_default': ['value', '0'], 'description': 'Helps to maintain the matrix solution structure: expert use only (sometimes helps with many moving structures - small changes only)'},
-            'NewMatrixDummy': {'var_name': 'Global Matrix Dummy', 'value_default': ['value', '0'], 'description': 'Same as Matrix Dummy but applied to the main calculation engine.'},
-            'Temperature': {'var_name': 'Temperature', 'value_default': ['value', '10'], 'description': 'Temperate of the water'},
-            'Dflood': {'var_name': 'dflood', 'value_default': ['value', '3'], 'description': 'Height of glass walling applied to river sections'},
-            'Htol': {'var_name': 'htol', 'value_default': ['value', '0.01'], 'description': 'Stage tolerance: how much stage can vary between time steps (both absolute and relative)'},
-            'Qtol': {'var_name': 'qtol', 'value_default': ['value', '0.01'], 'description': 'Flow tolerance: how much flow can vary between time steps (both absolute and relative)'},
-            'Minitr': {'var_name': 'minitr', 'value_default': ['value', '2'], 'description': 'Minimum number of iterations at each timestep'},
-            'Maxitr': {'var_name': 'maxitr', 'value_default': ['value', '6'], 'description': 'Maximum number of iterations allowed at each timestep (prime numbers are recommended)'},
-            'Theta': {'var_name': 'theta', 'value_default': ['value', '0.7'], 'description': 'Preissmann box weighting factor: fully implicit at 1.0 (justified changes include tidal models and many pumps, etc)'},
-            'Alpha': {'var_name': 'alpha', 'value_default': ['value', '0.7'], 'description': 'Under relaxation parameter: sets weighting towards the previous iterations result (value of 1.0 is no relaxation)'},
-            'Sconmx': {'var_name': 'sconmx', 'value_default': ['value', '100'], 'description': 'Maximum piezometric head above symmetrical conduit soffit'},
-            'Dltmax': {'var_name': 'dltmax', 'value_default': ['value', '1'], 'description': 'Maximum transition gradient for lateral spills (dQ/dh)'},
-            'Dilmax': {'var_name': 'dilmax', 'value_default': ['value', '1000'], 'description': 'Maximum transition gradient for inline spills (dQ/dh)'},
-            'Swop': {'var_name': 'swop', 'value_default': ['value', '0.001'], 'description': 'Determines when to apply "special case" equations to spill units'},
-            'Weight': {'var_name': 'Weight', 'value_default': ['value', '0.1'], 'description': 'Under relaxation parameter applied to spills'},
-            'SpillThreshold': {'var_name': 'Spill Threshold', 'value_default': ['value', '1E-6'], 'description': 'Difference in adjacent water levels at spill at which 0 flow applied'},
-            'Dfloodb': {'var_name': 'dfloodb', 'value_default': ['value', '10'], 'description': 'Height of glass walling applied to bridge sections'},
-            'Pcmxvd': {'var_name': 'pcmxvd', 'value_default': ['value', '2'], 'description': 'Dummy point interpolation percentage for calculating cross section properties'},
-            'Pswide': {'var_name': 'pswide', 'value_default': ['value', '0'], 'description': 'Width of triangular priessmann slot'},
-            'Psdeep': {'var_name': 'psdeep', 'value_default': ['value', '0'], 'description': 'Depth of triangular preissmann slot'},
-            'DHLinearise': {'var_name': 'Orifice Linearisation Head', 'value_default': ['value', '0'], 'description': 'Can help prevent oscillations at low head differences in orifice units'},
-            'BottomSlotDepth': {'var_name': 'Bottom Slot Depth', 'value_default': ['value', '0'], 'description': 'Depth of bottom slot in conduit units'},
-            'BottomSlotdh': {'var_name': 'Bottom Slot dh', 'value_default': ['value', '0'], 'description': 'Height of bottom slot above invert in conduit units'},
-            'TopSlotHeight': {'var_name': 'Top Slot Height', 'value_default': ['value', '0'], 'description': 'Height of top slot in conduit units'},
-            'TopSlotdh': {'var_name': 'Top Slot dh', 'value_default': ['value', '0'], 'description': 'Depth of top slot below soffit in conduit units'},
-            '2DScheme': {'var_name': '2D Scheme', 'check_value': '0', 'value_default': ['value', 'No'], 'description': 'Whether a 2D scheme (like TUFLOW) is being used'},
-            '2DTimestep': {'var_name': '2D Timestep', 'value_default': ['value', ''], 'description': '2D Timestep - may also be set and/or overriden in the 2D model'},
-            'LaunchDoublePrecisionVersion': {'var_name': 'Double Precision FMP', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Whether double precision FMP is being used'},
-            '2DDoublePrecision': {'var_name': 'Double Precision TUFLOW', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Whether double precision 2D model (like TUFLOW) is being used'},
-            '2DOptions': {'var_name': '2D Run Options', 'value_default': ['value', ''], 'description': 'Run options (scenarios/events) for 2D scheme'},
-        }
-
-    @property
-    def filepath(self):
-        return self.ief.filepath
-
-    @property
-    def files(self):
-        if not self._files:
-            self._files = self.findFiles()
-        return self._files
-
-    def findFiles(self):
-        dat = IefSubfile(self.ief.Datafile)
-        results = IefSubfile(self.ief.Results + '.zzn')
-        results = IefSubfile(self.ief.Results + '.zzd')
-        ieds = [IefSubfile(i) for i in self.ief.EventData.values()]
-        tcf = getattr(self.ief, '2DFile', None)
-        ics = getattr(self.ief, 'InitialConditions', None)
-
-        all_files = [dat, results]
-        all_files.extend(ieds)
-        if tcf:
-            all_files.append(IefSubfile(tcf))
-        if ics:
-            all_files.append(IefSubfile(ics))
-
-        return all_files
-
-    def checkParams(self):
-
-        for variable, variable_dict in self._variables.items():
-            ief_value = getattr(self.ief, variable, None)
-            has_checkval = True if 'checkval' in variable_dict.keys() else False
-            check_value = variable_dict['value_default'][0] if not has_checkval else variable_dict['checkval']
-            used_value = variable_dict['value_default'][0] if not variable_dict['value_default'][0] == 'value' else ief_value
-
-            if ief_value is not None and not ief_value == check_value:
-                self.params['changed'][variable_dict['var_name']] = {
-                    'name': variable, 'value': used_value, 
-                    'default': variable_dict['value_default'][1],
-                    'description': variable_dict['description'],
-                }
-            else:
-                self.params['default'][variable_dict['var_name']] = {
-                    'name': variable, 'value': used_value, 
-                    'default': variable_dict['value_default'][1],
-                    'description': variable_dict['description'],
-                }
-
-    def loadDiagnostics(self):
-        has_zzd = False
-        for f in self.files:
-            if f.extension.upper() == '.ZZD':
-                has_zzd = True
-                if f.resolved_path and f.resolved_path.is_file():
-                    details, warnings = loadZzd(f.fullpath)
-                    self.diagnostics['details'] = details
-                    self.diagnostics['warnings'] = warnings
+# class IefFile():
+#
+#     def __init__(self, ief):
+#         self.ief = ief
+#         self._files = []
+#         self.diagnostics = {'details': {}, 'warnings': {}}
+#         self.params = {'changed': {}, 'default': {}} 
+#         self._variables = {
+#             'Slot': {'var_name': 'Priessmann Slot', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Inserts an infinitesimally small slot in sections: not usually required for high flow models'},
+#             'FroudeLower': {'var_name': 'Froude Lower Limit', 'value_default': ['value', '0.75'], 'description': 'Affects the way that supercritical flow is approximated by phasing out dA/dx between values'},
+#             'FroudeUpper': {'var_name': 'Froude Upper Limit', 'value_default': ['value', '0.9'], 'description': 'Affects the way that supercritical flow is approximated by phasing out dA/dx between values'},
+#             'PivotalChoice': {'var_name': 'Pivotal Choice', 'value_default': ['value', '0.1'], 'description': 'Specifies the degree of matrix pivoting: expert use only is recommended'},
+#             'MatrixDummy': {'var_name': 'Matrix Dummy', 'value_default': ['value', '0'], 'description': 'Helps to maintain the matrix solution structure: expert use only (sometimes helps with many moving structures - small changes only)'},
+#             'NewMatrixDummy': {'var_name': 'Global Matrix Dummy', 'value_default': ['value', '0'], 'description': 'Same as Matrix Dummy but applied to the main calculation engine.'},
+#             'Temperature': {'var_name': 'Temperature', 'value_default': ['value', '10'], 'description': 'Temperate of the water'},
+#             'Dflood': {'var_name': 'dflood', 'value_default': ['value', '3'], 'description': 'Height of glass walling applied to river sections'},
+#             'Htol': {'var_name': 'htol', 'value_default': ['value', '0.01'], 'description': 'Stage tolerance: how much stage can vary between time steps (both absolute and relative)'},
+#             'Qtol': {'var_name': 'qtol', 'value_default': ['value', '0.01'], 'description': 'Flow tolerance: how much flow can vary between time steps (both absolute and relative)'},
+#             'Minitr': {'var_name': 'minitr', 'value_default': ['value', '2'], 'description': 'Minimum number of iterations at each timestep'},
+#             'Maxitr': {'var_name': 'maxitr', 'value_default': ['value', '6'], 'description': 'Maximum number of iterations allowed at each timestep (prime numbers are recommended)'},
+#             'Theta': {'var_name': 'theta', 'value_default': ['value', '0.7'], 'description': 'Preissmann box weighting factor: fully implicit at 1.0 (justified changes include tidal models and many pumps, etc)'},
+#             'Alpha': {'var_name': 'alpha', 'value_default': ['value', '0.7'], 'description': 'Under relaxation parameter: sets weighting towards the previous iterations result (value of 1.0 is no relaxation)'},
+#             'Sconmx': {'var_name': 'sconmx', 'value_default': ['value', '100'], 'description': 'Maximum piezometric head above symmetrical conduit soffit'},
+#             'Dltmax': {'var_name': 'dltmax', 'value_default': ['value', '1'], 'description': 'Maximum transition gradient for lateral spills (dQ/dh)'},
+#             'Dilmax': {'var_name': 'dilmax', 'value_default': ['value', '1000'], 'description': 'Maximum transition gradient for inline spills (dQ/dh)'},
+#             'Swop': {'var_name': 'swop', 'value_default': ['value', '0.001'], 'description': 'Determines when to apply "special case" equations to spill units'},
+#             'Weight': {'var_name': 'Weight', 'value_default': ['value', '0.1'], 'description': 'Under relaxation parameter applied to spills'},
+#             'SpillThreshold': {'var_name': 'Spill Threshold', 'value_default': ['value', '1E-6'], 'description': 'Difference in adjacent water levels at spill at which 0 flow applied'},
+#             'Dfloodb': {'var_name': 'dfloodb', 'value_default': ['value', '10'], 'description': 'Height of glass walling applied to bridge sections'},
+#             'Pcmxvd': {'var_name': 'pcmxvd', 'value_default': ['value', '2'], 'description': 'Dummy point interpolation percentage for calculating cross section properties'},
+#             'Pswide': {'var_name': 'pswide', 'value_default': ['value', '0'], 'description': 'Width of triangular priessmann slot'},
+#             'Psdeep': {'var_name': 'psdeep', 'value_default': ['value', '0'], 'description': 'Depth of triangular preissmann slot'},
+#             'DHLinearise': {'var_name': 'Orifice Linearisation Head', 'value_default': ['value', '0'], 'description': 'Can help prevent oscillations at low head differences in orifice units'},
+#             'BottomSlotDepth': {'var_name': 'Bottom Slot Depth', 'value_default': ['value', '0'], 'description': 'Depth of bottom slot in conduit units'},
+#             'BottomSlotdh': {'var_name': 'Bottom Slot dh', 'value_default': ['value', '0'], 'description': 'Height of bottom slot above invert in conduit units'},
+#             'TopSlotHeight': {'var_name': 'Top Slot Height', 'value_default': ['value', '0'], 'description': 'Height of top slot in conduit units'},
+#             'TopSlotdh': {'var_name': 'Top Slot dh', 'value_default': ['value', '0'], 'description': 'Depth of top slot below soffit in conduit units'},
+#             '2DScheme': {'var_name': '2D Scheme', 'check_value': '0', 'value_default': ['value', 'No'], 'description': 'Whether a 2D scheme (like TUFLOW) is being used'},
+#             '2DTimestep': {'var_name': '2D Timestep', 'value_default': ['value', ''], 'description': '2D Timestep - may also be set and/or overriden in the 2D model'},
+#             'LaunchDoublePrecisionVersion': {'var_name': 'Double Precision FMP', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Whether double precision FMP is being used'},
+#             '2DDoublePrecision': {'var_name': 'Double Precision TUFLOW', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Whether double precision 2D model (like TUFLOW) is being used'},
+#             '2DOptions': {'var_name': '2D Run Options', 'value_default': ['value', ''], 'description': 'Run options (scenarios/events) for 2D scheme'},
+#         }
+#
+#     @property
+#     def filepath(self):
+#         return self.ief.filepath
+#
+#     @property
+#     def files(self):
+#         if not self._files:
+#             self._files = self.findFiles()
+#         return self._files
+#
+#     def findFiles(self):
+#         dat = efSubfile(self.ief.Datafile)
+#         results = IefSubfile(self.ief.Results + '.zzn')
+#         results = IefSubfile(self.ief.Results + '.zzd')
+#         ieds = [IefSubfile(i) for i in self.ief.EventData.values()]
+#         tcf = getattr(self.ief, '2DFile', None)
+#         ics = getattr(self.ief, 'InitialConditions', None)
+#
+#         all_files = [dat, results]
+#         all_files.extend(ieds)
+#         if tcf:
+#             all_files.append(IefSubfile(tcf))
+#         if ics:
+#             all_files.append(IefSubfile(ics))
+#
+#         return all_files
+#
+#     def checkParams(self):
+#
+#         for variable, variable_dict in self._variables.items():
+#             ief_value = getattr(self.ief, variable, None)
+#             has_checkval = True if 'checkval' in variable_dict.keys() else False
+#             check_value = variable_dict['value_default'][0] if not has_checkval else variable_dict['checkval']
+#             used_value = variable_dict['value_default'][0] if not variable_dict['value_default'][0] == 'value' else ief_value
+#
+#             if ief_value is not None and not ief_value == check_value:
+#                 self.params['changed'][variable_dict['var_name']] = {
+#                     'name': variable, 'value': used_value, 
+#                     'default': variable_dict['value_default'][1],
+#                     'description': variable_dict['description'],
+#                 }
+#             else:
+#                 self.params['default'][variable_dict['var_name']] = {
+#                     'name': variable, 'value': used_value, 
+#                     'default': variable_dict['value_default'][1],
+#                     'description': variable_dict['description'],
+#                 }
+#
+#     def loadDiagnostics(self):
+#         has_zzd = False
+#         for f in self.files:
+#             if f.extension.upper() == '.ZZD':
+#                 has_zzd = True
+#                 if f.resolved_path and f.resolved_path.is_file():
+#                     details, warnings = loadZzd(f.fullpath)
+#                     self.diagnostics['details'] = details
+#                     self.diagnostics['warnings'] = warnings
     
 
-def loadIefFiles(fm_files):
-    iefs = {}
-    for fm in fm_files:
-        if fm.fileExt == 'ief':
-            ief_path = Path(fm.filepath)
-            ief = IEF(ief_path)
-            ief = IefFile(ief)
-            ief.checkParams()
-            ief.loadDiagnostics()
-            iefs[str(ief_path.stem)] = ief
-
-    return iefs
+# def loadIefFiles(fm_files):
+#     iefs = {}
+#     for fm in fm_files:
+#         if fm.fileExt == 'ief':
+#             ief_path = Path(fm.filepath)
+#             ief = IEF(ief_path)
+#             ief = IefFile(ief)
+#             ief.checkParams()
+#             ief.loadDiagnostics()
+#             iefs[str(ief_path.stem)] = ief
+#
+#     return iefs
 
 
 class FoundFiles():
     """
     """
+    FILE_NOT_FOUND = -1
+    FILE_EXISTS = 0
+    FILE_FOUND_UNSURE = 1
+    FILE_FOUND_PROBABLY = 2
+    FILE_FOUND_LIKELY = 3
 
-    def __init__(self, model_root, ief, tlfs, found_files):
+    def __init__(self, model_root, iefs, tlfs, found_files):
         self.model_root = ''
         self.iefs = iefs
         self.tlfs = tlfs
         self.files = found_files
         
         
-        self.parent = ''
-        self.seen_parents = []
-        self.missing = {}
-        self.ignored_files = []
-        self.file_tree = []
-#         self.found = {}
+        # self.parent = ''
+        # self.seen_parents = []
+        # self.missing = {}
+        # self.ignored_files = []
+        # self.file_tree = []
+        #
+        # self._summary = {'model_files': 0, 'other_files': 0, 'ignored_files': 0, 'total_files': 0}
+        # self.results = {'missing': [], 'found': [], 'found_ief': []}
+        # self.results_meta = {'summary': None, 'ignored': None, 'checked': None}
+        
+    def checkFmFiles(self, fm_files, ftypes):
+        missing = []
+        for i, f in enumerate(fm_files):
+            status = self.FILE_NOT_FOUND
+            match_file = None
+            for ftype in ftypes:
+                check_files = self.files[ftype]
+                status, match_file = self.checkFile(f, check_files)
+            
+                # TODO: Bit of a hack to catch some of the IEF files that haven't been setup
+                # propoerly
+                if match_file is not None and not isinstance(match_file, Path):
+                    match_file = match_file.filepath
+            
+                if status == self.FILE_NOT_FOUND:
+                    fm_files[i].missing = 'Yes'
+                    fm_files[i].resolved_path = ''
+                    missing.append(f)
+                elif status == self.FILE_EXISTS:
+                    fm_files[i].missing = 'No'
+                    fm_files[i].resolved_path = match_file
+                elif status == self.FILE_FOUND_UNSURE:
+                    fm_files[i].missing = 'No (3)'
+                    fm_files[i].resolved_path = match_file
+                elif status == self.FILE_FOUND_LIKELY:
+                    fm_files[i].missing = 'No (2)'
+                    fm_files[i].resolved_path = match_file
+                elif status == self.FILE_FOUND_PROBABLY:
+                    fm_files[i].missing = 'No (1)'
+                    fm_files[i].resolved_path = match_file
 
-        self._summary = {'model_files': 0, 'other_files': 0, 'ignored_files': 0, 'total_files': 0}
-        self.results = {'missing': [], 'found': [], 'found_ief': []}
-        self.results_meta = {'summary': None, 'ignored': None, 'checked': None}
+                if not status == self.FILE_NOT_FOUND:
+                    break
+        
+        return fm_files, missing
+        
+    def checkTuflowFiles(self, tuflow_files, ftypes):
+        """
+        
+        Args:
+            tuflow_files(list): file paths to check.
+            ftypes(list): lookup keys to check self.files against
+        """
+        missing = []
+        for i, f in enumerate(tuflow_files):
+            status = self.FILE_NOT_FOUND
+            match_file = None
+            for ftype in ftypes:
+                check_files = self.files[ftype]
+                status, match_file = self.checkFile(f, check_files)
+                
+                if status == self.FILE_NOT_FOUND:
+                    tuflow_files[i].missing = 'Yes'
+                    tuflow_files[i].resolved_path = ''
+                    missing.append(f)
+                elif status == self.FILE_EXISTS:
+                    tuflow_files[i].missing = 'No'
+                    tuflow_files[i].resolved_path = match_file.filepath
+                elif status == self.FILE_FOUND_UNSURE:
+                    tuflow_files[i].missing = 'No (3)'
+                    tuflow_files[i].resolved_path = match_file.filepath
+                elif status == self.FILE_FOUND_PROBABLY:
+                    tuflow_files[i].missing = 'No (2)'
+                    tuflow_files[i].resolved_path = match_file.filepath
+                elif status == self.FILE_FOUND_LIKELY:
+                    tuflow_files[i].missing = 'No (1)'
+                    tuflow_files[i].resolved_path = match_file.filepath
 
-    @property
-    def summary(self):
-        return self._summary
+                if not status == self.FILE_NOT_FOUND:
+                    break
+        
+        return tuflow_files, missing
+                
+    def checkFile(self, f, check_files, ignore_case=False):
+        if f.filepath.is_file():
+            return self.FILE_EXISTS, f.filepath
 
-    @summary.setter
-    def summary(self, summary):
-        self._summary = summary
-        self._summary['total_files'] = self.getFileTotal()
-
-    def formatFileTree(self, include_files=True, format_as_text=True, include_full_paths=False):
-        output_list = []
-        fullpath_list = []
-        for f in self.file_tree:
-            if not f['is_folder']:
-                if include_files:
-                    output_list.append('{}{}\n'.format(f['indent'], f['path']))
-                    fullpath_list.append(f['fullpath'])
-                else:
-                    fullpath_list.append('')
+        for check in check_files:
+            if ignore_case:
+                if f.filepath.stem.upper() + f.filepath.suffix.upper() != check.filepath.stem.upper() + check.filepath.suffix.upper():
+                    continue
             else:
-                if include_files:
-                    output_list.append('{}\n'.format(f['indent'][:-4]))
-                    fullpath_list.append('')
-                output_list.append('{}{}/\n'.format(f['indent'], f['path']))
-                fullpath_list.append('')
-
-        output = None
-        fullpaths = None
-        if format_as_text:
-            output = ''.join(output_list)
-            fullpaths = '\n'.join(fullpath_list)
-
-        if include_full_paths:
-            return output, fullpaths
-        else:
-            del fullpath_list
-            return output
-
-    def saveFileTree(self, save_path, include_files=True):
-        output = self.formatFileTree(include_files=include_files)
-        with open(save_path, 'w', newline='\n') as outfile:
-            outfile.write(output)
-
-    def addMissing(self, path, line, found=''):
-        if path in self.missing:
-            if not self.parent in self.missing[path]['parent']:
-                self.missing[path]['parent'].append(self.parent)
-                self.missing[path]['line'].append(line)
-        else:
-            self.missing[path] = {'parent': [self.parent], 'line': [line], 'found': found}
-
-    def setFound(self, path, found):
-        try:
-            self.missing[path]['found'] = found
-        except KeyError:
-            raise 
-
-    def summaryText(self):
-        return 'Model Files: {0:<10}\nOther Files: {1:<10}\nIgnored Files: {2:<10}\nTotal Files: {3:<10}'.format(
-            self._summary['model_files'], self._summary['other_files'], 
-            self._summary['ignored_files'], self._summary['total_files']
-        )
-
-    def getFileTotal(self):
-        return self._summary['model_files'] + self._summary['other_files'] + self._summary['ignored_files']
-
-    def processResults(self):
-        self.results = {'missing': [], 'found': [], 'found_ief': []}
-        self.results_meta['summary'] = self.summary
-        self.results_meta['ignored'] = self.ignored_files
-        self.results_meta['checked'] = self.seen_parents
-
-        for f, details in self.missing.items():
-            info = {'file': [], 'parents': []}
-            psplit = os.path.split(f)
-            filename = psplit[1] if len(psplit) > 1 else f
-            all_ief = True
-            for i, parent in enumerate(details['parent']):
-                if not parent[-3:] == 'ief':
-                    all_ief = False
-                info['parents'].append([parent, details['line'][i]])
-
-            if details['found']:
-                info['file'] = [filename, details['found'], f]
-                if all_ief:
-                    self.results['found_ief'].append(info)
+                if f.filepath.stem + f.filepath.suffix.upper() != check.filepath.stem + check.filepath.suffix.upper():
+                    continue
+            fparts = f.filepath.parts
+            cparts = check.filepath.parts
+            if ignore_case:
+                fparts = [f.upper() for f in fparts]
+                cparts = [c.upper() for c in cparts]
+            if fparts[-2] == cparts[-2]: # 1 parent up match
+                if fparts[-3] == cparts[-3]: # 2 parents up match
+                    return self.FILE_FOUND_LIKELY, check
                 else:
-                    self.results['found'].append(info)
+                    return self.FILE_FOUND_PROBABLY, check
             else:
-                info['file'] = [filename, f]
-                self.results['missing'].append(info)
+                return self.FILE_FOUND_UNSURE, check
+        return self.FILE_NOT_FOUND, None
+
+
+    # @property
+    # def summary(self):
+    #     return self._summary
+    #
+    # @summary.setter
+    # def summary(self, summary):
+    #     self._summary = summary
+    #     self._summary['total_files'] = self.getFileTotal()
+
+    # def formatFileTree(self, include_files=True, format_as_text=True, include_full_paths=False):
+    #     output_list = []
+    #     fullpath_list = []
+    #     for f in self.file_tree:
+    #         if not f['is_folder']:
+    #             if include_files:
+    #                 output_list.append('{}{}\n'.format(f['indent'], f['path']))
+    #                 fullpath_list.append(f['fullpath'])
+    #             else:
+    #                 fullpath_list.append('')
+    #         else:
+    #             if include_files:
+    #                 output_list.append('{}\n'.format(f['indent'][:-4]))
+    #                 fullpath_list.append('')
+    #             output_list.append('{}{}/\n'.format(f['indent'], f['path']))
+    #             fullpath_list.append('')
+    #
+    #     output = None
+    #     fullpaths = None
+    #     if format_as_text:
+    #         output = ''.join(output_list)
+    #         fullpaths = '\n'.join(fullpath_list)
+    #
+    #     if include_full_paths:
+    #         return output, fullpaths
+    #     else:
+    #         del fullpath_list
+    #         return output
+
+    # def saveFileTree(self, save_path, include_files=True):
+    #     output = self.formatFileTree(include_files=include_files)
+    #     with open(save_path, 'w', newline='\n') as outfile:
+    #         outfile.write(output)
+
+    # def addMissing(self, path, line, found=''):
+    #     if path in self.missing:
+    #         if not self.parent in self.missing[path]['parent']:
+    #             self.missing[path]['parent'].append(self.parent)
+    #             self.missing[path]['line'].append(line)
+    #     else:
+    #         self.missing[path] = {'parent': [self.parent], 'line': [line], 'found': found}
+    #
+    # def setFound(self, path, found):
+    #     try:
+    #         self.missing[path]['found'] = found
+    #     except KeyError:
+    #         raise 
+
+    # def summaryText(self):
+    #     return 'Model Files: {0:<10}\nOther Files: {1:<10}\nIgnored Files: {2:<10}\nTotal Files: {3:<10}'.format(
+    #         self._summary['model_files'], self._summary['other_files'], 
+    #         self._summary['ignored_files'], self._summary['total_files']
+    #     )
+
+    # def getFileTotal(self):
+    #     return self._summary['model_files'] + self._summary['other_files'] + self._summary['ignored_files']
+
+    # def processResults(self):
+    #     self.results = {'missing': [], 'found': [], 'found_ief': []}
+    #     self.results_meta['summary'] = self.summary
+    #     self.results_meta['ignored'] = self.ignored_files
+    #     self.results_meta['checked'] = self.seen_parents
+    #
+    #     for f, details in self.missing.items():
+    #         info = {'file': [], 'parents': []}
+    #         psplit = os.path.split(f)
+    #         filename = psplit[1] if len(psplit) > 1 else f
+    #         all_ief = True
+    #         for i, parent in enumerate(details['parent']):
+    #             if not parent[-3:] == 'ief':
+    #                 all_ief = False
+    #             info['parents'].append([parent, details['line'][i]])
+    #
+    #         if details['found']:
+    #             info['file'] = [filename, details['found'], f]
+    #             if all_ief:
+    #                 self.results['found_ief'].append(info)
+    #             else:
+    #                 self.results['found'].append(info)
+    #         else:
+    #             info['file'] = [filename, f]
+    #             self.results['missing'].append(info)
 
     # def exportResults(self, save_path):
     #     """
@@ -507,30 +615,21 @@ class FileFinder(QObject):
         super().__init__()
         
     def auditModelFiles(self, model_root):
-        self.status_signal.emit('Finding model files ...')
-
-        errors = {}
-        error_count = 0
-        search_successes = 0
-        
         self.status_signal.emit('Searching folders ...')
+
         iefs, (
             tuflow_model_files, fm_model_files, gis_files, log_files, result_files, csv_files, 
             workspace_files, other_files, ignore_files, file_tree
         ) = self.categorise(model_root)
-        # audit = AuditFiles(model_root, model_files, other_files, ignore_files)
-        # self.status_signal.emit('Categorising results ...')
-        # result_holder = ResultHolder()
-        # result_holder.ignored_files = ignore_files
-        
         tlfs = self.extractTlfs(log_files)
-        return iefs, tlfs, {
+        located_files = {
             'tuflow_model': tuflow_model_files, 'fm_model': fm_model_files, 'gis': gis_files, 
             'log': log_files, 'csv': csv_files, 'result': result_files, 
             'workspace': workspace_files, 'other': other_files, 'ignore': ignore_files, 
             'tree': file_tree
         }
-        # found_files = FoundFiles(model_root, iefs, tlfs, search_files)
+        found_files = FoundFiles(model_root, iefs, tlfs, located_files)
+        return found_files, iefs, tlfs
         
     def extractTlfs(self, log_files):
         output = []
@@ -601,6 +700,9 @@ class FileFinder(QObject):
 
                     elif query.isWorkspaceFile():
                         workspace_files.append(query)
+                        
+                    elif query.isBcdbaseFile():
+                        tuflow_model_files.append(query)
 
                     elif query.isCsvFile():
                         csv_files.append(query)
@@ -673,6 +775,7 @@ class SomeFile(object):
         self.messages_re = re.compile('.messages_?[LPRlpr]?\.(shp|mif|mid|sql|sqlite)$')
         self.check_re = re.compile('.(check|DEM_M|DEM_Z)_?[LPRlpr]?\.(shp|mif|mid|flt|asc|tiff{0,1}|sql|sqlite)$')
         self.result_re = re.compile('_(ccA|mmH|mmQ|mmV|PLOT_[LPRlpr]|TS|[dhvDHV]_Max|T(Dur|Exc)|ZUK|input_layers).*\.(shp|mif|mid|sql|sqlite|flt|xml)$')
+        self.dbase_re = re.compile('(?i)(dbase|database|bc_{0,1}db)')
         
         # File classification
         self.ignoreFile = self.fileExt in ignore_file_exts
@@ -698,11 +801,11 @@ class SomeFile(object):
 
     @property
     def parent1(self):
-        return self.filepath.parent()
+        return self.filepath.parent
 
     @property
     def parent2(self):
-        return self.filepath.parent().parent()
+        return self.filepath.parent.parent
         
     def __str__(self):
         return f"[{self.fileExt.upper()}] {self.name}"
@@ -743,6 +846,11 @@ class SomeFile(object):
 
     def isResultFile(self):
         return self.resultFile
+    
+    def isBcdbaseFile(self):
+        if re.search(self.dbase_re, self.name):
+            return True
+        return False
 
     def isCsvFile(self):
         return self.csvFile
@@ -1474,9 +1582,15 @@ class FmModel():
     
     def __init__(self, ief):
         self.ief = ief
-        self._files = []
+        self.dat = None
+        self.ics = None
+        self.results = []
+        self.ieds = []
+        self.tcf = None
+        # self._files = []
         self.diagnostics = {'details': {}, 'warnings': {}}
         self.params = {'changed': {}, 'default': {}} 
+        self.missing = []
         self._variables = {
             'Slot': {'var_name': 'Priessmann Slot', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Inserts an infinitesimally small slot in sections: not usually required for high flow models'},
             'FroudeLower': {'var_name': 'Froude Lower Limit', 'value_default': ['value', '0.75'], 'description': 'Affects the way that supercritical flow is approximated by phasing out dA/dx between values'},
@@ -1520,26 +1634,45 @@ class FmModel():
     
     @property
     def files(self):
-        if not self._files:
-            self._files = self.findFiles()
-        return self._files
+        # if not self._files:
+        #     self._files = self.findFiles()
+        # return self._files
+        fm_files = [self.dat]
+        if self.ics:
+            fm_files.append(self.ics)
+        if self.tcf:
+            fm_files.append(self.tcf)
+        fm_files.extend(self.results)
+        fm_files.extend(self.ieds)
+        return fm_files
+        
+    @property
+    def zzd(self):
+        for r in self.results:
+            if r.filepath.suffix.upper() == '.ZZD':
+                return r
+        return None
+
+    @property
+    def zzn(self):
+        for r in self.results:
+            if r.filepath.suffix.upper() == '.ZZN':
+                return r
+        return None
     
     def findFiles(self):
-        dat = IefSubfile(self.ief.Datafile)
-        results = IefSubfile(self.ief.Results + '.zzn')
-        results = IefSubfile(self.ief.Results + '.zzd')
-        ieds = [IefSubfile(i) for i in self.ief.EventData.values()]
+        self.dat = IefFile(self.ief.Datafile)
+        self.results = [
+            IefFile(self.ief.Results + '.zzn'),
+            IefFile(self.ief.Results + '.zzd')
+        ]
+        self.ieds = [IefFile(i) for i in self.ief.EventData.values()]
         tcf = getattr(self.ief, '2DFile', None)
         ics = getattr(self.ief, 'InitialConditions', None)
-
-        all_files = [dat, results]
-        all_files.extend(ieds)
         if tcf:
-            all_files.append(IefSubfile(tcf))
+            self.tcf = IefFile(tcf)
         if ics:
-            all_files.append(IefSubfile(ics))
-        
-        return all_files
+            self.ics = IefFile(ics)
     
     def checkParams(self):
 
@@ -1587,6 +1720,7 @@ class TuflowModel():
         self.summary = {}
         self.warnings = []
         self.non_defaults = {}
+        self.missing = []
     
     def readTlf(self):
         tlf = readTlfFile(self.tlf_path)
@@ -1607,7 +1741,6 @@ class TuflowModel():
 
     @property
     def all_files(self):
-        # gis_files = [g for k, g in self.gis_files.items()]
         gis_files = []
         for k, g in self.gis_files.items():
             gis_files.extend(g)
@@ -1634,13 +1767,104 @@ class ModelChecker(QObject):
     progress_max_signal = pyqtSignal(int)
     progress_val_signal = pyqtSignal(int)
     
-    def __init__(self):
-        tuflow_models = {}
-        fm_models = {}
+    def __init__(self, model_root):
+        super().__init__()
+        self.model_root = model_root
+        self.found_files = None
+        self.tuflow_models = {}
+        self.fm_models = {}
+        self.ief_names = []
+        self.tlf_names = []
+        
+    # def _setStatus(self, status):
+    #     status_update_signal.emit(status)
+    #
+    # def _setProgressMax(self, value):
+    #     progress_max_signal.emit(value)
+    #
+    # def _setProgressVal(self, value):
+    #     progress_val_signal.emit(value)
+        
+    def searchFiles(self, model_root=None):
+        if model_root is not None:
+            self.model_root = model_root
+
+        file_finder = FileFinder()
+        self.found_files, iefs, tlfs = file_finder.auditModelFiles(self.model_root)
+        self.ief_names = [f"FM  {ief.filepath.stem}" for ief in iefs]
+        self.tlf_names = [f"TUFLOW  {tlf.filepath.stem}" for tlf in tlfs]
+        self.loadIefFiles(iefs)
+        self.loadTlfFiles(tlfs)
+        
+    def checkMissingFiles(self):
+        if not self.found_files:
+            raise AttributeError("No found files to check.")
+        
+        self.status_update_signal.emit('Checking missing FM files...')
+        self.progress_max_signal.emit(len(self.fm_models))
+        count = 0
+        for k, fm in self.fm_models.items():
+            count += 1
+            self.progress_val_signal.emit(count)
+
+            missing_ics = []
+            missing_fmtcf = []
+            dats, missing_dats = self.found_files.checkFmFiles(
+                [fm.dat], ['fm_model']
+            )
+            self.fm_models[k].dat = dats[0]
+            if fm.tcf:
+                tcfs, missing_fmtcfs = self.found_files.checkFmFiles(
+                    [fm.tcf], ['tuflow_model']
+                )
+                self.fm_models[k].tcf = tcfs[0]
+            if fm.ics:
+                ics, missing_ics = self.found_files.checkFmFiles(
+                    [fm.ics], ['fm_model']
+                )
+                self.fm_models[k].ics = ics[0]
+            self.fm_models[k].results, missing_results = self.found_files.checkFmFiles(
+                fm.results, ['result']
+            )
+            self.fm_models[k].ieds, missing_ieds = self.found_files.checkFmFiles(
+                fm.ieds, ['fm_model']
+            )
+            fm.missing = missing_dats + missing_fmtcfs + missing_ics + missing_results + missing_ieds
+            fm.loadDiagnostics()
+            
+        self.status_update_signal.emit('Checking missing TUFLOW files...')
+        self.progress_max_signal.emit(len(self.tuflow_models))
+        count = 0
+        for k, tuflow in self.tuflow_models.items():
+            count += 1
+            self.progress_val_signal.emit(count)
+
+            root_tcf, missing_roottcf = self.found_files.checkTuflowFiles(
+                [tuflow.tcf], ['tuflow_model']
+            )
+            self.tuflow_models[k].tcf = root_tcf[0]
+            self.tuflow_models[k].control_files, missing_control = self.found_files.checkTuflowFiles(
+                tuflow.control_files, ['tuflow_model']
+            )
+            self.tuflow_models[k].gis_files['tcf'], missing_tcf = self.found_files.checkTuflowFiles(
+                tuflow.gis_files['tcf'], ['gis']
+            )
+            self.tuflow_models[k].gis_files['tgc'], missing_tgc = self.found_files.checkTuflowFiles(
+                tuflow.gis_files['tgc'], ['gis']
+            )
+            self.tuflow_models[k].gis_files['tbc'], missing_tbc = self.found_files.checkTuflowFiles(
+                tuflow.gis_files['tbc'], ['gis']
+            )
+            tuflow.missing = missing_roottcf + missing_control + missing_tcf + missing_tgc + missing_tbc
         
     def loadTlfFiles(self, tlf_files):
+        self.status_update_signal.emit('Loading TLF files...')
+        self.progress_max_signal.emit(len(tlf_files))
         tuflow_models = {}
-        for tlf in tlf_files:
+        for i, tlf in enumerate(tlf_files):
+            self.progress_val_signal.emit(i)
+
+            # TODO: Change this to use the new path setup
             if tlf.fileExt == 'tlf':
                 tlf_path = Path(tlf.filepath)
                 tuflow = TuflowModel(tlf_path)
@@ -1648,26 +1872,27 @@ class ModelChecker(QObject):
                 self.tuflow_models[str(tlf_path.stem)] = tuflow
 
     def loadIefFiles(self, fm_files):
+        self.status_update_signal.emit('Loading IEF files...')
+        self.progress_max_signal.emit(len(fm_files))
         iefs = {}
-        for fm in fm_files:
-            if fm.fileExt == 'ief':
-                ief_path = Path(fm.filepath)
-                ief = IEF(ief_path)
-                model = FmModel(ief)
-                model.checkParams()
-                model.loadDiagnostics()
-                self.fm_models[str(ief_path.stem)] = model
+        for i, ief in enumerate(fm_files):
+            self.progress_val_signal.emit(i)
+
+            model = FmModel(ief)
+            model.checkParams()
+            model.findFiles()
+            self.fm_models[str(ief.filepath.stem)] = model
     
 
-def loadTlfFiles(tlf_files):
-    tuflow_models = {}
-    for tlf in tlf_files:
-        if tlf.fileExt == 'tlf':
-            tlf_path = Path(tlf.filepath)
-            tuflow = TuflowModel(tlf_path)
-            tuflow.readTlf()
-            tuflow_models[str(tlf_path.stem)] = tuflow
-
-    return tuflow_models
+# def loadTlfFiles(tlf_files):
+#     tuflow_models = {}
+#     for tlf in tlf_files:
+#         if tlf.fileExt == 'tlf':
+#             tlf_path = Path(tlf.filepath)
+#             tuflow = TuflowModel(tlf_path)
+#             tuflow.readTlf()
+#             tuflow_models[str(tlf_path.stem)] = tuflow
+#
+#     return tuflow_models
 
 
