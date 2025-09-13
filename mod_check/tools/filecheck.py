@@ -14,24 +14,25 @@ For now, just get it done and working, then come back and fix up.
 '''
 
 import os
-import sys
+# import sys
 import csv
 import json
 import copy
-from pprint import pprint
-from PyQt5 import QtCore
 import re
 from pathlib import Path
-from lxml import etree
-from glob import glob
+# from lxml import etree
+# from glob import glob
+
+from PyQt5.QtCore import *
+from PyQt5.Qt import pyqtSignal
 
 from . import globaltools as gt
 from floodmodeller_api import IEF
-from tmf.tuflow_model_files import TCF
-from tmf.tuflow_model_files.inp.file import FileInput
-from tmf.tuflow_model_files.inp.gis import GisInput
-from tmf.tuflow_model_files.inp.setting import SettingInput
-import tuflow
+from tools.filecheck import FoundFiles
+# from tmf.tuflow_model_files import TCF
+# from tmf.tuflow_model_files.inp.file import FileInput
+# from tmf.tuflow_model_files.inp.gis import GisInput
+# from tmf.tuflow_model_files.inp.setting import SettingInput
 
 
 # class WorkspaceFile():
@@ -202,7 +203,7 @@ class IefSubfile():
         return self.path.name
 
 class IefFile():
-    
+
     def __init__(self, ief):
         self.ief = ief
         self._files = []
@@ -244,17 +245,17 @@ class IefFile():
             '2DDoublePrecision': {'var_name': 'Double Precision TUFLOW', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Whether double precision 2D model (like TUFLOW) is being used'},
             '2DOptions': {'var_name': '2D Run Options', 'value_default': ['value', ''], 'description': 'Run options (scenarios/events) for 2D scheme'},
         }
-        
+
     @property
     def filepath(self):
         return self.ief.filepath
-    
+
     @property
     def files(self):
         if not self._files:
             self._files = self.findFiles()
         return self._files
-    
+
     def findFiles(self):
         dat = IefSubfile(self.ief.Datafile)
         results = IefSubfile(self.ief.Results + '.zzn')
@@ -269,9 +270,9 @@ class IefFile():
             all_files.append(IefSubfile(tcf))
         if ics:
             all_files.append(IefSubfile(ics))
-        
+
         return all_files
-    
+
     def checkParams(self):
 
         for variable, variable_dict in self._variables.items():
@@ -279,7 +280,7 @@ class IefFile():
             has_checkval = True if 'checkval' in variable_dict.keys() else False
             check_value = variable_dict['value_default'][0] if not has_checkval else variable_dict['checkval']
             used_value = variable_dict['value_default'][0] if not variable_dict['value_default'][0] == 'value' else ief_value
-            
+
             if ief_value is not None and not ief_value == check_value:
                 self.params['changed'][variable_dict['var_name']] = {
                     'name': variable, 'value': used_value, 
@@ -292,7 +293,7 @@ class IefFile():
                     'default': variable_dict['value_default'][1],
                     'description': variable_dict['description'],
                 }
-                
+
     def loadDiagnostics(self):
         has_zzd = False
         for f in self.files:
@@ -311,29 +312,196 @@ def loadIefFiles(fm_files):
             ief_path = Path(fm.filepath)
             ief = IEF(ief_path)
             ief = IefFile(ief)
-
             ief.checkParams()
             ief.loadDiagnostics()
-
             iefs[str(ief_path.stem)] = ief
-    
+
     return iefs
 
 
-class FmRun():
-    
-    def __init__(self):
-        pass
+class FoundFiles():
+    """
+    """
+
+    def __init__(self, model_root, ief, tlfs, found_files):
+        self.model_root = ''
+        self.iefs = iefs
+        self.tlfs = tlfs
+        self.files = found_files
+        
+        
+        self.parent = ''
+        self.seen_parents = []
+        self.missing = {}
+        self.ignored_files = []
+        self.file_tree = []
+#         self.found = {}
+
+        self._summary = {'model_files': 0, 'other_files': 0, 'ignored_files': 0, 'total_files': 0}
+        self.results = {'missing': [], 'found': [], 'found_ief': []}
+        self.results_meta = {'summary': None, 'ignored': None, 'checked': None}
+
+    @property
+    def summary(self):
+        return self._summary
+
+    @summary.setter
+    def summary(self, summary):
+        self._summary = summary
+        self._summary['total_files'] = self.getFileTotal()
+
+    def formatFileTree(self, include_files=True, format_as_text=True, include_full_paths=False):
+        output_list = []
+        fullpath_list = []
+        for f in self.file_tree:
+            if not f['is_folder']:
+                if include_files:
+                    output_list.append('{}{}\n'.format(f['indent'], f['path']))
+                    fullpath_list.append(f['fullpath'])
+                else:
+                    fullpath_list.append('')
+            else:
+                if include_files:
+                    output_list.append('{}\n'.format(f['indent'][:-4]))
+                    fullpath_list.append('')
+                output_list.append('{}{}/\n'.format(f['indent'], f['path']))
+                fullpath_list.append('')
+
+        output = None
+        fullpaths = None
+        if format_as_text:
+            output = ''.join(output_list)
+            fullpaths = '\n'.join(fullpath_list)
+
+        if include_full_paths:
+            return output, fullpaths
+        else:
+            del fullpath_list
+            return output
+
+    def saveFileTree(self, save_path, include_files=True):
+        output = self.formatFileTree(include_files=include_files)
+        with open(save_path, 'w', newline='\n') as outfile:
+            outfile.write(output)
+
+    def addMissing(self, path, line, found=''):
+        if path in self.missing:
+            if not self.parent in self.missing[path]['parent']:
+                self.missing[path]['parent'].append(self.parent)
+                self.missing[path]['line'].append(line)
+        else:
+            self.missing[path] = {'parent': [self.parent], 'line': [line], 'found': found}
+
+    def setFound(self, path, found):
+        try:
+            self.missing[path]['found'] = found
+        except KeyError:
+            raise 
+
+    def summaryText(self):
+        return 'Model Files: {0:<10}\nOther Files: {1:<10}\nIgnored Files: {2:<10}\nTotal Files: {3:<10}'.format(
+            self._summary['model_files'], self._summary['other_files'], 
+            self._summary['ignored_files'], self._summary['total_files']
+        )
+
+    def getFileTotal(self):
+        return self._summary['model_files'] + self._summary['other_files'] + self._summary['ignored_files']
+
+    def processResults(self):
+        self.results = {'missing': [], 'found': [], 'found_ief': []}
+        self.results_meta['summary'] = self.summary
+        self.results_meta['ignored'] = self.ignored_files
+        self.results_meta['checked'] = self.seen_parents
+
+        for f, details in self.missing.items():
+            info = {'file': [], 'parents': []}
+            psplit = os.path.split(f)
+            filename = psplit[1] if len(psplit) > 1 else f
+            all_ief = True
+            for i, parent in enumerate(details['parent']):
+                if not parent[-3:] == 'ief':
+                    all_ief = False
+                info['parents'].append([parent, details['line'][i]])
+
+            if details['found']:
+                info['file'] = [filename, details['found'], f]
+                if all_ief:
+                    self.results['found_ief'].append(info)
+                else:
+                    self.results['found'].append(info)
+            else:
+                info['file'] = [filename, f]
+                self.results['missing'].append(info)
+
+    # def exportResults(self, save_path):
+    #     """
+    #     """
+    #     with open(save_path, 'w', newline='\n') as outfile:
+    #         outfile.write('\n###########################')
+    #         outfile.write('\n# FILE SEARCH SUMMARY')
+    #         outfile.write('\n###########################\n\n')
+    #         outfile.write('Root folder: {0}\n'.format(self.model_root))
+    #         outfile.write(self.summaryText())
+    #
+    #         outfile.write('\n\nFILES THAT WERE IGNORED\n')
+    #         if self.ignored_files:
+    #             outfile.write('\n'.join([i.filepath for i in self.ignored_files]))
+    #         else:
+    #             outfile.write('\nNo files were ignored')
+    #
+    #         outfile.write('\n\nMISSING FILES\n')
+    #         if self.results['missing']:
+    #             outfile.write('\n'.join(m['file'][0] for m in self.results['missing']))
+    #         else:
+    #             outfile.write('\nNo missing files')
+    #
+    #         outfile.write('\n\nFOUND FILES (Incorrect paths)\n')
+    #         if self.results['found'] or self.results['found_ief']:
+    #             outfile.write('\n'.join(f['file'][0] for f in self.results['found']))
+    #             outfile.write('\n'.join(f['file'][0] for f in self.results['found_ief']))
+    #         else:
+    #             outfile.write('\nNo misreferenced files')
+    #
+    #         outfile.write('\n\nMODEL FILES CHECKED\n')
+    #         outfile.write('\n'.join([p for p in self.seen_parents]))
+    #
+    #         outfile.write('\n\n\n###########################')
+    #         outfile.write('\n# DETAILED RESULTS')
+    #         outfile.write('\n###########################\n')
+    #
+    #         outfile.write('\n\nMISSING FILES\n')
+    #         if self.results['missing']:
+    #             for m in self.results['missing']:
+    #                 outfile.write('\n{0:<20}{1}'.format('File:', m['file'][0]))
+    #                 outfile.write('\n{0:<20}{1}'.format('Path:', m['file'][1]))
+    #                 outfile.write('\nReferenced by parent files:\n')
+    #                 outfile.write('\n'.join(['Line ({0})\t {1}'.format(p[1], p[0]) for p in m['parents']]))
+    #                 outfile.write('\n')
+    #         else:
+    #             outfile.write('\nNo missing files')
+    #
+    #         outfile.write('\n\n\nFOUND FILES (Incorrect paths)\n')
+    #         if self.results['found'] or self.results['found_ief']:
+    #             for f in self.results['found']:
+    #                 outfile.write('\n{0:<20}{1}'.format('File:', f['file'][0]))
+    #                 outfile.write('\n{0:<20}{1}'.format('Original Path:', f['file'][2]))
+    #                 outfile.write('\n{0:<20}{1}'.format('Found Path:', f['file'][1]))
+    #                 outfile.write('\nReferenced by parent files:\n')
+    #                 outfile.write('\n'.join(['Line ({0})\t {1}'.format(p[1], p[0]) for p in f['parents']]))
+    #                 outfile.write('\n')
+    #             for f in self.results['found_ief']:
+    #                 outfile.write('\n{0:<20}{1}'.format('File:', f['file'][0]))
+    #                 outfile.write('\n{0:<20}{1}'.format('Original Path:', f['file'][2]))
+    #                 outfile.write('\n{0:<20}{1}'.format('Found Path:', f['file'][1]))
+    #                 outfile.write('\nReferenced by parent files:\n')
+    #                 outfile.write('\n'.join(['Line ({0})\t {1}'.format(p[1], p[0]) for p in f['parents']]))
+    #                 outfile.write('\n')
+    #         else:
+    #             outfile.write('\nNo misreferenced files')
 
 
-class TuflowRun():
-    
-    def __init__(self):
-        pass
-    
-
-class FileFinder(QtCore.QObject):
-    status_signal = QtCore.pyqtSignal(str)
+class FileFinder(QObject):
+    status_signal = pyqtSignal(str)
     
     def __init__(self):
         super().__init__()
@@ -362,49 +530,7 @@ class FileFinder(QtCore.QObject):
             'workspace': workspace_files, 'other': other_files, 'ignore': ignore_files, 
             'tree': file_tree
         }
-        
-        
-        # self.status_signal.emit('Checking paths ...')
-        
-        
-        # for f in audit.getModelFiles():
-        #     fpath = f.getFilePath()
-        #     self.status_signal.emit('Checking paths for file: {0}'.format(fpath))
-        #     errorlist = []
-        #
-        #     if fpath in result_holder.seen_parents: continue
-        #
-        #     result_holder.parent = fpath
-        #     result_holder.seen_parents.append(fpath)
-        #
-        #     for p, line in f.getPathsToCheck():
-        #         if not p.isReal():
-        #
-        #             path_as_read = p.getPathAsRead()
-        #             result_holder.addMissing(p.pathAsRead, line)
-        #
-        #             error_count += 1
-        #             errorlist.append((p, line))
-        #             search_result = p.find(audit)
-        #             if len(search_result) > 0:
-        #
-        #                 try:
-        #                     result_holder.setFound(p.pathAsRead, search_result)
-        #                 except KeyError:
-        #                     pass
-        #                 search_successes += 1
-        #     errors[f] = errorlist
-            
-
-
-
-
-        # result_holder.model_root = model_root
-        # result_holder.summary = audit.getFileCounts()
-        # result_holder.processResults()
-        # result_holder.file_tree = file_tree
-        # self.status_signal.emit('Check complete')
-        # return result_holder
+        # found_files = FoundFiles(model_root, iefs, tlfs, search_files)
         
     def extractTlfs(self, log_files):
         output = []
@@ -520,182 +646,6 @@ class FileFinder(QtCore.QObject):
         return iefs, fm_files, new_result_files
 
         
-
-# class ResultHolder():    
-#     """
-#     """
-#
-#     def __init__(self):
-#         self.model_root = ''
-#         self.parent = ''
-#         self.seen_parents = []
-#         self.missing = {}
-#         self.ignored_files = []
-#         self.file_tree = []
-# #         self.found = {}
-#
-#         self._summary = {'model_files': 0, 'other_files': 0, 'ignored_files': 0, 'total_files': 0}
-#         self.results = {'missing': [], 'found': [], 'found_ief': []}
-#         self.results_meta = {'summary': None, 'ignored': None, 'checked': None}
-#
-#     @property
-#     def summary(self):
-#         return self._summary
-#
-#     @summary.setter
-#     def summary(self, summary):
-#         self._summary = summary
-#         self._summary['total_files'] = self.getFileTotal()
-#
-#     def formatFileTree(self, include_files=True, format_as_text=True, include_full_paths=False):
-#         output_list = []
-#         fullpath_list = []
-#         for f in self.file_tree:
-#             if not f['is_folder']:
-#                 if include_files:
-#                     output_list.append('{}{}\n'.format(f['indent'], f['path']))
-#                     fullpath_list.append(f['fullpath'])
-#                 else:
-#                     fullpath_list.append('')
-#             else:
-#                 if include_files:
-#                     output_list.append('{}\n'.format(f['indent'][:-4]))
-#                     fullpath_list.append('')
-#                 output_list.append('{}{}/\n'.format(f['indent'], f['path']))
-#                 fullpath_list.append('')
-#
-#         output = None
-#         fullpaths = None
-#         if format_as_text:
-#             output = ''.join(output_list)
-#             fullpaths = '\n'.join(fullpath_list)
-#
-#         if include_full_paths:
-#             return output, fullpaths
-#         else:
-#             del fullpath_list
-#             return output
-#
-#     def saveFileTree(self, save_path, include_files=True):
-#         output = self.formatFileTree(include_files=include_files)
-#         with open(save_path, 'w', newline='\n') as outfile:
-#             outfile.write(output)
-#
-#     def addMissing(self, path, line, found=''):
-#         if path in self.missing:
-#             if not self.parent in self.missing[path]['parent']:
-#                 self.missing[path]['parent'].append(self.parent)
-#                 self.missing[path]['line'].append(line)
-#         else:
-#             self.missing[path] = {'parent': [self.parent], 'line': [line], 'found': found}
-#
-#     def setFound(self, path, found):
-#         try:
-#             self.missing[path]['found'] = found
-#         except KeyError:
-#             raise 
-#
-#     def summaryText(self):
-#         return 'Model Files: {0:<10}\nOther Files: {1:<10}\nIgnored Files: {2:<10}\nTotal Files: {3:<10}'.format(
-#             self._summary['model_files'], self._summary['other_files'], 
-#             self._summary['ignored_files'], self._summary['total_files']
-#         )
-#
-#     def getFileTotal(self):
-#         return self._summary['model_files'] + self._summary['other_files'] + self._summary['ignored_files']
-#
-#     def processResults(self):
-#         self.results = {'missing': [], 'found': [], 'found_ief': []}
-#         self.results_meta['summary'] = self.summary
-#         self.results_meta['ignored'] = self.ignored_files
-#         self.results_meta['checked'] = self.seen_parents
-#
-#         for f, details in self.missing.items():
-#             info = {'file': [], 'parents': []}
-#             psplit = os.path.split(f)
-#             filename = psplit[1] if len(psplit) > 1 else f
-#             all_ief = True
-#             for i, parent in enumerate(details['parent']):
-#                 if not parent[-3:] == 'ief':
-#                     all_ief = False
-#                 info['parents'].append([parent, details['line'][i]])
-#
-#             if details['found']:
-#                 info['file'] = [filename, details['found'], f]
-#                 if all_ief:
-#                     self.results['found_ief'].append(info)
-#                 else:
-#                     self.results['found'].append(info)
-#             else:
-#                 info['file'] = [filename, f]
-#                 self.results['missing'].append(info)
-#
-#     def exportResults(self, save_path):
-#         """
-#         """
-#         with open(save_path, 'w', newline='\n') as outfile:
-#             outfile.write('\n###########################')
-#             outfile.write('\n# FILE SEARCH SUMMARY')
-#             outfile.write('\n###########################\n\n')
-#             outfile.write('Root folder: {0}\n'.format(self.model_root))
-#             outfile.write(self.summaryText())
-#
-#             outfile.write('\n\nFILES THAT WERE IGNORED\n')
-#             if self.ignored_files:
-#                 outfile.write('\n'.join([i.filepath for i in self.ignored_files]))
-#             else:
-#                 outfile.write('\nNo files were ignored')
-#
-#             outfile.write('\n\nMISSING FILES\n')
-#             if self.results['missing']:
-#                 outfile.write('\n'.join(m['file'][0] for m in self.results['missing']))
-#             else:
-#                 outfile.write('\nNo missing files')
-#
-#             outfile.write('\n\nFOUND FILES (Incorrect paths)\n')
-#             if self.results['found'] or self.results['found_ief']:
-#                 outfile.write('\n'.join(f['file'][0] for f in self.results['found']))
-#                 outfile.write('\n'.join(f['file'][0] for f in self.results['found_ief']))
-#             else:
-#                 outfile.write('\nNo misreferenced files')
-#
-#             outfile.write('\n\nMODEL FILES CHECKED\n')
-#             outfile.write('\n'.join([p for p in self.seen_parents]))
-#
-#             outfile.write('\n\n\n###########################')
-#             outfile.write('\n# DETAILED RESULTS')
-#             outfile.write('\n###########################\n')
-#
-#             outfile.write('\n\nMISSING FILES\n')
-#             if self.results['missing']:
-#                 for m in self.results['missing']:
-#                     outfile.write('\n{0:<20}{1}'.format('File:', m['file'][0]))
-#                     outfile.write('\n{0:<20}{1}'.format('Path:', m['file'][1]))
-#                     outfile.write('\nReferenced by parent files:\n')
-#                     outfile.write('\n'.join(['Line ({0})\t {1}'.format(p[1], p[0]) for p in m['parents']]))
-#                     outfile.write('\n')
-#             else:
-#                 outfile.write('\nNo missing files')
-#
-#             outfile.write('\n\n\nFOUND FILES (Incorrect paths)\n')
-#             if self.results['found'] or self.results['found_ief']:
-#                 for f in self.results['found']:
-#                     outfile.write('\n{0:<20}{1}'.format('File:', f['file'][0]))
-#                     outfile.write('\n{0:<20}{1}'.format('Original Path:', f['file'][2]))
-#                     outfile.write('\n{0:<20}{1}'.format('Found Path:', f['file'][1]))
-#                     outfile.write('\nReferenced by parent files:\n')
-#                     outfile.write('\n'.join(['Line ({0})\t {1}'.format(p[1], p[0]) for p in f['parents']]))
-#                     outfile.write('\n')
-#                 for f in self.results['found_ief']:
-#                     outfile.write('\n{0:<20}{1}'.format('File:', f['file'][0]))
-#                     outfile.write('\n{0:<20}{1}'.format('Original Path:', f['file'][2]))
-#                     outfile.write('\n{0:<20}{1}'.format('Found Path:', f['file'][1]))
-#                     outfile.write('\nReferenced by parent files:\n')
-#                     outfile.write('\n'.join(['Line ({0})\t {1}'.format(p[1], p[0]) for p in f['parents']]))
-#                     outfile.write('\n')
-#             else:
-#                 outfile.write('\nNo misreferenced files')
-
 
 ignore_file_exts = ['log', 'doc', 'pdf', 'xf4', 'xf8', 'txt', 'dbf', 'shx', 'prj', 'iml', 'feb', 'ext', 'pxy', 'hdr', 'id', 'ext']
 tuflow_model_file_exts = ['tcf', 'tgc', 'tbc', 'tef', 'ecf', 'trd', 'tsoil', 'tmf']
@@ -934,7 +884,44 @@ TUFLOW_DEFAULTS = {
 }
 TUFLOW_DEFAULTS_KEYS = TUFLOW_DEFAULTS.keys()
 
-def read_tlf_file(filepath):
+
+class TuflowFile():
+    
+    def __init__(self, path, parent_type=None, gpkg_layer=None):
+        self.rawpath = path
+        self.filepath = Path(path)
+        self.missing = 'Yes'
+        self.resolved_path = None
+        self.gpkg_layer = gpkg_layer
+        if parent_type is None:
+            self.parent_type = ''
+        else:
+            self.parent_type = parent_type
+        
+    @property
+    def fullpath(self):
+        return self.filepath.absolute()
+
+    @property
+    def name(self):
+        return self.filepath.name
+
+    @property
+    def extension(self):
+        return self.filepath.suffix
+
+    @property
+    def ftype(self):
+        temp = self.filepath.suffix[1:].upper()
+        if self.parent_type:
+            temp = f"{temp} ({self.parent_type})"
+        return temp
+    
+    def __str__(self):
+        return self.filepath.name
+
+
+def readTlfFile(filepath):
     """
      WARNING:
      - Assumes any control file that has a 'csv' extension is a BCDbase.
@@ -969,7 +956,7 @@ def read_tlf_file(filepath):
     params = {}
     variables = {}
     gis_files = {'tcf': [], 'tgc': [], 'tbc': [], 'xs': [], 'outputs': []}
-    found_files = {'tcf': [], 'tgc': [], 'tbc': []}
+    found_files = {'tcf': [], 'tgc': [], 'tbc': [], 'control': []}
     checks = {'checks': {}, 'warnings': {}, 'errors': {}}
 
     def reading_xs_match(line):
@@ -1009,8 +996,9 @@ def read_tlf_file(filepath):
             fpath = rmatch.group('path')
             fext = rmatch.group('extension')
             combined = f"{fpath}.{fext}"
-            if combined not in control_files:
-                control_files.append(combined)
+            if combined not in found_files['control']:
+                found_files['control'].append(combined)
+                control_files.append(TuflowFile(combined, parent_type='TCF'))
 
             return True
         return False
@@ -1028,6 +1016,7 @@ def read_tlf_file(filepath):
             fpath = rmatch.group('path')
             fext = rmatch.group('extension')
             geolayer = rmatch.group('geolayer')
+            combined = f"{fpath}.{fext}"
             
             # CHECK: This isn't great, as, I think, not all mid's have mif's?
             if fext in ['mid', 'tab']:
@@ -1038,21 +1027,26 @@ def read_tlf_file(filepath):
             if in_xs:
                 if not lookup in found_files['tcf']:
                     # xs_files.append([fpath, 'TCF', fext, geolayer])
-                    gis_files['xs'].append([fpath, 'TCF', fext, geolayer])
-                    gis_files['tcf'].append([fpath, 'TCF', fext, geolayer])
+                    # gis_files['xs'].append([fpath, 'TCF', fext, geolayer])
+                    # gis_files['tcf'].append([fpath, 'TCF', fext, geolayer])
+                    gis_files['xs'].append(TuflowFile(combined, parent_type='TCF', gpkg_layer=geolayer))
+                    gis_files['tcf'].append(TuflowFile(combined, parent_type='TCF', gpkg_layer=geolayer))
                     found_files['tcf'].append(lookup)
             
             if is_tgc > 0:
                 if not lookup in found_files['tgc']:
-                    gis_files['tgc'].append([fpath, 'TGC', fext, geolayer])
+                    # gis_files['tgc'].append([fpath, 'TGC', fext, geolayer])
+                    gis_files['tgc'].append(TuflowFile(combined, parent_type='TGC', gpkg_layer=geolayer))
                     found_files['tgc'].append(lookup)
             elif is_tbc:
                 if not lookup in found_files['tbc']:
-                    gis_files['tbc'].append([fpath, 'TBC', fext, geolayer])
+                    gis_files['tbc'].append(TuflowFile(combined, parent_type='TBC', gpkg_layer=geolayer))
+                    # gis_files['tbc'].append([fpath, 'TBC', fext, geolayer])
                     found_files['tbc'].append(lookup)
             else:
                 if not lookup in found_files['tcf']:
-                    gis_files['tcf'].append([fpath, 'TCF', fext, geolayer])
+                    # gis_files['tcf'].append([fpath, 'TCF', fext, geolayer])
+                    gis_files['tcf'].append(TuflowFile(combined, parent_type='TCF', gpkg_layer=geolayer))
                     found_files['tcf'].append(lookup)
             return True
         return False
@@ -1079,36 +1073,53 @@ def read_tlf_file(filepath):
         filtered_files = []
         tcf_files = []
         for s in gis_files['tcf']:
-            layer = s[0]
-            geolayer = s[3]
-            lookup = layer+str(geolayer)
+            # layer = s[0]
+            # geolayer = s[3]
+            # lookup = layer+str(geolayer)
+
+            # layer = s.filepath
+            layer = s.rawpath
+            geolayer = s.gpkg_layer
+            lookup = s.rawpath+str(geolayer)
             
             if not lookup in found_files['tgc'] and not lookup in found_files['tbc']:
                 if not geolayer is None:
                     if re.search(gis_filter_regex, geolayer):
-                        gis_files['outputs'].append([s[0], s[1], s[2], s[3]])
+                        # gis_files['outputs'].append([s[0], s[1], s[2], s[3]])
+                        gis_files['outputs'].append(TuflowFile(layer, parent_type=s.parent_type, gpkg_layer=geolayer))
                     else:
-                        tcf_files.append([s[0], s[1], s[2], s[3]])
+                        # tcf_files.append([s[0], s[1], s[2], s[3]])
+                        tcf_files.append(TuflowFile(layer, parent_type=s.parent_type, gpkg_layer=geolayer))
                 else:
                     if re.search(gis_filter_regex, layer):
-                        gis_files['outputs'].append([s[0], s[1], s[2], s[3]])
+                        # gis_files['outputs'].append([s[0], s[1], s[2], s[3]])
+                        gis_files['outputs'].append(TuflowFile(layer, parent_type=s.parent_type, gpkg_layer=geolayer))
                     else:
-                        tcf_files.append([s[0], s[1], s[2], s[3]])
+                        # tcf_files.append([s[0], s[1], s[2], s[3]])
+                        tcf_files.append(TuflowFile(layer, parent_type=s.parent_type, gpkg_layer=geolayer))
 
         tgc_files = []
         for s in gis_files['tgc']:
-            layer = s[0]
-            geolayer = s[3]
+            # layer = s[0]
+            # geolayer = s[3]
+
+            # layer = s.filepath
+            layer = s.rawpath
+            geolayer = s.gpkg_layer
             if not geolayer is None:
                 if re.search(gis_filter_regex, geolayer):
-                    gis_files['outputs'].append([s[0], '', s[2], s[3]])
+                    # gis_files['outputs'].append([s[0], '', s[2], s[3]])
+                    gis_files['outputs'].append(TuflowFile(layer, parent_type=s.parent_type, gpkg_layer=geolayer))
                 else:
-                    tgc_files.append([s[0], s[1], s[2], s[3]])
+                    # tgc_files.append([s[0], s[1], s[2], s[3]])
+                    tgc_files.append(TuflowFile(layer, parent_type=s.parent_type, gpkg_layer=geolayer))
             else:
                 if re.search(gis_filter_regex, layer):
-                    gis_files['outputs'].append([s[0], '', s[2], s[3]])
+                    # gis_files['outputs'].append([s[0], '', s[2], s[3]])
+                    gis_files['outputs'].append(TuflowFile(layer, parent_type=s.parent_type, gpkg_layer=geolayer))
                 else:
-                    tgc_files.append([s[0], s[1], s[2], s[3]])
+                    # tgc_files.append([s[0], s[1], s[2], s[3]])
+                    tgc_files.append(TuflowFile(layer, parent_type=s.parent_type, gpkg_layer=geolayer))
             
                 
         filtered_files = gis_files
@@ -1121,7 +1132,7 @@ def read_tlf_file(filepath):
         """
         output = []
         for c in control_files:
-            control = Path(c)
+            control = c.filepath
             ext = control.suffix.upper()
             if ext == '.CSV':
                 ext = 'BCDBase'
@@ -1132,7 +1143,8 @@ def read_tlf_file(filepath):
                 if len(control.parts) < 2:
                     continue
 
-            output.append([c, ext])
+            # output.append([c, ext])
+            output.append(c)
         return output
     
     def order_summary_items(summary):
@@ -1240,7 +1252,8 @@ def read_tlf_file(filepath):
             # Can have multiple tcfs, but only one 'main' entry point
             if line.startswith('Reading .tcf File .. '):
                 line = line.replace('Reading .tcf File .. ', '')
-                entry_tcf = line.strip()
+                # entry_tcf = line.strip()
+                entry_tcf = TuflowFile(line.strip(), parent_type='Root')
                 continue
                     
             # Pick up control files (tcf, tgc, etc)
@@ -1312,7 +1325,10 @@ def read_tlf_file(filepath):
                     var = ''
 
                 if command == 'BC Database':
-                    control_files.append(os.path.split(var)[1])
+                    # control_files.append(os.path.split(var)[1])
+                    if var not in found_files['control']:
+                        found_files['control'].append(var)
+                        control_files.append(TuflowFile(var, parent_type='TCF'))
 
                 elif command.lower() in param_lookup:
                     params[command] = var
@@ -1435,6 +1451,7 @@ def read_tlf_file(filepath):
 
     # Create the output dictionary
     variables, scenarios = format_variables(variables)
+    i=0
     final_files = {
         'resolved_name': summary['resolved_name'],
         'entry_tcf': entry_tcf,
@@ -1445,10 +1462,212 @@ def read_tlf_file(filepath):
         'scenarios': scenarios,
         # 'summary': order_summary_items(summary),
         'summary': summary,
-        'check_messages': format_checks(checks),
+        # 'check_messages': format_checks(checks),
+        'check_messages': checks,
         'tuflow_non_defaults': tuflow_non_defaults,
     }
 
     return final_files
+
+
+class FmModel():
+    
+    def __init__(self, ief):
+        self.ief = ief
+        self._files = []
+        self.diagnostics = {'details': {}, 'warnings': {}}
+        self.params = {'changed': {}, 'default': {}} 
+        self._variables = {
+            'Slot': {'var_name': 'Priessmann Slot', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Inserts an infinitesimally small slot in sections: not usually required for high flow models'},
+            'FroudeLower': {'var_name': 'Froude Lower Limit', 'value_default': ['value', '0.75'], 'description': 'Affects the way that supercritical flow is approximated by phasing out dA/dx between values'},
+            'FroudeUpper': {'var_name': 'Froude Upper Limit', 'value_default': ['value', '0.9'], 'description': 'Affects the way that supercritical flow is approximated by phasing out dA/dx between values'},
+            'PivotalChoice': {'var_name': 'Pivotal Choice', 'value_default': ['value', '0.1'], 'description': 'Specifies the degree of matrix pivoting: expert use only is recommended'},
+            'MatrixDummy': {'var_name': 'Matrix Dummy', 'value_default': ['value', '0'], 'description': 'Helps to maintain the matrix solution structure: expert use only (sometimes helps with many moving structures - small changes only)'},
+            'NewMatrixDummy': {'var_name': 'Global Matrix Dummy', 'value_default': ['value', '0'], 'description': 'Same as Matrix Dummy but applied to the main calculation engine.'},
+            'Temperature': {'var_name': 'Temperature', 'value_default': ['value', '10'], 'description': 'Temperate of the water'},
+            'Dflood': {'var_name': 'dflood', 'value_default': ['value', '3'], 'description': 'Height of glass walling applied to river sections'},
+            'Htol': {'var_name': 'htol', 'value_default': ['value', '0.01'], 'description': 'Stage tolerance: how much stage can vary between time steps (both absolute and relative)'},
+            'Qtol': {'var_name': 'qtol', 'value_default': ['value', '0.01'], 'description': 'Flow tolerance: how much flow can vary between time steps (both absolute and relative)'},
+            'Minitr': {'var_name': 'minitr', 'value_default': ['value', '2'], 'description': 'Minimum number of iterations at each timestep'},
+            'Maxitr': {'var_name': 'maxitr', 'value_default': ['value', '6'], 'description': 'Maximum number of iterations allowed at each timestep (prime numbers are recommended)'},
+            'Theta': {'var_name': 'theta', 'value_default': ['value', '0.7'], 'description': 'Preissmann box weighting factor: fully implicit at 1.0 (justified changes include tidal models and many pumps, etc)'},
+            'Alpha': {'var_name': 'alpha', 'value_default': ['value', '0.7'], 'description': 'Under relaxation parameter: sets weighting towards the previous iterations result (value of 1.0 is no relaxation)'},
+            'Sconmx': {'var_name': 'sconmx', 'value_default': ['value', '100'], 'description': 'Maximum piezometric head above symmetrical conduit soffit'},
+            'Dltmax': {'var_name': 'dltmax', 'value_default': ['value', '1'], 'description': 'Maximum transition gradient for lateral spills (dQ/dh)'},
+            'Dilmax': {'var_name': 'dilmax', 'value_default': ['value', '1000'], 'description': 'Maximum transition gradient for inline spills (dQ/dh)'},
+            'Swop': {'var_name': 'swop', 'value_default': ['value', '0.001'], 'description': 'Determines when to apply "special case" equations to spill units'},
+            'Weight': {'var_name': 'Weight', 'value_default': ['value', '0.1'], 'description': 'Under relaxation parameter applied to spills'},
+            'SpillThreshold': {'var_name': 'Spill Threshold', 'value_default': ['value', '1E-6'], 'description': 'Difference in adjacent water levels at spill at which 0 flow applied'},
+            'Dfloodb': {'var_name': 'dfloodb', 'value_default': ['value', '10'], 'description': 'Height of glass walling applied to bridge sections'},
+            'Pcmxvd': {'var_name': 'pcmxvd', 'value_default': ['value', '2'], 'description': 'Dummy point interpolation percentage for calculating cross section properties'},
+            'Pswide': {'var_name': 'pswide', 'value_default': ['value', '0'], 'description': 'Width of triangular priessmann slot'},
+            'Psdeep': {'var_name': 'psdeep', 'value_default': ['value', '0'], 'description': 'Depth of triangular preissmann slot'},
+            'DHLinearise': {'var_name': 'Orifice Linearisation Head', 'value_default': ['value', '0'], 'description': 'Can help prevent oscillations at low head differences in orifice units'},
+            'BottomSlotDepth': {'var_name': 'Bottom Slot Depth', 'value_default': ['value', '0'], 'description': 'Depth of bottom slot in conduit units'},
+            'BottomSlotdh': {'var_name': 'Bottom Slot dh', 'value_default': ['value', '0'], 'description': 'Height of bottom slot above invert in conduit units'},
+            'TopSlotHeight': {'var_name': 'Top Slot Height', 'value_default': ['value', '0'], 'description': 'Height of top slot in conduit units'},
+            'TopSlotdh': {'var_name': 'Top Slot dh', 'value_default': ['value', '0'], 'description': 'Depth of top slot below soffit in conduit units'},
+            '2DScheme': {'var_name': '2D Scheme', 'check_value': '0', 'value_default': ['value', 'No'], 'description': 'Whether a 2D scheme (like TUFLOW) is being used'},
+            '2DTimestep': {'var_name': '2D Timestep', 'value_default': ['value', ''], 'description': '2D Timestep - may also be set and/or overriden in the 2D model'},
+            'LaunchDoublePrecisionVersion': {'var_name': 'Double Precision FMP', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Whether double precision FMP is being used'},
+            '2DDoublePrecision': {'var_name': 'Double Precision TUFLOW', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Whether double precision 2D model (like TUFLOW) is being used'},
+            '2DOptions': {'var_name': '2D Run Options', 'value_default': ['value', ''], 'description': 'Run options (scenarios/events) for 2D scheme'},
+        }
+        
+    @property
+    def filepath(self):
+        return self.ief.filepath
+    
+    @property
+    def files(self):
+        if not self._files:
+            self._files = self.findFiles()
+        return self._files
+    
+    def findFiles(self):
+        dat = IefSubfile(self.ief.Datafile)
+        results = IefSubfile(self.ief.Results + '.zzn')
+        results = IefSubfile(self.ief.Results + '.zzd')
+        ieds = [IefSubfile(i) for i in self.ief.EventData.values()]
+        tcf = getattr(self.ief, '2DFile', None)
+        ics = getattr(self.ief, 'InitialConditions', None)
+
+        all_files = [dat, results]
+        all_files.extend(ieds)
+        if tcf:
+            all_files.append(IefSubfile(tcf))
+        if ics:
+            all_files.append(IefSubfile(ics))
+        
+        return all_files
+    
+    def checkParams(self):
+
+        for variable, variable_dict in self._variables.items():
+            ief_value = getattr(self.ief, variable, None)
+            has_checkval = True if 'checkval' in variable_dict.keys() else False
+            check_value = variable_dict['value_default'][0] if not has_checkval else variable_dict['checkval']
+            used_value = variable_dict['value_default'][0] if not variable_dict['value_default'][0] == 'value' else ief_value
+            
+            if ief_value is not None and not ief_value == check_value:
+                self.params['changed'][variable_dict['var_name']] = {
+                    'name': variable, 'value': used_value, 
+                    'default': variable_dict['value_default'][1],
+                    'description': variable_dict['description'],
+                }
+            else:
+                self.params['default'][variable_dict['var_name']] = {
+                    'name': variable, 'value': used_value, 
+                    'default': variable_dict['value_default'][1],
+                    'description': variable_dict['description'],
+                }
+                
+    def loadDiagnostics(self):
+        has_zzd = False
+        for f in self.files:
+            if f.extension.upper() == '.ZZD':
+                has_zzd = True
+                if f.resolved_path and f.resolved_path.is_file():
+                    details, warnings = loadZzd(f.fullpath)
+                    self.diagnostics['details'] = details
+                    self.diagnostics['warnings'] = warnings
+
+
+class TuflowModel():
+    
+    def __init__(self, tlf_path):
+        self.tlf_path = tlf_path
+        self.resolved_name = ''
+        self.tcf = None
+        self.control_files = []
+        self.gis_files = []
+        self.parameters = []
+        self.variables = []
+        self.scenarios = []
+        self.summary = {}
+        self.warnings = []
+        self.non_defaults = {}
+    
+    def readTlf(self):
+        tlf = readTlfFile(self.tlf_path)
+        self.resolved_name = tlf['resolved_name']
+        self.tcf = tlf['entry_tcf']
+        self.control_files = tlf['control']
+        self.gis_files = tlf['gis']
+        self.parameters = tlf['params']
+        self.variables = tlf['variables']
+        self.scenarios = tlf['scenarios']
+        self.summary = tlf['summary']
+        self.warnings = tlf['check_messages']
+        self.non_defaults = tlf['tuflow_non_defaults']
+        
+    @property
+    def all_variables(self):
+        return self.variables + self.scenarios# + [self.parameters]
+
+    @property
+    def all_files(self):
+        # gis_files = [g for k, g in self.gis_files.items()]
+        gis_files = []
+        for k, g in self.gis_files.items():
+            gis_files.extend(g)
+        return [self.tcf] + self.control_files + gis_files
+    
+    @property
+    def diagnostics(self):
+        checks = self.warnings.get('checks', {})
+        warns = self.warnings.get('warnings', {})
+        errors = self.warnings.get('errors', {})
+        checks = [{'type': k, 'count': v['count'], 'message': v['message']} for k, v in checks.items()]
+        warns = [{'type': k, 'count': v['count'], 'message': v['message']} for k, v in warns.items()]
+        errors = [{'type': k, 'count': v['count'], 'message': v['message']} for k, v in errors.items()]
+        return errors + warns + checks
+    
+    @property
+    def run_summary(self):
+        temp = self.summary | self.parameters
+        return temp
+
+
+class ModelChecker(QObject):
+    status_update_signal = pyqtSignal(str)
+    progress_max_signal = pyqtSignal(int)
+    progress_val_signal = pyqtSignal(int)
+    
+    def __init__(self):
+        tuflow_models = {}
+        fm_models = {}
+        
+    def loadTlfFiles(self, tlf_files):
+        tuflow_models = {}
+        for tlf in tlf_files:
+            if tlf.fileExt == 'tlf':
+                tlf_path = Path(tlf.filepath)
+                tuflow = TuflowModel(tlf_path)
+                tuflow.readTlf()
+                self.tuflow_models[str(tlf_path.stem)] = tuflow
+
+    def loadIefFiles(self, fm_files):
+        iefs = {}
+        for fm in fm_files:
+            if fm.fileExt == 'ief':
+                ief_path = Path(fm.filepath)
+                ief = IEF(ief_path)
+                model = FmModel(ief)
+                model.checkParams()
+                model.loadDiagnostics()
+                self.fm_models[str(ief_path.stem)] = model
+    
+
+def loadTlfFiles(tlf_files):
+    tuflow_models = {}
+    for tlf in tlf_files:
+        if tlf.fileExt == 'tlf':
+            tlf_path = Path(tlf.filepath)
+            tuflow = TuflowModel(tlf_path)
+            tuflow.readTlf()
+            tuflow_models[str(tlf_path.stem)] = tuflow
+
+    return tuflow_models
 
 

@@ -29,7 +29,7 @@
     </rect>
    </property>
    <property name="currentIndex">
-    <number>3</number>
+    <number>1</number>
    </property>
    <widget class="QWidget" name="allFilesTab">
     <attribute name="title">
@@ -243,9 +243,6 @@
          <string>Files</string>
         </attribute>
         <layout class="QVBoxLayout" name="verticalLayout_4">
-         <item>
-          <widget class="QComboBox" name="modelFilesCBox"/>
-         </item>
          <item>
           <widget class="QTableWidget" name="modelFilesTable">
            <property name="sortingEnabled">

@@ -64,6 +64,8 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
         tlf_names = [tlf.filepath.stem for tlf in self.tlfs]
         try:
             self.setUpdatesEnabled(False)
+            self.fmModelsCBox.clear()
+            self.tuflowModelsCBox.clear()
             self.fmModelsCBox.addItems(ief_names)
             self.tuflowModelsCBox.addItems(tlf_names)
             self.summaryLookup = [
@@ -76,10 +78,14 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
             raise err
         finally:
             self.setUpdatesEnabled(True)
+            
+        # self.tuflow_models = filecheck.loadTlfFiles(self.search_results['tuflow_model']['logs'])
+        self.tuflow_models = filecheck.loadTlfFiles(self.tlfs)
 
         if len(self.fm_models) > 0:
             self.show_fm(0)
-        
+        elif len(self.tuflow_models) > 0:
+            self.show_tuflow(0)
     
     def show_fm(self, i):
         # fm = self.search_results['fm_model']
@@ -103,7 +109,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
             row_position += 1
         self.variablesTable.setSortingEnabled(True)
 
-        self.variablesTable.setSortingEnabled(False)
+        self.modelFilesTable.setSortingEnabled(False)
         row_position = 0
         self.modelFilesTable.setRowCount(row_position)
         for f in fm.files:
@@ -120,9 +126,9 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
         self.diagnosticDetailsTable.setRowCount(row_position)
         for k, detail in fm.diagnostics['details'].items():
             self.diagnosticDetailsTable.insertRow(row_position)
-            self.diagnosticDetailsTable.setItem(row_position, 0, QDetailsTableWidgetItem(k))
-            self.diagnosticDetailsTable.setItem(row_position, 1, QDetailsTableWidgetItem(detail['value']))
-            self.diagnosticDetailsTable.setItem(row_position, 2, QDetailsTableWidgetItem(detail['description']))
+            self.diagnosticDetailsTable.setItem(row_position, 0, QTableWidgetItem(k))
+            self.diagnosticDetailsTable.setItem(row_position, 1, QTableWidgetItem(detail['value']))
+            self.diagnosticDetailsTable.setItem(row_position, 2, QTableWidgetItem(detail['description']))
             row_position += 1
         self.diagnosticDetailsTable.setSortingEnabled(True)
 
@@ -131,14 +137,77 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
         self.diagnosticWarningTable.setRowCount(row_position)
         for k, warning in fm.diagnostics['warnings'].items():
             self.diagnosticWarningTable.insertRow(row_position)
-            self.diagnosticWarningTable.setItem(row_position, 0, QWarningTableWidgetItem(warning['type']))
-            self.diagnosticWarningTable.setItem(row_position, 1, QWarningTableWidgetItem(str(warning['count'])))
-            self.diagnosticWarningTable.setItem(row_position, 2, QWarningTableWidgetItem(warning['description']))
+            self.diagnosticWarningTable.setItem(row_position, 0, QTableWidgetItem(warning['type']))
+            self.diagnosticWarningTable.setItem(row_position, 1, QTableWidgetItem(str(warning['count'])))
+            self.diagnosticWarningTable.setItem(row_position, 2, QTableWidgetItem(warning['description']))
             row_position += 1
         self.diagnosticWarningTable.setSortingEnabled(True)
     
     def show_tuflow(self, i):
-        pass
+        
+        tuflow_name = str(self.tuflowModelsCBox.currentText())
+        try:
+            tuflow = self.tuflow_models[tuflow_name]
+        except KeyError as err:
+            return
+
+        self.variablesTable.setSortingEnabled(False)
+        row_position = 0
+        self.variablesTable.setRowCount(row_position)
+        for var in tuflow.all_variables:
+            for k, v in var.items():
+                self.variablesTable.insertRow(row_position)
+                self.variablesTable.setItem(row_position, 0, QTableWidgetItem(k))
+                self.variablesTable.setItem(row_position, 1, QTableWidgetItem(''))
+                self.variablesTable.setItem(row_position, 2, QTableWidgetItem(str(v)))
+                self.variablesTable.setItem(row_position, 3, QTableWidgetItem(''))
+                self.variablesTable.setItem(row_position, 4, QTableWidgetItem(''))
+                row_position += 1
+
+        for k, v in tuflow.non_defaults.items():
+            self.variablesTable.insertRow(row_position)
+            self.variablesTable.setItem(row_position, 0, QTableWidgetItem(k))
+            self.variablesTable.setItem(row_position, 1, QTableWidgetItem('No'))
+            self.variablesTable.setItem(row_position, 2, QTableWidgetItem(str(v['value'])))
+            self.variablesTable.setItem(row_position, 3, QTableWidgetItem(v['default']))
+            self.variablesTable.setItem(row_position, 4, QTableWidgetItem(v['description']))
+            row_position += 1
+        self.variablesTable.setSortingEnabled(True)
+        
+        self.modelFilesTable.setSortingEnabled(False)
+        row_position = 0
+        self.modelFilesTable.setRowCount(row_position)
+        for f in tuflow.all_files:
+            self.modelFilesTable.insertRow(row_position)
+            self.modelFilesTable.setItem(row_position, 0, QTableWidgetItem(f.ftype))
+            self.modelFilesTable.setItem(row_position, 1, QTableWidgetItem(f.name))
+            self.modelFilesTable.setItem(row_position, 2, QTableWidgetItem(''))
+            self.modelFilesTable.setItem(row_position, 3, QTableWidgetItem(str(f.fullpath)))
+            row_position += 1
+        self.modelFilesTable.setSortingEnabled(True)
+        
+        self.diagnosticDetailsTable.setSortingEnabled(False)
+        row_position = 0
+        self.diagnosticDetailsTable.setRowCount(row_position)
+        for k, detail in tuflow.run_summary.items():
+            self.diagnosticDetailsTable.insertRow(row_position)
+            self.diagnosticDetailsTable.setItem(row_position, 0, QTableWidgetItem(k))
+            self.diagnosticDetailsTable.setItem(row_position, 1, QTableWidgetItem(str(detail)))
+            self.diagnosticDetailsTable.setItem(row_position, 2, QTableWidgetItem(''))
+            row_position += 1
+        self.diagnosticDetailsTable.setSortingEnabled(True)
+        
+        self.diagnosticWarningTable.setSortingEnabled(False)
+        row_position = 0
+        self.diagnosticWarningTable.setRowCount(row_position)
+        for d in tuflow.diagnostics:
+            # for k, d in dtype.items():
+            self.diagnosticWarningTable.insertRow(row_position)
+            self.diagnosticWarningTable.setItem(row_position, 0, QTableWidgetItem(d['type']))
+            self.diagnosticWarningTable.setItem(row_position, 1, QTableWidgetItem(str(d['count'])))
+            self.diagnosticWarningTable.setItem(row_position, 2, QTableWidgetItem(d['message']))
+            row_position += 1
+        self.diagnosticWarningTable.setSortingEnabled(True)
     
     def showSummaryFiles(self, i):
         try:
