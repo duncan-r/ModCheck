@@ -357,7 +357,7 @@ class FoundFiles():
             match_file = None
             for ftype in ftypes:
                 check_files = self.files[ftype]
-                status, match_file = self.checkFile(f, check_files)
+                status, match_file = self.checkFile(f, check_files, ignore_case=True)
             
                 # TODO: Bit of a hack to catch some of the IEF files that haven't been setup
                 # propoerly
@@ -736,7 +736,7 @@ class FileFinder(QObject):
             if f.fileExt.lower() == 'ief':
                 ief = IEF(f.filepath)
                 iefs.append(ief)
-                dat_name = Path(ief.datafile).name
+                dat_name = Path(ief.datafile).stem
                 dat_names.append(dat_name)
                 
         for r in result_files:
@@ -754,7 +754,7 @@ tuflow_model_file_exts = ['tcf', 'tgc', 'tbc', 'tef', 'ecf', 'trd', 'tsoil', 'tm
 fm_model_file_exts = ['ief', 'ied', 'iic']
 gis_file_exts = ['shp', 'mif', 'mid', 'asc', 'flt', 'tif', 'tiff', 'xml', 'sqlite', 'tin']
 log_file_exts = ['tlf', 'tsf']
-result_file_exts = ['xmdf', 'sup', '2dm', 'eof', 'dat', 'zzd', 'zzn', 'zzs']
+result_file_exts = ['xmdf', 'sup', '2dm', 'eof', 'dat', 'zzd', 'zzn', 'zzs', 'bmp']
 workspace_file_exts = ['qgs']#, 'wor']
 class SomeFile(object):
     '''
@@ -1701,7 +1701,7 @@ class FmModel():
             if f.extension.upper() == '.ZZD':
                 has_zzd = True
                 if f.resolved_path and f.resolved_path.is_file():
-                    details, warnings = loadZzd(f.fullpath)
+                    details, warnings = loadZzd(f.resolved_path)
                     self.diagnostics['details'] = details
                     self.diagnostics['warnings'] = warnings
 
