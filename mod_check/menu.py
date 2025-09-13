@@ -63,10 +63,6 @@ from .dialogs.tuflowstabilitycheckdialog import TuflowStabilityCheckDialog
 from .dialogs.stabilitycheck1ddialog import StabilityCheck1DDialog
 from .dialogs.modelvarsfilescheckdialog import ModelVarsFilesCheckDialog
 
-# TODO: Remove when combined version is working (ModelVarsFilesCheckDialog)
-from .dialogs.fmtuflowvariablescheckdialog import FmpTuflowVariablesCheckDialog
-from .dialogs.filecheckdialog import FileCheckDialog
-
 
 class Menu:
 
@@ -98,8 +94,6 @@ class Menu:
             # 'View_NRFA_Station': {'dialog': None, 'class': NrfaStationViewerDialog},
             # 'FMP_REFH_Check': {'dialog': None, 'class': FmpRefhCheckDialog},
             '1D_Stability_Check': {'dialog': None, 'class': StabilityCheck1DDialog},
-            'Model_File_Audit': {'dialog': None, 'class': FileCheckDialog},
-            'Model_Variables_Check': {'dialog': None, 'class': FmpTuflowVariablesCheckDialog},
             # 'Model_Assessment': {'dialog': None, 'class': AssessmentDialog},
             'TUFLOW_Stability_Check': {'dialog': None, 'class': TuflowStabilityCheckDialog},
             'FMP_Section_Check': {'dialog': None, 'class': FmpSectionCheckDialog},
@@ -135,11 +129,6 @@ class Menu:
         self.check_1d2dWidth_action.triggered.connect(self.check_1d2d_width)
         self.iface.addPluginToMenu("&ModCheck", self.check_1d2dWidth_action)
         
-        # FMP / TUFLOW default variables check
-        self.get_runsummary_action = QAction(icon, "Run variables and summary", self.iface.mainWindow())
-        self.get_runsummary_action.triggered.connect(self.get_runsummary)
-        self.iface.addPluginToMenu("&ModCheck", self.get_runsummary_action)
-        
         # FMP section property check
         self.check_fmpsections_action = QAction(icon, "Check FMP section properties", self.iface.mainWindow())
         self.check_fmpsections_action.triggered.connect(self.check_fmp_sections)
@@ -159,14 +148,9 @@ class Menu:
         self.check_1d_stability_action = QAction(icon, "Check 1D Stability Plots", self.iface.mainWindow())
         self.check_1d_stability_action.triggered.connect(self.check_1d_stability)
         self.iface.addPluginToMenu("&ModCheck", self.check_1d_stability_action)
-        
-        # TUFLOW stability outputs viewer (MB, Dvol, etc)
-        self.filecheck_action = QAction(icon, "Audit Model Files", self.iface.mainWindow())
-        self.filecheck_action.triggered.connect(self.check_files)
-        self.iface.addPluginToMenu("&ModCheck", self.filecheck_action)
 
         # Check variables and files for a model folder
-        self.model_varsfiles_check_action = QAction(icon, "Model Vars and Files Check", self.iface.mainWindow())
+        self.model_varsfiles_check_action = QAction(icon, "Model Files / Variables Check", self.iface.mainWindow())
         self.model_varsfiles_check_action.triggered.connect(self.check_model_varsfiles)
         self.iface.addPluginToMenu("&ModCheck", self.model_varsfiles_check_action)
         
@@ -180,13 +164,11 @@ class Menu:
         # self.iface.removePluginMenu("&ModCheck", self.model_assessment_action)
         self.iface.removePluginMenu("&ModCheck", self.check_fmptuflow_chainage_action)
         self.iface.removePluginMenu("&ModCheck", self.check_1d2dWidth_action)
-        self.iface.removePluginMenu("&ModCheck", self.get_runsummary_action)
         self.iface.removePluginMenu("&ModCheck", self.check_fmpsections_action)
         # self.iface.removePluginMenu("&ModCheck", self.check_fmprefh_action)
         self.iface.removePluginMenu("&ModCheck", self.check_tuflowstability_action)
         self.iface.removePluginMenu("&ModCheck", self.check_1d_stability_action)
         # self.iface.removePluginMenu("&ModCheck", self.nrfa_stationviewer_action)
-        self.iface.removePluginMenu("&ModCheck", self.filecheck_action)
         self.iface.removePluginMenu("&ModCheck", self.model_varsfiles_check_action)
         
     def launchDialog(self, dialog_name):
@@ -224,12 +206,6 @@ class Menu:
     def check_1d_stability(self): 
         self.launchDialog('1D_Stability_Check')
     
-    def check_files(self):
-        self.launchDialog('Model_File_Audit')
-    
-    def get_runsummary(self):
-        self.launchDialog('Model_Variables_Check')
-
     def check_model_varsfiles(self):
         self.launchDialog('Model_VarsFiles_Check')
 

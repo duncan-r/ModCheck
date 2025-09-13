@@ -28,7 +28,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
 
     def __init__(self, dialog_name, iface, project):
 
-        DialogBase.__init__(self, dialog_name, iface, project, 'Model Files / Variables Check')
+        DialogBase.__init__(self, dialog_name, iface, project, 'Model Files Variables')
 
         model_root = mrt_settings.loadProjectSetting(
             'model_root', self.project.readPath('./')
