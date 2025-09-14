@@ -175,54 +175,6 @@ for the timebeing you'll need to do it manually.
 
 """
 
-# VARIABLES_SUMMARY = """
-# Run variables and summary allows you to review the 1D and 2D FMP and TUFLOW run
-# parameters, check them against the default values and interrogate some of the
-# diagnostic information from the simulation output files.
-#
-# The are two main tabs, FMP and TUFLOW.
-#
-#
-# FMP:
-#
-# The Multiple Summary tab will load key run parameter information from all FMP .ief
-# files in a folder (it will also search subfolders). These parameters will be loaded
-# into the table and any that have been changed from the default values will be
-# highlighted in red. By right-clicking on a row you can select to "Show detailed view"
-# and the full details and descriptions of the .ief file will be loaded into the 
-# Variables table.
-#
-# The Variables tab contains a summary of all of the run parameters used in the FMP
-# model, whether they have been changed from the default, what the default value is and
-# a description explaining the parameter. It also includes a second table summarising
-# all of the files associated with the model (.dat, .iic, .ied, etc).
-# The tables can be loaded by either selecting an FMP .ief file in the file search box,
-# or by right-clicking on a row in the Multiple Summary tab table.
-#
-# The Diagnostics tab will load key information from the FMP .zzd diagnostics file
-# outputs. The Run Summary table contains summary information about the details of the
-# simulation and the main diagnostic outputs. The Errors and Warnings table contains
-# a summary of all of the errors and/or warnings raised during the simulation, how many
-# times they occurred and a description of what it means. You can load the data into the
-# tables by selecting an FMP .zzd file in the file search box.
-#
-#
-# TUFLOW:
-#
-# The variables tab contains a summary of all of the run parameter used in the TUFLOW model,
-# whether they have been changed from the default value, what the default value is and a
-# description explaining the parameter. There is also a second table summarising all of
-# the files used by the model (.tgc, .tbc, etc).
-#
-# The diagnostics tab contains details about the simulation and the main diagnostics
-# outputs. These include summaries of the checks and warning, negative depths, 
-# model build, run dates, stability info, etc. The Checks, Warnings and Errors table 
-# contains a summary of all of the checks, warnings and errors that were raised during
-# the simulation, how many times they occurred, a description and a link to the 
-# TUFLOW wiki for more information.
-#
-# """
-
 FMP_SECTIONS = """
 Check FMP section properties allows you to review some key schematisation properties
 of the Flood Modeller sections; primarily the river unit data.
@@ -266,21 +218,21 @@ zoom and pan funcionality, and saving the graph image are available on the toolb
 
 """
 
-REFH_CHECK = """
-Compare FMP ReFH units allows you to check the consistency of the values used in all
-of the ReFH units in a Flood Modeller model.
-
-Selecting an FMP .dat or .ied file in the file search box will load all of the ReFH
-units in the model file and output the configuration values in the text box. The 
-values for all of the different ReFH units will be displayed alongside each other 
-for comparison.
-
-Key values that should usually be the same across all ReFH boundaries are checked,
-if there is a difference between some of the values they will be highlighted red
-and should be investigated further to check that the value is correct.
-
-The results of the check can be exported to a csv file with the Export to CSV button.
-"""
+# REFH_CHECK = """
+# Compare FMP ReFH units allows you to check the consistency of the values used in all
+# of the ReFH units in a Flood Modeller model.
+#
+# Selecting an FMP .dat or .ied file in the file search box will load all of the ReFH
+# units in the model file and output the configuration values in the text box. The 
+# values for all of the different ReFH units will be displayed alongside each other 
+# for comparison.
+#
+# Key values that should usually be the same across all ReFH boundaries are checked,
+# if there is a difference between some of the values they will be highlighted red
+# and should be investigated further to check that the value is correct.
+#
+# The results of the check can be exported to a csv file with the Export to CSV button.
+# """
 
 CHECK_TUFLOW_MB = """
 Review TUFLOW MB files to check key stability outputs from model runs.
@@ -499,6 +451,20 @@ above the tabs. Flood Modeller models will be prefixed with "FM" and TUFLOW
 models with "TUFLOW".
 
 
+All Files tab:
+Contains the model summary; a list of all FM and TUFLOW models found and loaded
+during the search. These will match the names in the dropdown box above. The table
+lists key findings from loading them, such as whether they have missing files and
+the status of the simulation. If the file could not be loaded for some reason -
+usually because the run crashed or was stopped, "Loaded" will be false and you will
+not be able to view the run or see it in the dropdown choices.
+Right-click on a row to see a shortcut menu for different components of the
+summary. 
+
+The Search Summary tab provides the overview of all the loaded files in the model
+directory, as described above.
+
+
 Model Files tab:
 Contains all of the files associated with a particular model simulation. Any files
 that could not be found by the software will also be listed separately under the
@@ -512,12 +478,13 @@ The tables include:
 
 The "Missing?" column on the Files tab also states whether a file could be found
 or not. The following classification is used:
-- "Yes": File was found where expected (absolute path match).
+- "Yes": The file could not be found within the model folder.
+- "No": The file was found where expected (absolute path match).
 - "No (1)": The file has a strong match and is very likely the correct one. 
 - "No (2)": The file has a good match and is quite likely the correct one. 
 - "No (3)": The file name matched, but nothing else. Double-check these. 
 
-The classification is based on the number of major parent directories. The more
+The classification is based on the number of parent directories. The more
 parent matches, the greater the certainty that the file is in the correct
 location, it's just on a different computer (as expected). If only the file name
 matches ("No (3)"), it is either a top level file in the chosen folder, or it
@@ -629,7 +596,7 @@ HELP_LOOKUP = {
     'Check Chainage': CHECK_CHAINAGE,
     'Check Width': CHECK_WIDTH,
     'Check FMP Sections': FMP_SECTIONS,
-    'ReFH Check': REFH_CHECK,
+    # 'ReFH Check': REFH_CHECK,
     'Check TUFLOW MB': CHECK_TUFLOW_MB,
     'Check 1D Stability': CHECK_1D_STABILITY,
     'Model Files Variables': MODEL_FILES_VARS_CHECK,

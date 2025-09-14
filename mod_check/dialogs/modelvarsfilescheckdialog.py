@@ -46,6 +46,8 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
         self.fm_models = {}
         self.tuflow_models = {}
         self.allFilesSummaryCBox.currentIndexChanged.connect(lambda i: self.showSummaryFiles(i))
+        self.allFilesModelsTable.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.allFilesModelsTable.customContextMenuRequested.connect(self._summaryModelsTableContext)
 
     def updateModelRoot(self):
         mrt_settings.saveProjectSetting('model_root', self.modelFolderFileWidget.filePath())
@@ -54,36 +56,30 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
     def findFiles(self):
         model_root = mrt_settings.loadProjectSetting('model_root', './temp')
         if not os.path.isdir(model_root):
-            # file_finder = filecheck.FileFinder()
-            # self.iefs, self.tlfs, self.search_results = file_finder.auditModelFiles(model_root)
-        # else:
             QMessageBox.warning(self, "Folder does not exist", "Model folder doesn't exist at: {}".format(model_root))
             return
         
-        # try:
+        self._resetUI()
         self.model_checker = filecheck.ModelChecker(model_root)
         self.model_checker.status_update_signal.connect(self._updateStatus)
         self.model_checker.progress_max_signal.connect(self._setProgressMax)
         self.model_checker.progress_val_signal.connect(self._setProgressVal)
         self.model_checker.searchFiles()
         self.model_checker.checkMissingFiles()
+        self.model_checker.loadTuflowSubfiles()
         self._updateStatus("Model check complete")
         self._setProgressVal(0)
-        # except Exception as err:
-        #     QMessageBox.warning(self, "Search Files Error", "Failed to read model files at: {}".format(model_root))
-        #     return
 
         self.setUpdatesEnabled(False)
         self.modelsCBox.clear()
-        # self.tuflowModelsCBox.clear()
         self.modelsCBox.addItems(self.model_checker.ief_names)
         self.modelsCBox.addItems(self.model_checker.tlf_names)
-        # self.tuflowModelsCBox.addItems(self.model_checker.tlf_names)
         self.summaryLookup = [
             'tuflow_model', 'fm_model', 'gis', 'result', 'workspace', 'log', 'csv', 'other'
         ]
         self.allFilesSummaryCBox.addItems(['Tuflow Model', 'FM Model', 'GIS', 'Results', 'Workspaces', 'Logs', 'CSVs', 'Other'])        
         self.resultsTabWidget.setCurrentIndex(0)
+        self._updateAllFilesModelsTable()
         self.setUpdatesEnabled(True)
         self.showModel(0)
         
@@ -96,6 +92,70 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
 
     def _setProgressVal(self, value):
         self.progressBar.setValue(value)
+        QApplication.processEvents()
+
+    def _summaryModelsTableContext(self, pos):
+        """Add context menu to model summary table.
+        """
+        index = self.allFilesModelsTable.itemAt(pos)
+        if index is None: return
+        menu = QMenu()
+        view_model_files_action = menu.addAction("View model files")
+        view_model_missingfiles_action = menu.addAction("View model missing files")
+        view_model_variables_action = menu.addAction("View model variables")
+        view_model_diagnostics_action = menu.addAction("View model diagnostics")
+
+        # Get the action and do whatever it says
+        action = menu.exec_(self.allFilesModelsTable.viewport().mapToGlobal(pos))
+
+        if (action == view_model_files_action 
+                or action == view_model_missingfiles_action 
+                or action == view_model_variables_action 
+                or action == view_model_diagnostics_action
+            ):
+            row = self.allFilesModelsTable.currentRow()
+            loaded = self.allFilesModelsTable.item(row, 1).text()
+            if loaded == 'False':
+                return
+            type = self.allFilesModelsTable.item(row, 0).text()
+            name = self.allFilesModelsTable.item(row, 2).text()
+            combo = f"{type}  {name}"
+
+            self.modelsCBox.setCurrentText(combo)
+            if action == view_model_files_action:
+                self.resultsTabWidget.setCurrentIndex(1)
+            if action == view_model_missingfiles_action:
+                self.resultsTabWidget.setCurrentIndex(1)
+                self.modelFilesSummaryTab.setCurrentIndex(1)
+            elif action == view_model_variables_action:
+                self.resultsTabWidget.setCurrentIndex(2)
+            elif action == view_model_diagnostics_action:
+                self.resultsTabWidget.setCurrentIndex(3)
+                
+    def _resetUI(self):
+        self.allFilesSummaryCBox.clear()
+        self.modelsCBox.clear()
+
+    def _updateAllFilesModelsTable(self):
+        
+        self.allFilesModelsTable.setSortingEnabled(False)
+        row_position = 0
+        self.allFilesModelsTable.setRowCount(row_position)
+
+        for info in self.model_checker.modelSummaryInfo():
+            self.allFilesModelsTable.insertRow(row_position)
+            self.allFilesModelsTable.setItem(row_position, 0, QTableWidgetItem(info['type']))
+            self.allFilesModelsTable.setItem(row_position, 1, QTableWidgetItem(str(info['loaded'])))
+            if info['loaded']:
+                self.allFilesModelsTable.setItem(row_position, 2, QTableWidgetItem(info['name']))
+                self.allFilesModelsTable.setItem(row_position, 3, QTableWidgetItem(info['missing_files']))
+                self.allFilesModelsTable.setItem(row_position, 4, QTableWidgetItem(info['non_defaults']))
+                self.allFilesModelsTable.setItem(row_position, 5, QTableWidgetItem(info['errors']))
+                self.allFilesModelsTable.setItem(row_position, 6, QTableWidgetItem(info['run_status']))
+            row_position += 1
+
+        self.allFilesModelsTable.setSortingEnabled(True)
+
             
     def showModel(self, i):
         name = str(self.modelsCBox.currentText())
@@ -115,6 +175,9 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
         try:
             fm = self.model_checker.fm_models[name]
         except KeyError as err:
+            return
+        
+        if not fm.loaded:
             return
 
         self.variablesTable.setSortingEnabled(False)
@@ -183,6 +246,9 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
             tuflow = self.model_checker.tuflow_models[name]
         except KeyError as err:
             return
+        
+        if not tuflow.loaded:
+            return
 
         self.variablesTable.setSortingEnabled(False)
         row_position = 0
@@ -213,7 +279,12 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
         for f in tuflow.all_files:
             self.modelFilesTable.insertRow(row_position)
             self.modelFilesTable.setItem(row_position, 0, QTableWidgetItem(f.ftype))
-            self.modelFilesTable.setItem(row_position, 1, QTableWidgetItem(f.name))
+            
+            name = f.name
+            if f.gpkg_layer:
+                name = f"{name} | {f.gpkg_layer}"
+            self.modelFilesTable.setItem(row_position, 1, QTableWidgetItem(name))
+
             self.modelFilesTable.setItem(row_position, 2, QTableWidgetItem(f.missing))
             self.modelFilesTable.setItem(row_position, 3, QTableWidgetItem(str(f.resolved_path)))
             self.modelFilesTable.setItem(row_position, 4, QTableWidgetItem(str(f.fullpath)))
@@ -226,7 +297,12 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
         for f in tuflow.missing:
             self.modelFilesMissingTable.insertRow(row_position)
             self.modelFilesMissingTable.setItem(row_position, 0, QTableWidgetItem(f.filepath.suffix.upper()))
-            self.modelFilesMissingTable.setItem(row_position, 1, QTableWidgetItem(f.name))
+
+            name = f.name
+            if f.gpkg_layer:
+                name = f"{name} | {f.gpkg_layer}"
+            self.modelFilesMissingTable.setItem(row_position, 1, QTableWidgetItem(name))
+
             self.modelFilesMissingTable.setItem(row_position, 2, QTableWidgetItem(str(f.fullpath)))
             row_position += 1
         self.modelFilesMissingTable.setSortingEnabled(True)

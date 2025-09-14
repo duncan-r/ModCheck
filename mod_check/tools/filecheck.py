@@ -25,6 +25,7 @@ from pathlib import Path
 
 from PyQt5.QtCore import *
 from PyQt5.Qt import pyqtSignal
+from qgis.core import *
 
 from . import globaltools as gt
 from floodmodeller_api import IEF
@@ -87,16 +88,6 @@ from floodmodeller_api import IEF
 #         workspace_files[workspace.name] = files
 #     return workspace_files
 
-# class ZzdFileCheck(ti.ToolInterface): 
-#
-#     def __init__(self, project, zzd_path):
-#         super().__init__()
-#         self.project = project
-#         self.zzd_path = zzd_path
-#
-#     def run_tool(self):
-#         super()
-#         return self.loadZzdContents()
     
 def loadZzd(zzd_path):
     """
@@ -176,8 +167,9 @@ def loadZzd(zzd_path):
             line_count += 1
     
     details['Run completed']['value'] = 'Yes' if run_completed else 'No'
+    has_errors = len(warnings['error']) > 0
     combo_warnings = warnings['error'] | warnings['warning']
-    return details, combo_warnings
+    return details, combo_warnings, has_errors
 
 
 class IefFile():
@@ -207,122 +199,6 @@ class IefFile():
     def __str__(self):
         return self.filepath.name
 
-# class IefFile():
-#
-#     def __init__(self, ief):
-#         self.ief = ief
-#         self._files = []
-#         self.diagnostics = {'details': {}, 'warnings': {}}
-#         self.params = {'changed': {}, 'default': {}} 
-#         self._variables = {
-#             'Slot': {'var_name': 'Priessmann Slot', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Inserts an infinitesimally small slot in sections: not usually required for high flow models'},
-#             'FroudeLower': {'var_name': 'Froude Lower Limit', 'value_default': ['value', '0.75'], 'description': 'Affects the way that supercritical flow is approximated by phasing out dA/dx between values'},
-#             'FroudeUpper': {'var_name': 'Froude Upper Limit', 'value_default': ['value', '0.9'], 'description': 'Affects the way that supercritical flow is approximated by phasing out dA/dx between values'},
-#             'PivotalChoice': {'var_name': 'Pivotal Choice', 'value_default': ['value', '0.1'], 'description': 'Specifies the degree of matrix pivoting: expert use only is recommended'},
-#             'MatrixDummy': {'var_name': 'Matrix Dummy', 'value_default': ['value', '0'], 'description': 'Helps to maintain the matrix solution structure: expert use only (sometimes helps with many moving structures - small changes only)'},
-#             'NewMatrixDummy': {'var_name': 'Global Matrix Dummy', 'value_default': ['value', '0'], 'description': 'Same as Matrix Dummy but applied to the main calculation engine.'},
-#             'Temperature': {'var_name': 'Temperature', 'value_default': ['value', '10'], 'description': 'Temperate of the water'},
-#             'Dflood': {'var_name': 'dflood', 'value_default': ['value', '3'], 'description': 'Height of glass walling applied to river sections'},
-#             'Htol': {'var_name': 'htol', 'value_default': ['value', '0.01'], 'description': 'Stage tolerance: how much stage can vary between time steps (both absolute and relative)'},
-#             'Qtol': {'var_name': 'qtol', 'value_default': ['value', '0.01'], 'description': 'Flow tolerance: how much flow can vary between time steps (both absolute and relative)'},
-#             'Minitr': {'var_name': 'minitr', 'value_default': ['value', '2'], 'description': 'Minimum number of iterations at each timestep'},
-#             'Maxitr': {'var_name': 'maxitr', 'value_default': ['value', '6'], 'description': 'Maximum number of iterations allowed at each timestep (prime numbers are recommended)'},
-#             'Theta': {'var_name': 'theta', 'value_default': ['value', '0.7'], 'description': 'Preissmann box weighting factor: fully implicit at 1.0 (justified changes include tidal models and many pumps, etc)'},
-#             'Alpha': {'var_name': 'alpha', 'value_default': ['value', '0.7'], 'description': 'Under relaxation parameter: sets weighting towards the previous iterations result (value of 1.0 is no relaxation)'},
-#             'Sconmx': {'var_name': 'sconmx', 'value_default': ['value', '100'], 'description': 'Maximum piezometric head above symmetrical conduit soffit'},
-#             'Dltmax': {'var_name': 'dltmax', 'value_default': ['value', '1'], 'description': 'Maximum transition gradient for lateral spills (dQ/dh)'},
-#             'Dilmax': {'var_name': 'dilmax', 'value_default': ['value', '1000'], 'description': 'Maximum transition gradient for inline spills (dQ/dh)'},
-#             'Swop': {'var_name': 'swop', 'value_default': ['value', '0.001'], 'description': 'Determines when to apply "special case" equations to spill units'},
-#             'Weight': {'var_name': 'Weight', 'value_default': ['value', '0.1'], 'description': 'Under relaxation parameter applied to spills'},
-#             'SpillThreshold': {'var_name': 'Spill Threshold', 'value_default': ['value', '1E-6'], 'description': 'Difference in adjacent water levels at spill at which 0 flow applied'},
-#             'Dfloodb': {'var_name': 'dfloodb', 'value_default': ['value', '10'], 'description': 'Height of glass walling applied to bridge sections'},
-#             'Pcmxvd': {'var_name': 'pcmxvd', 'value_default': ['value', '2'], 'description': 'Dummy point interpolation percentage for calculating cross section properties'},
-#             'Pswide': {'var_name': 'pswide', 'value_default': ['value', '0'], 'description': 'Width of triangular priessmann slot'},
-#             'Psdeep': {'var_name': 'psdeep', 'value_default': ['value', '0'], 'description': 'Depth of triangular preissmann slot'},
-#             'DHLinearise': {'var_name': 'Orifice Linearisation Head', 'value_default': ['value', '0'], 'description': 'Can help prevent oscillations at low head differences in orifice units'},
-#             'BottomSlotDepth': {'var_name': 'Bottom Slot Depth', 'value_default': ['value', '0'], 'description': 'Depth of bottom slot in conduit units'},
-#             'BottomSlotdh': {'var_name': 'Bottom Slot dh', 'value_default': ['value', '0'], 'description': 'Height of bottom slot above invert in conduit units'},
-#             'TopSlotHeight': {'var_name': 'Top Slot Height', 'value_default': ['value', '0'], 'description': 'Height of top slot in conduit units'},
-#             'TopSlotdh': {'var_name': 'Top Slot dh', 'value_default': ['value', '0'], 'description': 'Depth of top slot below soffit in conduit units'},
-#             '2DScheme': {'var_name': '2D Scheme', 'check_value': '0', 'value_default': ['value', 'No'], 'description': 'Whether a 2D scheme (like TUFLOW) is being used'},
-#             '2DTimestep': {'var_name': '2D Timestep', 'value_default': ['value', ''], 'description': '2D Timestep - may also be set and/or overriden in the 2D model'},
-#             'LaunchDoublePrecisionVersion': {'var_name': 'Double Precision FMP', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Whether double precision FMP is being used'},
-#             '2DDoublePrecision': {'var_name': 'Double Precision TUFLOW', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Whether double precision 2D model (like TUFLOW) is being used'},
-#             '2DOptions': {'var_name': '2D Run Options', 'value_default': ['value', ''], 'description': 'Run options (scenarios/events) for 2D scheme'},
-#         }
-#
-#     @property
-#     def filepath(self):
-#         return self.ief.filepath
-#
-#     @property
-#     def files(self):
-#         if not self._files:
-#             self._files = self.findFiles()
-#         return self._files
-#
-#     def findFiles(self):
-#         dat = efSubfile(self.ief.Datafile)
-#         results = IefSubfile(self.ief.Results + '.zzn')
-#         results = IefSubfile(self.ief.Results + '.zzd')
-#         ieds = [IefSubfile(i) for i in self.ief.EventData.values()]
-#         tcf = getattr(self.ief, '2DFile', None)
-#         ics = getattr(self.ief, 'InitialConditions', None)
-#
-#         all_files = [dat, results]
-#         all_files.extend(ieds)
-#         if tcf:
-#             all_files.append(IefSubfile(tcf))
-#         if ics:
-#             all_files.append(IefSubfile(ics))
-#
-#         return all_files
-#
-#     def checkParams(self):
-#
-#         for variable, variable_dict in self._variables.items():
-#             ief_value = getattr(self.ief, variable, None)
-#             has_checkval = True if 'checkval' in variable_dict.keys() else False
-#             check_value = variable_dict['value_default'][0] if not has_checkval else variable_dict['checkval']
-#             used_value = variable_dict['value_default'][0] if not variable_dict['value_default'][0] == 'value' else ief_value
-#
-#             if ief_value is not None and not ief_value == check_value:
-#                 self.params['changed'][variable_dict['var_name']] = {
-#                     'name': variable, 'value': used_value, 
-#                     'default': variable_dict['value_default'][1],
-#                     'description': variable_dict['description'],
-#                 }
-#             else:
-#                 self.params['default'][variable_dict['var_name']] = {
-#                     'name': variable, 'value': used_value, 
-#                     'default': variable_dict['value_default'][1],
-#                     'description': variable_dict['description'],
-#                 }
-#
-#     def loadDiagnostics(self):
-#         has_zzd = False
-#         for f in self.files:
-#             if f.extension.upper() == '.ZZD':
-#                 has_zzd = True
-#                 if f.resolved_path and f.resolved_path.is_file():
-#                     details, warnings = loadZzd(f.fullpath)
-#                     self.diagnostics['details'] = details
-#                     self.diagnostics['warnings'] = warnings
-    
-
-# def loadIefFiles(fm_files):
-#     iefs = {}
-#     for fm in fm_files:
-#         if fm.fileExt == 'ief':
-#             ief_path = Path(fm.filepath)
-#             ief = IEF(ief_path)
-#             ief = IefFile(ief)
-#             ief.checkParams()
-#             ief.loadDiagnostics()
-#             iefs[str(ief_path.stem)] = ief
-#
-#     return iefs
-
 
 class FoundFiles():
     """
@@ -332,6 +208,20 @@ class FoundFiles():
     FILE_FOUND_UNSURE = 1
     FILE_FOUND_PROBABLY = 2
     FILE_FOUND_LIKELY = 3
+    GPKG_LAYER_NOT_FOUND = 4
+    
+    GPKG_RESULTS_LOOKUP = {
+        "_1d_ccA": ["_L"],
+        "_1d_mmH": ["_P"],
+        "_1d_mmQ": ["_P"],
+        "_1d_mmV": ["_P"],
+        "_TS": ["_P", "_L", "_R"],
+        "_TSF": ["_P"],
+        "_TSL": ["_P"],
+        "_TSMB": ["_P"],
+        "_TSMB1d2d": ["_P", "_R"],
+    }
+    GPKG_RESULTS_LOOKUP_KEYS = GPKG_RESULTS_LOOKUP.keys()
 
     def __init__(self, model_root, iefs, tlfs, found_files):
         self.model_root = ''
@@ -339,28 +229,17 @@ class FoundFiles():
         self.tlfs = tlfs
         self.files = found_files
         
-        
-        # self.parent = ''
-        # self.seen_parents = []
-        # self.missing = {}
-        # self.ignored_files = []
-        # self.file_tree = []
-        #
-        # self._summary = {'model_files': 0, 'other_files': 0, 'ignored_files': 0, 'total_files': 0}
-        # self.results = {'missing': [], 'found': [], 'found_ief': []}
-        # self.results_meta = {'summary': None, 'ignored': None, 'checked': None}
-        
-    def checkFmFiles(self, fm_files, ftypes):
+    def checkFmFiles(self, fm_files, ftypes, ignore_case=False):
         missing = []
         for i, f in enumerate(fm_files):
             status = self.FILE_NOT_FOUND
             match_file = None
             for ftype in ftypes:
                 check_files = self.files[ftype]
-                status, match_file = self.checkFile(f, check_files, ignore_case=True)
+                status, match_file = self.checkFile(f, check_files, ignore_case=ignore_case)
             
                 # TODO: Bit of a hack to catch some of the IEF files that haven't been setup
-                # propoerly
+                # properly
                 if match_file is not None and not isinstance(match_file, Path):
                     match_file = match_file.filepath
             
@@ -404,7 +283,7 @@ class FoundFiles():
                 if status == self.FILE_NOT_FOUND:
                     tuflow_files[i].missing = 'Yes'
                     tuflow_files[i].resolved_path = ''
-                    missing.append(f)
+                    # missing.append(f)
                 elif status == self.FILE_EXISTS:
                     tuflow_files[i].missing = 'No'
                     tuflow_files[i].resolved_path = match_file.filepath
@@ -418,8 +297,18 @@ class FoundFiles():
                     tuflow_files[i].missing = 'No (1)'
                     tuflow_files[i].resolved_path = match_file.filepath
 
-                if not status == self.FILE_NOT_FOUND:
+                if status != self.FILE_NOT_FOUND:
+                    status, new_f = self.checkGpkg(tuflow_files[i], status)
+                    if status == self.GPKG_LAYER_NOT_FOUND:
+                        tuflow_files[i].missing = 'Yes (GPKG)'
+                        missing.append(f)
+                    else:
+                        # Update the layer name if we found that it has _P/L/R appended
+                        tuflow_files[i].gpkg_layer = new_f.gpkg_layer
                     break
+                
+            if status == self.FILE_NOT_FOUND:
+                missing.append(f)
         
         return tuflow_files, missing
                 
@@ -434,6 +323,7 @@ class FoundFiles():
             else:
                 if f.filepath.stem + f.filepath.suffix.upper() != check.filepath.stem + check.filepath.suffix.upper():
                     continue
+                
             fparts = f.filepath.parts
             cparts = check.filepath.parts
             if ignore_case:
@@ -447,6 +337,79 @@ class FoundFiles():
             else:
                 return self.FILE_FOUND_UNSURE, check
         return self.FILE_NOT_FOUND, None
+    
+    def checkGpkg(self, f, file_found_status):
+        is_valid = True
+        if f.gpkg_layer is not None:
+            is_valid = False
+
+            try:
+                gpkg_path = f"{f.resolved_path}|layername={f.gpkg_layer}"
+                vec = QgsVectorLayer(gpkg_path, "GPKG layer", "ogr")
+                if vec.isValid():
+                    is_valid = True
+                
+                else:
+                    # For the results and check files, TUFLOW seems to put _P/L/R on the end of the layer
+                    # names within the .gpkg DB, but doesn't include them in the .tlf.
+                    # Check if it's a results file and if it has an expected layer name end match
+                    lyr = QgsVectorLayer(f"{f.resolved_path}", "GPKG Layer", "ogr")
+                    sublayers = lyr.dataProvider().subLayers()
+                    
+                    for sublayer in sublayers:
+                        name = sublayer.split('!!::!!')[1]
+                        if f.gpkg_layer == name:
+                            is_valid = True
+                            break
+                        elif f.gpkg_layer + "_P" == name:
+                            is_valid = True
+                            f.gpkg_layer += "_P"
+                            break
+                        elif f.gpkg_layer + "_L" == name:
+                            is_valid = True
+                            f.gpkg_layer += "_L"
+                            break
+                        elif f.gpkg_layer + "_R" == name:
+                            is_valid = True
+                            f.gpkg_layer += "_R"
+                            break
+
+            except Exception as err:
+                is_valid = False
+
+            # TODO: Maybe should do a final check on loading the resolved layer here?
+            # Loading the layers is a big hit on performance
+            
+            # is_valid = False
+            # try:
+            #     gpkg_path = f"{f.resolved_path}|layername={f.gpkg_layer}"
+            #     vec = QgsVectorLayer(gpkg_path, "GPKG layer", "ogr")
+            #     if not vec.isValid():
+            #         # For the results files, TUFLOW seems to put _P/L/R on the end of the layer
+            #         # names within the .gpkg DB, but doesn't include them in the .tlf.
+            #         # Check if it's a results file and if it has an expected layer name end match
+            #         result_key = ''
+            #         for rk in self.GPKG_RESULTS_LOOKUP_KEYS:
+            #             if rk in f.gpkg_layer:
+            #                 result_key = rk
+            #                 break
+            #         if result_key:
+            #             for lookup in self.GPKG_RESULTS_LOOKUP[result_key]:
+            #                 temp_path = gpkg_path + lookup #self.GPKG_RESULTS_LOOKUP[rk][lookup]
+            #                 vec = QgsVectorLayer(temp_path, "GPKG layer", "ogr")
+            #                 if vec.isValid():
+            #                     is_valid = True
+            #                     break
+            #
+            #     else:
+            #         is_valid = True
+            # except Exception as err:
+            #     is_valid = False
+        
+        if is_valid:
+            return file_found_status, f
+        else:
+            return self.GPKG_LAYER_NOT_FOUND, f
 
 
     # @property
@@ -706,11 +669,7 @@ class FileFinder(QObject):
 
                     elif query.isCsvFile():
                         csv_files.append(query)
-                    #
-                    # # model files each have there own class describing their expected format
-                    # elif query.isModelFile():
-                    #     model_files.append(model_file_exts[query.getFileExt()](filepath))
-                    #
+
                     else:
                         other_files.append(query)
                 root_count += 1
@@ -752,7 +711,7 @@ class FileFinder(QObject):
 ignore_file_exts = ['log', 'doc', 'pdf', 'xf4', 'xf8', 'txt', 'dbf', 'shx', 'prj', 'iml', 'feb', 'ext', 'pxy', 'hdr', 'id', 'ext']
 tuflow_model_file_exts = ['tcf', 'tgc', 'tbc', 'tef', 'ecf', 'trd', 'tsoil', 'tmf']
 fm_model_file_exts = ['ief', 'ied', 'iic']
-gis_file_exts = ['shp', 'mif', 'mid', 'asc', 'flt', 'tif', 'tiff', 'xml', 'sqlite', 'tin']
+gis_file_exts = ['shp', 'mif', 'mid', 'asc', 'flt', 'tif', 'tiff', 'xml', 'gpkg', 'tin']
 log_file_exts = ['tlf', 'tsf']
 result_file_exts = ['xmdf', 'sup', '2dm', 'eof', 'dat', 'zzd', 'zzn', 'zzs', 'bmp']
 workspace_file_exts = ['qgs']#, 'wor']
@@ -764,12 +723,6 @@ class SomeFile(object):
         self.raw_path = filepath
         self.filepath = Path(filepath)
 
-        # basepath and file name
-        # self.path, self.name = os.path.split(filepath)
-        
-        # File extension (converted to lower case)
-        # self.fileExt = self.name.rsplit('.',1)[-1].lower()
-        
         # Regular expressions
         self.empty_re = re.compile('._empty_[LPRlpr]\.(shp|mif|mid|sql|sqlite)$')
         self.messages_re = re.compile('.messages_?[LPRlpr]?\.(shp|mif|mid|sql|sqlite)$')
@@ -860,30 +813,6 @@ class SomeFile(object):
 
     def isIgnoreFile(self):
         return self.ignoreFile
-    
-    
-    
-def read_xs_file(fpath, gpkg_layer=None):
-    vec = None
-    if gpkg_layer is not None:
-        xs_layer = fpath + f"|{gpkg_layer}"
-        vec = QgsVectorLayer(xs_layer, "XS Layer", "ogr")
-    else:
-        vec = QgsVectorLayer(fpath, "XS Layer", "ogr")
-        
-    xs_attributes = []
-    features = vec.getFeatures()
-    for feat in features():
-        attrs = feat.attributes()
-        xs_attributes.append({
-            'source': attrs[0],
-            'type': attrs[1],
-            'flags': attrs[2],
-            'column1': attrs[3],
-            'column2': attrs[3],
-            'column3': attrs[3],
-        })
-    return xs_attributes
 
 
 TUFLOW_DEFAULTS = {
@@ -1030,11 +959,7 @@ class TuflowFile():
 
 
 def readTlfFile(filepath):
-    """
-     WARNING:
-     - Assumes any control file that has a 'csv' extension is a BCDbase.
-       Obviously won't be true when we support csv for TMF files!!
-       (see control_type_setter function).
+    """TUFLOW TLF file parser.
        
     This is not great at the moment. Lots of updates to handle things like the differences
     between quadtree and non-quadtree format .tlf files. A lot of this could be handled
@@ -1052,8 +977,8 @@ def readTlfFile(filepath):
     # Need the closing one, because sometimes the 'Opening GIS' doesn't include the gpkg layer name
     # Match the 'path', then the 'extension' (gis file types), then an optional match for
     # geopackage layers (geolayer) at the end of the line
-    # Example GPKG:    Closing GIS Layer 2 [Y:\PROJECTS\AEG4706_Backwell_03\TUFLOW\model\gis\AEG4706_Backwell_TCF.gpkg >> 2d_po_4706_008_L]...
-    # Example SHP/MIF: Closing GIS Layer 2 [D:\Models\MoretonOnLugg\Hydraulics\model\tuflow\model\gis\2d_bc_hx_MOL_005_L.shp]...
+    # Example GPKG:    Closing GIS Layer 2 [C:\some\folders\TUFLOW\model\gis\Modelpackagename.gpkg >> 2d_po_4706_008_L]...
+    # Example SHP/MIF: Closing GIS Layer 2 [D:\some\folders\tuflow\model\gis\2d_bc_hx_model_001_L.shp]...
     GIS_FILE_PATTERN = 'Closing GIS.+\[(?P<path>.+)\.(?P<extension>shp|mif|mid|tab|gpkg)(\]\.{0,3})?(\s>>\s)?(?P<geolayer>.+)?(\]\.{0,3})'
 
     GIS_FILTER_PATTERN = '_mmH|Q|V|ccA|_TS|_PLOT\.|messages|check.*'
@@ -1134,26 +1059,20 @@ def readTlfFile(filepath):
                 
             if in_xs:
                 if not lookup in found_files['tcf']:
-                    # xs_files.append([fpath, 'TCF', fext, geolayer])
-                    # gis_files['xs'].append([fpath, 'TCF', fext, geolayer])
-                    # gis_files['tcf'].append([fpath, 'TCF', fext, geolayer])
                     gis_files['xs'].append(TuflowFile(combined, parent_type='TCF', gpkg_layer=geolayer))
                     gis_files['tcf'].append(TuflowFile(combined, parent_type='TCF', gpkg_layer=geolayer))
                     found_files['tcf'].append(lookup)
             
             if is_tgc > 0:
                 if not lookup in found_files['tgc']:
-                    # gis_files['tgc'].append([fpath, 'TGC', fext, geolayer])
                     gis_files['tgc'].append(TuflowFile(combined, parent_type='TGC', gpkg_layer=geolayer))
                     found_files['tgc'].append(lookup)
             elif is_tbc:
                 if not lookup in found_files['tbc']:
                     gis_files['tbc'].append(TuflowFile(combined, parent_type='TBC', gpkg_layer=geolayer))
-                    # gis_files['tbc'].append([fpath, 'TBC', fext, geolayer])
                     found_files['tbc'].append(lookup)
             else:
                 if not lookup in found_files['tcf']:
-                    # gis_files['tcf'].append([fpath, 'TCF', fext, geolayer])
                     gis_files['tcf'].append(TuflowFile(combined, parent_type='TCF', gpkg_layer=geolayer))
                     found_files['tcf'].append(lookup)
             return True
@@ -1181,11 +1100,6 @@ def readTlfFile(filepath):
         filtered_files = []
         tcf_files = []
         for s in gis_files['tcf']:
-            # layer = s[0]
-            # geolayer = s[3]
-            # lookup = layer+str(geolayer)
-
-            # layer = s.filepath
             layer = s.rawpath
             geolayer = s.gpkg_layer
             lookup = s.rawpath+str(geolayer)
@@ -1193,40 +1107,28 @@ def readTlfFile(filepath):
             if not lookup in found_files['tgc'] and not lookup in found_files['tbc']:
                 if not geolayer is None:
                     if re.search(gis_filter_regex, geolayer):
-                        # gis_files['outputs'].append([s[0], s[1], s[2], s[3]])
                         gis_files['outputs'].append(TuflowFile(layer, parent_type=s.parent_type, gpkg_layer=geolayer))
                     else:
-                        # tcf_files.append([s[0], s[1], s[2], s[3]])
                         tcf_files.append(TuflowFile(layer, parent_type=s.parent_type, gpkg_layer=geolayer))
                 else:
                     if re.search(gis_filter_regex, layer):
-                        # gis_files['outputs'].append([s[0], s[1], s[2], s[3]])
                         gis_files['outputs'].append(TuflowFile(layer, parent_type=s.parent_type, gpkg_layer=geolayer))
                     else:
-                        # tcf_files.append([s[0], s[1], s[2], s[3]])
                         tcf_files.append(TuflowFile(layer, parent_type=s.parent_type, gpkg_layer=geolayer))
 
         tgc_files = []
         for s in gis_files['tgc']:
-            # layer = s[0]
-            # geolayer = s[3]
-
-            # layer = s.filepath
             layer = s.rawpath
             geolayer = s.gpkg_layer
             if not geolayer is None:
                 if re.search(gis_filter_regex, geolayer):
-                    # gis_files['outputs'].append([s[0], '', s[2], s[3]])
                     gis_files['outputs'].append(TuflowFile(layer, parent_type=s.parent_type, gpkg_layer=geolayer))
                 else:
-                    # tgc_files.append([s[0], s[1], s[2], s[3]])
                     tgc_files.append(TuflowFile(layer, parent_type=s.parent_type, gpkg_layer=geolayer))
             else:
                 if re.search(gis_filter_regex, layer):
-                    # gis_files['outputs'].append([s[0], '', s[2], s[3]])
                     gis_files['outputs'].append(TuflowFile(layer, parent_type=s.parent_type, gpkg_layer=geolayer))
                 else:
-                    # tgc_files.append([s[0], s[1], s[2], s[3]])
                     tgc_files.append(TuflowFile(layer, parent_type=s.parent_type, gpkg_layer=geolayer))
             
                 
@@ -1251,7 +1153,6 @@ def readTlfFile(filepath):
                 if len(control.parts) < 2:
                     continue
 
-            # output.append([c, ext])
             output.append(c)
         return output
     
@@ -1305,7 +1206,7 @@ def readTlfFile(filepath):
             if '~' in k:
                 scenarios.append({f'{k}': f'{v}'})
             else:
-                variables.append({f'<<{k}>>:' f'{v}'})
+                variables.append({f'<<{k}>>': f'{v}'})
         return variables, scenarios 
 
 
@@ -1501,18 +1402,8 @@ def readTlfFile(filepath):
     for line in summary_lines:
         if line.startswith('Log File:'):
             split = line.replace("\s", "").split()[2] # Format is Log\sFile:\s+ThePathWeWant
-            # print('\n\nLog file found')
             log_path = Path(split)
             summary['resolved_name'] = log_path.stem
-            # print(summary['resolved_name'])
-            # if '/' in split:
-            #     summary['resolved_name'] = split.split('/')[-1]
-            #     print('Is forward slash')
-            #     print(summary['resolved_name'])
-            # else:
-            #     summary['resolved_name'] = split.split('\\')[-1]
-            #     print('Is backward slash')
-            #     print(summary['resolved_name'])
 
         if line.startswith('Clock Time: '):
             split = line.split('[')[0]
@@ -1559,7 +1450,6 @@ def readTlfFile(filepath):
 
     # Create the output dictionary
     variables, scenarios = format_variables(variables)
-    i=0
     final_files = {
         'resolved_name': summary['resolved_name'],
         'entry_tcf': entry_tcf,
@@ -1576,6 +1466,31 @@ def readTlfFile(filepath):
     }
 
     return final_files
+    
+    
+def readXsFile(fpath, gpkg_layer=None):
+    vec = None
+    if gpkg_layer is not None:
+        xs_layer = f"{fpath}|layername={gpkg_layer}"
+        vec = QgsVectorLayer(xs_layer, "XS Layer", "ogr")
+    else:
+        vec = QgsVectorLayer(str(fpath), "XS Layer", "ogr")
+        
+    field_names = [f.name() for f in vec.fields()]
+    has_fid = field_names[0].lower() == 'fid'
+    fid_shift = 1 if has_fid else 0
+    xs_attributes = []
+    for feat in vec.getFeatures():
+        attrs = feat.attributes()
+        xs_attributes.append({
+            'source': attrs[0 + fid_shift],
+            'type': attrs[1 + fid_shift],
+            'flags': attrs[2 + fid_shift],
+            'column1': attrs[3 + fid_shift],
+            'column2': attrs[4 + fid_shift],
+            'column3': attrs[5 + fid_shift],
+        })
+    return xs_attributes
 
 
 class FmModel():
@@ -1587,10 +1502,12 @@ class FmModel():
         self.results = []
         self.ieds = []
         self.tcf = None
-        # self._files = []
+        self.has_zzd = False
         self.diagnostics = {'details': {}, 'warnings': {}}
+        self.has_errors = False
         self.params = {'changed': {}, 'default': {}} 
         self.missing = []
+        self.loaded = False
         self._variables = {
             'Slot': {'var_name': 'Priessmann Slot', 'checkval': '0', 'value_default': ['Yes', 'No'], 'description': 'Inserts an infinitesimally small slot in sections: not usually required for high flow models'},
             'FroudeLower': {'var_name': 'Froude Lower Limit', 'value_default': ['value', '0.75'], 'description': 'Affects the way that supercritical flow is approximated by phasing out dA/dx between values'},
@@ -1634,9 +1551,6 @@ class FmModel():
     
     @property
     def files(self):
-        # if not self._files:
-        #     self._files = self.findFiles()
-        # return self._files
         fm_files = [self.dat]
         if self.ics:
             fm_files.append(self.ics)
@@ -1659,6 +1573,19 @@ class FmModel():
             if r.filepath.suffix.upper() == '.ZZN':
                 return r
         return None
+    
+    @property
+    def has_non_defaults(self):
+        ignore = [
+            '2D Scheme', '2D Timestep', 'Double Precision FMP', 'Double Precision TUFLOW',
+            '2D Run Options',
+        ]
+        non_default_keys = self.params['changed'].keys()
+        failed = False
+        for k in non_default_keys:
+            if k not in ignore:
+                return True
+        return False
     
     def findFiles(self):
         self.dat = IefFile(self.ief.Datafile)
@@ -1696,12 +1623,12 @@ class FmModel():
                 }
                 
     def loadDiagnostics(self):
-        has_zzd = False
+        self.has_zzd = False
         for f in self.files:
             if f.extension.upper() == '.ZZD':
-                has_zzd = True
+                self.has_zzd = True
                 if f.resolved_path and f.resolved_path.is_file():
-                    details, warnings = loadZzd(f.resolved_path)
+                    details, warnings, self.has_errors = loadZzd(f.resolved_path)
                     self.diagnostics['details'] = details
                     self.diagnostics['warnings'] = warnings
 
@@ -1714,6 +1641,7 @@ class TuflowModel():
         self.tcf = None
         self.control_files = []
         self.gis_files = []
+        self.xs_files = []
         self.parameters = []
         self.variables = []
         self.scenarios = []
@@ -1721,6 +1649,7 @@ class TuflowModel():
         self.warnings = []
         self.non_defaults = {}
         self.missing = []
+        self.loaded = False
     
     def readTlf(self):
         tlf = readTlfFile(self.tlf_path)
@@ -1728,6 +1657,7 @@ class TuflowModel():
         self.tcf = tlf['entry_tcf']
         self.control_files = tlf['control']
         self.gis_files = tlf['gis']
+        self.xs_files = []
         self.parameters = tlf['params']
         self.variables = tlf['variables']
         self.scenarios = tlf['scenarios']
@@ -1744,7 +1674,7 @@ class TuflowModel():
         gis_files = []
         for k, g in self.gis_files.items():
             gis_files.extend(g)
-        return [self.tcf] + self.control_files + gis_files
+        return [self.tcf] + self.control_files + gis_files + self.xs_files
     
     @property
     def diagnostics(self):
@@ -1755,6 +1685,11 @@ class TuflowModel():
         warns = [{'type': k, 'count': v['count'], 'message': v['message']} for k, v in warns.items()]
         errors = [{'type': k, 'count': v['count'], 'message': v['message']} for k, v in errors.items()]
         return errors + warns + checks
+
+    @property
+    def has_errors(self):
+        errors = self.warnings.get('errors', {})
+        return len(errors) > 0
     
     @property
     def run_summary(self):
@@ -1776,36 +1711,69 @@ class ModelChecker(QObject):
         self.ief_names = []
         self.tlf_names = []
         
-    # def _setStatus(self, status):
-    #     status_update_signal.emit(status)
-    #
-    # def _setProgressMax(self, value):
-    #     progress_max_signal.emit(value)
-    #
-    # def _setProgressVal(self, value):
-    #     progress_val_signal.emit(value)
-        
     def searchFiles(self, model_root=None):
         if model_root is not None:
             self.model_root = model_root
 
         file_finder = FileFinder()
         self.found_files, iefs, tlfs = file_finder.auditModelFiles(self.model_root)
-        self.ief_names = [f"FM  {ief.filepath.stem}" for ief in iefs]
-        self.tlf_names = [f"TUFLOW  {tlf.filepath.stem}" for tlf in tlfs]
         self.loadIefFiles(iefs)
         self.loadTlfFiles(tlfs)
+        # self.ief_names = [f"FM  {ief.filepath.stem}" for ief in iefs]
+        # self.tlf_names = [f"TUFLOW  {tlf.filepath.stem}" for tlf in tlfs]
+        self.tlf_names = [f"TUFLOW  {k}" for k, v in self.tuflow_models.items() if v.loaded]
+        self.ief_names = [f"FM  {k}" for k, v in self.fm_models.items() if v.loaded]
+        i=0
+        
+    def modelSummaryInfo(self):
+        summary_info = []
+        for name, fm in self.fm_models.items():
+            if not fm.loaded:
+                summary_info.append({
+                    'type': 'FM',
+                    'loaded': False
+                })
+            else:
+                summary_info.append({
+                    'type': 'FM',
+                    'loaded': fm.loaded,
+                    'name': name,
+                    'missing_files': 'Yes' if len(fm.missing) > 0 else 'No',
+                    'non_defaults': 'Yes' if fm.has_non_defaults else 'No',
+                    'errors': 'Yes' if fm.has_errors else 'No',
+                    'run_status': 'FINISHED' if fm.diagnostics['details']['Run completed']['value'] == 'Yes' else 'FAILED',
+                })
+        for name, tuflow in self.tuflow_models.items():
+            if not tuflow.loaded:
+                summary_info.append({
+                    'type': 'TUFLOW',
+                    'loaded': False
+                })
+            else:
+                summary_info.append({
+                    'type': 'TUFLOW',
+                    'loaded': tuflow.loaded,
+                    'name': name,
+                    'missing_files': 'Yes' if len(tuflow.missing) > 0 else 'No',
+                    'non_defaults': 'Yes' if len(tuflow.non_defaults) > 0 else 'No',
+                    'errors': 'Yes' if tuflow.has_errors else 'No',
+                    'run_status': tuflow.summary['Simulation'],
+                })
+        return summary_info 
         
     def checkMissingFiles(self):
         if not self.found_files:
             raise AttributeError("No found files to check.")
         
+        self.progress_val_signal.emit(0)
         self.status_update_signal.emit('Checking missing FM files...')
         self.progress_max_signal.emit(len(self.fm_models))
         count = 0
         for k, fm in self.fm_models.items():
             count += 1
             self.progress_val_signal.emit(count)
+            if not fm.loaded:
+                continue
 
             missing_ics = []
             missing_fmtcf = []
@@ -1824,7 +1792,7 @@ class ModelChecker(QObject):
                 )
                 self.fm_models[k].ics = ics[0]
             self.fm_models[k].results, missing_results = self.found_files.checkFmFiles(
-                fm.results, ['result']
+                fm.results, ['result'], ignore_case=True
             )
             self.fm_models[k].ieds, missing_ieds = self.found_files.checkFmFiles(
                 fm.ieds, ['fm_model']
@@ -1832,12 +1800,15 @@ class ModelChecker(QObject):
             fm.missing = missing_dats + missing_fmtcfs + missing_ics + missing_results + missing_ieds
             fm.loadDiagnostics()
             
+        self.progress_val_signal.emit(0)
         self.status_update_signal.emit('Checking missing TUFLOW files...')
         self.progress_max_signal.emit(len(self.tuflow_models))
         count = 0
         for k, tuflow in self.tuflow_models.items():
             count += 1
             self.progress_val_signal.emit(count)
+            if not tuflow.loaded:
+                continue
 
             root_tcf, missing_roottcf = self.found_files.checkTuflowFiles(
                 [tuflow.tcf], ['tuflow_model']
@@ -1855,9 +1826,20 @@ class ModelChecker(QObject):
             self.tuflow_models[k].gis_files['tbc'], missing_tbc = self.found_files.checkTuflowFiles(
                 tuflow.gis_files['tbc'], ['gis']
             )
-            tuflow.missing = missing_roottcf + missing_control + missing_tcf + missing_tgc + missing_tbc
+            self.tuflow_models[k].gis_files['outputs'], missing_out = self.found_files.checkTuflowFiles(
+                tuflow.gis_files['outputs'], ['result', 'gis']
+            )
+            self.tuflow_models[k].gis_files['xs'], missing_xs = self.found_files.checkTuflowFiles(
+                tuflow.gis_files['xs'], ['gis']
+            )
+            tuflow.missing = missing_roottcf + missing_control + missing_tcf + missing_tgc + missing_tbc + missing_xs + missing_out
+            # tuflow.missing = (
+            #     missing_roottcf + missing_control + missing_tcf + missing_tgc + 
+            #     missing_tbc + missing_xs
+            # )
         
     def loadTlfFiles(self, tlf_files):
+        self.progress_val_signal.emit(0)
         self.status_update_signal.emit('Loading TLF files...')
         self.progress_max_signal.emit(len(tlf_files))
         tuflow_models = {}
@@ -1868,10 +1850,15 @@ class ModelChecker(QObject):
             if tlf.fileExt == 'tlf':
                 tlf_path = Path(tlf.filepath)
                 tuflow = TuflowModel(tlf_path)
-                tuflow.readTlf()
+                try:
+                    tuflow.readTlf()
+                    tuflow.loaded = True
+                except:
+                    tuflow.loaded = False
                 self.tuflow_models[str(tlf_path.stem)] = tuflow
 
     def loadIefFiles(self, fm_files):
+        self.progress_val_signal.emit(0)
         self.status_update_signal.emit('Loading IEF files...')
         self.progress_max_signal.emit(len(fm_files))
         iefs = {}
@@ -1881,18 +1868,35 @@ class ModelChecker(QObject):
             model = FmModel(ief)
             model.checkParams()
             model.findFiles()
+            model.loaded = True
             self.fm_models[str(ief.filepath.stem)] = model
-    
-
-# def loadTlfFiles(tlf_files):
-#     tuflow_models = {}
-#     for tlf in tlf_files:
-#         if tlf.fileExt == 'tlf':
-#             tlf_path = Path(tlf.filepath)
-#             tuflow = TuflowModel(tlf_path)
-#             tuflow.readTlf()
-#             tuflow_models[str(tlf_path.stem)] = tuflow
-#
-#     return tuflow_models
+            
+    def loadTuflowSubfiles(self):
+        """Load additional TUFLOW files like XS and BCDbase.
+        """
+        self.progress_val_signal.emit(0)
+        self.status_update_signal.emit('Loading Tuflow subfiles...')
+        self.progress_max_signal.emit(len(self.tuflow_models))
+        count = 0
+        for name, tuflow in self.tuflow_models.items():
+            count += 1
+            self.progress_val_signal.emit(count)
+            if not tuflow.loaded:
+                continue
+            
+            xs_files = tuflow.gis_files['xs']
+            for xs in xs_files:
+                attributes = readXsFile(xs.resolved_path, xs.gpkg_layer)
+                for a in attributes:
+                    resolved_path = f"{xs.resolved_path.parent}/{a['source']}"
+                    original_path = f"{xs.filepath.parent}/{a['source']}"
+                    section_file = TuflowFile(original_path, parent_type='XS', gpkg_layer=None)
+                    section_file.resolved_path = Path(resolved_path)
+                    if section_file.resolved_path.is_file():
+                        section_file.missing = 'No'
+                    else:
+                        section_file.missing = 'Yes'
+                        self.tuflow_models[name].missing.append(section_file)
+                    self.tuflow_models[name].xs_files.append(section_file)
 
 
