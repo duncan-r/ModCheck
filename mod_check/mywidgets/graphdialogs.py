@@ -717,6 +717,9 @@ class FmpStabilityGraphicsView():
         self.time_data = []
         self.results = None
         self.title = ""
+        self.show_time_series = 'Both'
+        self.p1 = None
+        self.p2 = None
  
     def _mouseMoved(self, evt):
         if not self.show_hover:
@@ -810,8 +813,8 @@ class FmpStabilityGraphicsView():
         status_text = '{} {}'.format(self.node_name, fail_times) #'Dy2 Fail = {}   :   {}'.format(derivs['status'], fail_times)
         self.title = status_text
 
-        if stage_ds_series is not None:
-            self.p1.addLegend()
+        # if stage_ds_series is not None:
+        #     self.p1.addLegend()
 
         # Set the primary series based on whether we're checking stage or flow
         # TODO: refactor to avoid duplicate code
@@ -819,34 +822,35 @@ class FmpStabilityGraphicsView():
             self.p1.getAxis('left').setLabel('Stage', color='blue', **{'font-size': '10pt'})
             self.p1.getAxis('right').setLabel('Flow', color='red', **{'font-size': '10pt'})
             self.p1.plot(
-                self.time_data, stage_series,
+                self.time_data, stage_series,# name="stage",
                 pen=({'color': "b", 'width': 1.5}), antialias=True, title=self.title
             )
             self.p2.addItem(pg.PlotCurveItem(
-                self.time_data, flow_series,
+                self.time_data, flow_series,# name="flow",
                 pen=({'color': "r", 'width': 1.5}), antialias=True, hoverable=True
             ))
             if stage_ds_series is not None:
                 self.p1.addItem(pg.PlotCurveItem(
-                    self.time_data, stage_ds_series,
+                    self.time_data, stage_ds_series, name="stage_ds",
                     pen=({'color': "g", 'width': 1.5}), antialias=True
                 ))
         else:
             self.p1.getAxis('left').setLabel('Flow', color='red', **{'font-size': '10pt'})
             self.p1.getAxis('right').setLabel('Stage', color='blue', **{'font-size': '10pt'})
             self.p1.plot(
-                self.time_data, flow_series,
+                self.time_data, flow_series, #name="stage",
                 pen=({'color': "b", 'width': 1.5}), antialias=True, title=self.title
             )
             self.p2.addItem(pg.PlotCurveItem(
-                self.time_data, stage_series,
+                self.time_data, stage_series,# name="flow",
                 pen=({'color': "r", 'width': 1.5}), antialias=True, hoverable=True
             ))
             if stage_ds_series is not None:
                 self.p2.addItem(pg.PlotCurveItem(
-                    self.time_data, stage_ds_series,
+                    self.time_data, stage_ds_series,# name="stage_ds",
                     pen=({'color': "g", 'width': 1.5}), antialias=True
                 ))
+        self.p1.vb.autoRange()
 
         self.p1.addItem(pg.InfiniteLine(
             pos=self.timestep, angle=90, pen=({
@@ -860,8 +864,26 @@ class FmpStabilityGraphicsView():
         )
         self.gv.addItem(self.display_text)
         self.display_text.hide()
-        self.p1.vb.autoRange()
+        
+        # Handle which series to draw
+        for child in self.p1.vb.allChildren():
+            if self.show_time_series == 'Flow':
+                child.setVisible(False)
+            else:
+                child.setVisible(True)
+        for child in self.p2.allChildren():
+            if self.show_time_series == 'Stage':
+                child.setVisible(False)
+            else:
+                child.setVisible(True)
+        
+        # self.p1.vb.autoRange()
         self.updateViews()
+        
+    def setTimeSeriesVisibility(self, choice):
+        self.show_time_series = choice
+        if self.p1 and self.p2:
+            self.updatePlot()
         
     def updateViews(self):
         self.p2.setGeometry(self.p1.vb.sceneBoundingRect())

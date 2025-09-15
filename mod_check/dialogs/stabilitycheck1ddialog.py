@@ -53,6 +53,8 @@ class StabilityCheck1DDialog(DialogBase, stability_ui.Ui_StabilityCheck1DDialog)
         self.timestepSlider.sliderReleased.connect(self.timestepSliderReleased)
         self.timestepIncButton.clicked.connect(lambda i: self.timestepButtonClicked(i, 'inc'))
         self.timestepDecButton.clicked.connect(lambda i: self.timestepButtonClicked(i, 'dec'))
+        self.showSeriesCBox.currentTextChanged.connect(self._updateTimeSeriesSelection)
+        self.hideXSCheckbox.stateChanged.connect(self._updateHideXSStatus)
         self.splitter.setStretchFactor(5, 10)
         
         self.model_type = ''
@@ -98,6 +100,26 @@ class StabilityCheck1DDialog(DialogBase, stability_ui.Ui_StabilityCheck1DDialog)
     def timestepSliderReleased(self):
         self.timestep_press_active = False
         self.updateTimestepSlider(self.timestepSlider.value())
+        
+    def _updateTimeSeriesSelection(self, choice):
+        self.setUpdatesEnabled(False)
+        self.showSeriesCBox.setCurrentText(choice)
+        self.setUpdatesEnabled(True)
+        self.series_graphics_view.setTimeSeriesVisibility(choice)
+
+    def _updateHideXSStatus(self, choice):
+        if choice:
+            self.splitter_sizes = self.splitter.sizes()
+            self.splitter.setSizes([1000, 0])
+            self.setUpdatesEnabled(False)
+            self.hideXSCheckbox.setChecked(True)
+            self.setUpdatesEnabled(True)
+        else:
+            self.splitter.setSizes([1000, 1000])
+            self.splitter.setStretchFactor(5, 10)
+            self.setUpdatesEnabled(False)
+            self.hideXSCheckbox.setChecked(False)
+            self.setUpdatesEnabled(True)
 
     def fileChanged(self, path, caller):
         if caller == 'results_file':
@@ -111,9 +133,15 @@ class StabilityCheck1DDialog(DialogBase, stability_ui.Ui_StabilityCheck1DDialog)
         self.series_graphics_view.clearPlot()
         self.section_graphics_view.clearPlot()
         if self.fileSelectionTabWidget.currentIndex() == 0:
+            self._updateTimeSeriesSelection("Both")
             self.loadDatResults()
+            # self.splitter_sizes = self.splitter.sizes()
+            self._updateHideXSStatus(False)
         elif self.fileSelectionTabWidget.currentIndex() == 1:
+            self._updateTimeSeriesSelection("Both")
             self.loadEstryResults()
+            # self.splitter_sizes = self.splitter.sizes()
+            self._updateHideXSStatus(True)
 
     def loadDatResults(self):
         dat_path = mrt_settings.loadProjectSetting('dat_file', None)

@@ -140,8 +140,8 @@ class CheckFmpSections(QObject):
         k_tol = -k_tol # Mark k_tol negative
         issues = {}
         for name, river in river_sections.items():
-            self.progress_max_signal.emit(counter)
             counter += 1
+            self.progress_val_signal.emit(counter)
 
             k = self.calculateActiveConveyance(river.active_data)
 
@@ -177,8 +177,8 @@ class CheckFmpSections(QObject):
         self.progress_max_signal.emit(len(river_sections))
         counter = 0
         for name, river in river_sections.items():
-            self.progress_val_signal.emit(counter)
             counter += 1
+            self.progress_val_signal.emit(counter)
 
             # Index references are not updated for the new 'active' part of the df
             # Find the indexes so we can use a relative lookup

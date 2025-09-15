@@ -164,17 +164,37 @@
       </widget>
      </item>
      <item>
-      <spacer name="horizontalSpacer">
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
+      <widget class="QCheckBox" name="hideXSCheckbox">
+       <property name="text">
+        <string>Hide XS</string>
        </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>40</width>
-         <height>20</height>
-        </size>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="label_6">
+       <property name="text">
+        <string>Show series</string>
        </property>
-      </spacer>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="showSeriesCBox">
+       <item>
+        <property name="text">
+         <string>Both</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Flow</string>
+        </property>
+       </item>
+       <item>
+        <property name="text">
+         <string>Stage</string>
+        </property>
+       </item>
+      </widget>
      </item>
      <item>
       <widget class="QLabel" name="label_10">
