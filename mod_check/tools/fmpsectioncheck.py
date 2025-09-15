@@ -172,7 +172,8 @@ class CheckFmpSections(QObject):
         ):
         """
         """
-        # bad_banks = {}
+        LOCAL_MIN_ABOVE_BED_TOLERANCE = 0.5
+
         self.status_signal.emit(f"Checking bank configurations...")
         self.progress_max_signal.emit(len(river_sections))
         counter = 0
@@ -187,6 +188,7 @@ class CheckFmpSections(QObject):
             xs_end = river.active_data['Y'][-1:].index[0]
             
             # Get max l/r banks and min bed from active section
+            min_section = river.active_data.loc[xs_start:xs_end]['Y'].min()
             min_index = river.active_data.loc[xs_start:xs_end]['Y'].idxmin()
             max_index_l = river.active_data.loc[xs_start:min_index]['Y'].idxmax()
             max_index_r = river.active_data.loc[min_index:xs_end]['Y'].idxmax()
@@ -263,11 +265,15 @@ class CheckFmpSections(QObject):
                 if max_index > -1:
                     temp_drop = local_minmax[max_index]['max'] - local_minmax[max_index]['min']
                     if temp_drop > dy_tol:
-                        drop_l = temp_drop
-                        max_index_l = local_minmax[max_index]['max_idx']
-                        min_l = local_minmax[max_index]['min']
-                        max_l = local_minmax[max_index]['max']
-                        fail_l = True
+
+                        # Try to avoid silly results by making sure we're a reasonble height above
+                        # the section bed
+                        if local_minmax[max_index]['min'] - min_section > LOCAL_MIN_ABOVE_BED_TOLERANCE:
+                            drop_l = temp_drop
+                            max_index_l = local_minmax[max_index]['max_idx']
+                            min_l = local_minmax[max_index]['min']
+                            max_l = local_minmax[max_index]['max']
+                            fail_l = True
                 
                 
                 # Right bank
@@ -303,16 +309,17 @@ class CheckFmpSections(QObject):
                 if max_index > -1:
                     temp_drop = local_minmax[max_index]['max'] - local_minmax[max_index]['min']
                     if temp_drop > dy_tol:
-                        drop_r = temp_drop
+                        if local_minmax[max_index]['min'] - min_section > LOCAL_MIN_ABOVE_BED_TOLERANCE:
+                            drop_r = temp_drop
 
-                        # List was reversed, so translate back to the actual index
-                        # Get in relation to the active section (unreversed), then determine the
-                        # location within the full section (to account for pandas index numbers)
-                        max_index_r = sect_len - local_minmax[max_index]['max_idx']
-                        max_index_r = xs_end - max_index_r
-                        min_r = local_minmax[max_index]['min']
-                        max_r = local_minmax[max_index]['max']
-                        fail_r = True
+                            # List was reversed, so translate back to the actual index
+                            # Get in relation to the active section (unreversed), then determine the
+                            # location within the full section (to account for pandas index numbers)
+                            max_index_r = sect_len - local_minmax[max_index]['max_idx']
+                            max_index_r = xs_end - max_index_r
+                            min_r = local_minmax[max_index]['min']
+                            max_r = local_minmax[max_index]['max']
+                            fail_r = True
             
             
             if fail_l or fail_r:

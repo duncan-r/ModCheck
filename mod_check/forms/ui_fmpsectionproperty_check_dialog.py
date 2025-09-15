@@ -139,15 +139,6 @@ class Ui_FmpSectionPropertyCheckDialog(object):
         self.showHoverCBox.setChecked(True)
         self.showHoverCBox.setObjectName("showHoverCBox")
         self.horizontalLayout.addWidget(self.showHoverCBox)
-        self.showSeriesCBox = QtWidgets.QComboBox(self.layoutWidget)
-        self.showSeriesCBox.setObjectName("showSeriesCBox")
-        self.showSeriesCBox.addItem("")
-        self.showSeriesCBox.addItem("")
-        self.showSeriesCBox.addItem("")
-        self.horizontalLayout.addWidget(self.showSeriesCBox)
-        self.hideXSCheckbox = QtWidgets.QCheckBox(self.layoutWidget)
-        self.hideXSCheckbox.setObjectName("hideXSCheckbox")
-        self.horizontalLayout.addWidget(self.hideXSCheckbox)
         spacerItem = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         self.horizontalLayout.addItem(spacerItem)
         self.graphLayout.addLayout(self.horizontalLayout)
@@ -206,10 +197,6 @@ class Ui_FmpSectionPropertyCheckDialog(object):
         self.resultsTabWidget.setTabText(self.resultsTabWidget.indexOf(self.banktopTab), _translate("FmpSectionPropertyCheckDialog", "Banktops"))
         self.resetPlotButton.setText(_translate("FmpSectionPropertyCheckDialog", "Reset plot"))
         self.showHoverCBox.setText(_translate("FmpSectionPropertyCheckDialog", "Show hover text"))
-        self.showSeriesCBox.setItemText(0, _translate("FmpSectionPropertyCheckDialog", "Flow"))
-        self.showSeriesCBox.setItemText(1, _translate("FmpSectionPropertyCheckDialog", "Stage"))
-        self.showSeriesCBox.setItemText(2, _translate("FmpSectionPropertyCheckDialog", "Both"))
-        self.hideXSCheckbox.setText(_translate("FmpSectionPropertyCheckDialog", "Hide XS"))
 from pyqtgraph import PlotWidget
 from qgsdoublespinbox import QgsDoubleSpinBox
 from qgsfilewidget import QgsFileWidget
