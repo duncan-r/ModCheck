@@ -167,7 +167,10 @@ def loadZzd(zzd_path):
             line_count += 1
     
     details['Run completed']['value'] = 'Yes' if run_completed else 'No'
-    has_errors = len(warnings['error']) > 0
+    has_errors = {
+        'errors': len(warnings['error']) > 0,
+        'warnings': len(warnings['warning']) > 0
+    }
     combo_warnings = warnings['error'] | warnings['warning']
     return details, combo_warnings, has_errors
 
@@ -377,35 +380,6 @@ class FoundFiles():
             except Exception as err:
                 is_valid = False
 
-            # TODO: Maybe should do a final check on loading the resolved layer here?
-            # Loading the layers is a big hit on performance
-            
-            # is_valid = False
-            # try:
-            #     gpkg_path = f"{f.resolved_path}|layername={f.gpkg_layer}"
-            #     vec = QgsVectorLayer(gpkg_path, "GPKG layer", "ogr")
-            #     if not vec.isValid():
-            #         # For the results files, TUFLOW seems to put _P/L/R on the end of the layer
-            #         # names within the .gpkg DB, but doesn't include them in the .tlf.
-            #         # Check if it's a results file and if it has an expected layer name end match
-            #         result_key = ''
-            #         for rk in self.GPKG_RESULTS_LOOKUP_KEYS:
-            #             if rk in f.gpkg_layer:
-            #                 result_key = rk
-            #                 break
-            #         if result_key:
-            #             for lookup in self.GPKG_RESULTS_LOOKUP[result_key]:
-            #                 temp_path = gpkg_path + lookup #self.GPKG_RESULTS_LOOKUP[rk][lookup]
-            #                 vec = QgsVectorLayer(temp_path, "GPKG layer", "ogr")
-            #                 if vec.isValid():
-            #                     is_valid = True
-            #                     break
-            #
-            #     else:
-            #         is_valid = True
-            # except Exception as err:
-            #     is_valid = False
-        
         if is_valid:
             return file_found_status, f
         else:
@@ -985,6 +959,7 @@ def readTlfFile(filepath):
     VARIABLE_PATTERN = '^\s*Set Variable[\s\w~]+==\s\w+'
     
     is_quadtree = False
+    in_runtime = False
     control_files = []
     params = {}
     variables = {}
@@ -1087,6 +1062,11 @@ def readTlfFile(filepath):
             split = cmatch.split(' == ')
             split[0] = split[0].strip().replace('Set Variable ', '')
             variables[split[0]] = split[1]
+            return True
+        return False
+    
+    def in_runtime_match(line):
+        if 'initialising run time summary' in line:
             return True
         return False
     
@@ -1240,6 +1220,20 @@ def readTlfFile(filepath):
                 if line == '': continue
                 summary_lines.append(line)
                 continue
+
+            # Mark as the summary section at the end of the file when we hit it
+            if line.startswith('SIMULATION SUMMARY'):
+                in_summary = True
+                continue
+            
+            # Don't need to do lots of expensive checks if we've reached the model run outputs.
+            # Skip lines until we hit the summary (above) which will handle parsing the info
+            # at the end of the file
+            if in_runtime:
+                continue
+            if in_runtime_match(line):
+                in_runtime = True
+                continue
             
             if reading_xs_match(line):
                 in_xs = True
@@ -1391,9 +1385,9 @@ def readTlfFile(filepath):
                     split = line.strip().split(': ')[1].strip()
                     params['Log Folder'] = split
                     
-                # Mark as the summary section at the end of the file when we hit it
-                elif line.startswith('SIMULATION SUMMARY'):
-                    in_summary = True
+                # # Mark as the summary section at the end of the file when we hit it
+                # elif line.startswith('SIMULATION SUMMARY'):
+                #     in_summary = True
                 
     # Process the details we need from the summary section
     # This can be handled better and neatened up, but a lot of it requires quite
@@ -1505,6 +1499,7 @@ class FmModel():
         self.has_zzd = False
         self.diagnostics = {'details': {}, 'warnings': {}}
         self.has_errors = False
+        self.has_warnings = False
         self.params = {'changed': {}, 'default': {}} 
         self.missing = []
         self.loaded = False
@@ -1628,9 +1623,11 @@ class FmModel():
             if f.extension.upper() == '.ZZD':
                 self.has_zzd = True
                 if f.resolved_path and f.resolved_path.is_file():
-                    details, warnings, self.has_errors = loadZzd(f.resolved_path)
+                    details, warnings, has_errors = loadZzd(f.resolved_path)
                     self.diagnostics['details'] = details
                     self.diagnostics['warnings'] = warnings
+                    self.has_errors = has_errors['errors']
+                    self.has_warnings = has_errors['warnings']
 
 
 class TuflowModel():
@@ -1690,6 +1687,11 @@ class TuflowModel():
     def has_errors(self):
         errors = self.warnings.get('errors', {})
         return len(errors) > 0
+
+    @property
+    def has_warnings(self):
+        errors = self.warnings.get('warnings', {})
+        return len(errors) > 0
     
     @property
     def run_summary(self):
@@ -1719,11 +1721,8 @@ class ModelChecker(QObject):
         self.found_files, iefs, tlfs = file_finder.auditModelFiles(self.model_root)
         self.loadIefFiles(iefs)
         self.loadTlfFiles(tlfs)
-        # self.ief_names = [f"FM  {ief.filepath.stem}" for ief in iefs]
-        # self.tlf_names = [f"TUFLOW  {tlf.filepath.stem}" for tlf in tlfs]
         self.tlf_names = [f"TUFLOW  {k}" for k, v in self.tuflow_models.items() if v.loaded]
         self.ief_names = [f"FM  {k}" for k, v in self.fm_models.items() if v.loaded]
-        i=0
         
     def modelSummaryInfo(self):
         summary_info = []
@@ -1740,6 +1739,7 @@ class ModelChecker(QObject):
                     'name': name,
                     'missing_files': 'Yes' if len(fm.missing) > 0 else 'No',
                     'non_defaults': 'Yes' if fm.has_non_defaults else 'No',
+                    'warnings': 'Yes' if fm.has_warnings else 'No',
                     'errors': 'Yes' if fm.has_errors else 'No',
                     'run_status': 'FINISHED' if fm.diagnostics['details']['Run completed']['value'] == 'Yes' else 'FAILED',
                 })
@@ -1756,6 +1756,7 @@ class ModelChecker(QObject):
                     'name': name,
                     'missing_files': 'Yes' if len(tuflow.missing) > 0 else 'No',
                     'non_defaults': 'Yes' if len(tuflow.non_defaults) > 0 else 'No',
+                    'warnings': 'Yes' if tuflow.has_warnings else 'No',
                     'errors': 'Yes' if tuflow.has_errors else 'No',
                     'run_status': tuflow.summary['Simulation'],
                 })

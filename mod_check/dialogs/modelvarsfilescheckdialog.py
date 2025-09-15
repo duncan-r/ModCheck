@@ -151,9 +151,11 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
                 self.allFilesModelsTable.setItem(row_position, 3, QTableWidgetItem(info['missing_files']))
                 self.allFilesModelsTable.setItem(row_position, 4, QTableWidgetItem(info['non_defaults']))
                 self.allFilesModelsTable.setItem(row_position, 5, QTableWidgetItem(info['errors']))
-                self.allFilesModelsTable.setItem(row_position, 6, QTableWidgetItem(info['run_status']))
+                self.allFilesModelsTable.setItem(row_position, 6, QTableWidgetItem(info['warnings']))
+                self.allFilesModelsTable.setItem(row_position, 7, QTableWidgetItem(info['run_status']))
             row_position += 1
 
+        self.allFilesModelsTable.resizeColumnsToContents()
         self.allFilesModelsTable.setSortingEnabled(True)
 
             
@@ -191,6 +193,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
             self.variablesTable.setItem(row_position, 3, QTableWidgetItem(params['default']))
             self.variablesTable.setItem(row_position, 4, QTableWidgetItem(params['description']))
             row_position += 1
+        self.variablesTable.resizeColumnsToContents()
         self.variablesTable.setSortingEnabled(True)
 
         self.modelFilesTable.setSortingEnabled(False)
@@ -204,6 +207,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
             self.modelFilesTable.setItem(row_position, 3, QTableWidgetItem(str(f.resolved_path)))
             self.modelFilesTable.setItem(row_position, 4, QTableWidgetItem(str(f.fullpath)))
             row_position += 1
+        self.modelFilesTable.resizeColumnsToContents()
         self.modelFilesTable.setSortingEnabled(True)
 
         self.modelFilesMissingTable.setSortingEnabled(False)
@@ -215,6 +219,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
             self.modelFilesMissingTable.setItem(row_position, 1, QTableWidgetItem(f.name))
             self.modelFilesMissingTable.setItem(row_position, 2, QTableWidgetItem(str(f.fullpath)))
             row_position += 1
+        self.modelFilesMissingTable.resizeColumnsToContents()
         self.modelFilesMissingTable.setSortingEnabled(True)
 
         self.diagnosticDetailsTable.setSortingEnabled(False)
@@ -226,6 +231,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
             self.diagnosticDetailsTable.setItem(row_position, 1, QTableWidgetItem(detail['value']))
             self.diagnosticDetailsTable.setItem(row_position, 2, QTableWidgetItem(detail['description']))
             row_position += 1
+        self.diagnosticDetailsTable.resizeColumnsToContents()
         self.diagnosticDetailsTable.setSortingEnabled(True)
 
         self.diagnosticWarningTable.setSortingEnabled(False)
@@ -237,6 +243,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
             self.diagnosticWarningTable.setItem(row_position, 1, QTableWidgetItem(str(warning['count'])))
             self.diagnosticWarningTable.setItem(row_position, 2, QTableWidgetItem(warning['info']))
             row_position += 1
+        self.diagnosticWarningTable.resizeColumnsToContents()
         self.diagnosticWarningTable.setSortingEnabled(True)
     
     def showTuflow(self, name):
@@ -271,6 +278,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
             self.variablesTable.setItem(row_position, 3, QTableWidgetItem(v['default']))
             self.variablesTable.setItem(row_position, 4, QTableWidgetItem(v['description']))
             row_position += 1
+        self.variablesTable.resizeColumnsToContents()
         self.variablesTable.setSortingEnabled(True)
         
         self.modelFilesTable.setSortingEnabled(False)
@@ -289,6 +297,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
             self.modelFilesTable.setItem(row_position, 3, QTableWidgetItem(str(f.resolved_path)))
             self.modelFilesTable.setItem(row_position, 4, QTableWidgetItem(str(f.fullpath)))
             row_position += 1
+        self.modelFilesTable.resizeColumnsToContents()
         self.modelFilesTable.setSortingEnabled(True)
 
         self.modelFilesMissingTable.setSortingEnabled(False)
@@ -305,6 +314,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
 
             self.modelFilesMissingTable.setItem(row_position, 2, QTableWidgetItem(str(f.fullpath)))
             row_position += 1
+        self.modelFilesMissingTable.resizeColumnsToContents()
         self.modelFilesMissingTable.setSortingEnabled(True)
         
         self.diagnosticDetailsTable.setSortingEnabled(False)
@@ -316,6 +326,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
             self.diagnosticDetailsTable.setItem(row_position, 1, QTableWidgetItem(str(detail)))
             self.diagnosticDetailsTable.setItem(row_position, 2, QTableWidgetItem(''))
             row_position += 1
+        self.diagnosticDetailsTable.resizeColumnsToContents()
         self.diagnosticDetailsTable.setSortingEnabled(True)
         
         self.diagnosticWarningTable.setSortingEnabled(False)
@@ -328,6 +339,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
             self.diagnosticWarningTable.setItem(row_position, 1, QTableWidgetItem(str(d['count'])))
             self.diagnosticWarningTable.setItem(row_position, 2, QTableWidgetItem(d['message']))
             row_position += 1
+        self.diagnosticWarningTable.resizeColumnsToContents()
         self.diagnosticWarningTable.setSortingEnabled(True)
     
     def showSummaryFiles(self, i):
@@ -346,6 +358,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
             self.allFilesSummaryTable.setItem(row_position, 1, QTableWidgetItem(content.filepath.stem))
             self.allFilesSummaryTable.setItem(row_position, 2, QTableWidgetItem(str(content.filepath.resolve())))
             row_position += 1
+        self.allFilesSummaryTable.resizeColumnsToContents()
         self.allFilesSummaryTable.setSortingEnabled(True)
         
         
