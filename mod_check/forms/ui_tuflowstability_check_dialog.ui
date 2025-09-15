@@ -17,7 +17,7 @@
    <item>
     <widget class="QTabWidget" name="mainTabWidget">
      <property name="currentIndex">
-      <number>0</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="mbTab">
       <attribute name="title">
@@ -371,14 +371,20 @@
          <item>
           <widget class="QLabel" name="label_5">
            <property name="text">
-            <string>TUFLOW dt.csv file</string>
+            <string>TUFLOW dt.csv folder</string>
            </property>
           </widget>
          </item>
          <item>
-          <widget class="QgsFileWidget" name="hpcFileWidget">
+          <widget class="QgsFileWidget" name="hpcFolderWidget">
            <property name="filter">
-            <string>*dt.csv</string>
+            <string/>
+           </property>
+           <property name="storageMode">
+            <enum>QgsFileWidget::GetDirectory</enum>
+           </property>
+           <property name="options">
+            <set>QFileDialog::ShowDirsOnly</set>
            </property>
           </widget>
          </item>
@@ -407,6 +413,9 @@
           </spacer>
          </item>
         </layout>
+       </item>
+       <item>
+        <widget class="QComboBox" name="hpcFileCBox"/>
        </item>
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_14" stretch="2,8">

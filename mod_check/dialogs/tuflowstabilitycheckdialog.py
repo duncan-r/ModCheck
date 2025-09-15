@@ -59,9 +59,9 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         hpc_folder = mrt_settings.loadProjectSetting(
             'hpc_folder', self.project.readPath('./temp')
         )
-        hpc_file = mrt_settings.loadProjectSetting(
-            'hpc_file', hpc_folder
-        )
+        # hpc_file = mrt_settings.loadProjectSetting(
+        #     'hpc_file', hpc_folder
+        # )
         self.mbFolderWidget.setStorageMode(QgsFileWidget.GetDirectory)
         self.mbFolderWidget.setFilePath(os.path.dirname(mb_folder))
         self.mbFolderWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'mb_folder'))
@@ -84,9 +84,9 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         self.mbShowDvolCheckbox.stateChanged.connect(self.graphMultipleResults)
         self.mbSummarySelectAllCheckbox.stateChanged.connect(self.summarySelectAll)
         
-        self.hpcFileWidget.setFilePath(hpc_file)
-        self.hpcFileWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'hpc_file'))
-        self.hpcReloadButton.clicked.connect(self.loadHpcFile)
+        self.hpcFolderWidget.setFilePath(hpc_folder)
+        self.hpcFolderWidget.fileChanged.connect(lambda i: self.fileChanged(i, 'hpc_folder'))
+        self.hpcReloadButton.clicked.connect(self.findHpcFiles)
         self.hpcUpdateGraphBtn.clicked.connect(self.updateHpcGraph)
         self.hpcDtStarRadioBtn.clicked.connect(self.updateHpcGraph)
         self.hpcDtRadioBtn.clicked.connect(self.updateHpcGraph)
@@ -95,6 +95,7 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
         self.hpcNdRadioBtn.clicked.connect(self.updateHpcGraph)
         self.hpcEffRadioBtn.clicked.connect(self.updateHpcGraph)
         self.hpcShowHoverCBox.stateChanged.connect(self.hpcShowHoverChanged)
+        self.hpcFileCBox.currentTextChanged.connect(self.loadHpcFile)
 
         self.mbSummaryTable.setContextMenuPolicy(Qt.CustomContextMenu)
         self.mbSummaryTable.customContextMenuRequested.connect(self._showIndividualMbPlot)
@@ -117,8 +118,9 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
             self.findMbFiles()
         elif caller == 'mb_file':
             self.loadMbFile()
-        elif caller == 'hpc_file':
-            self.loadHpcFile()
+        elif caller == 'hpc_folder':
+            self.findHpcFiles()
+            # self.loadHpcFile()
             
     def mbIndividualShowHoverChanged(self, checked):
         if checked:
@@ -352,16 +354,31 @@ class TuflowStabilityCheckDialog(DialogBase, tuflowstability_ui.Ui_TuflowStabili
                 graph_series, self.file_results, self.current_mb_filename
             )
             
-    def loadHpcFile(self):
-        hpc_path = mrt_settings.loadProjectSetting(
-            'hpc_file', self.project.readPath('./temp')
+    def findHpcFiles(self):
+        hpc_folder = mrt_settings.loadProjectSetting(
+            'hpc_folder', self.project.readPath('./temp')
         )
-
-        self.current_hpc_filename = os.path.split(hpc_path)[1]
         self.hpc_check = tmb_check.TuflowHpcCheck()
+        try:
+            hpc_names = self.hpc_check.findHpcFiles(hpc_folder)
+            self.hpcFileCBox.clear()
+            self.hpcFileCBox.addItems(hpc_names)
+        except IOError as err:
+            QMessageBox(self, "Failed to find HPC files", "Check that the folder exists: {}".format(err.args[0]))
+        
+    def loadHpcFile(self, fname):
+        
+        hpc_path = None
+        try:
+            hpc_path = self.hpc_check.hpc_files[fname]
+        except KeyError as err:
+            QMessageBox(self, "HPC file doesn't exist", "Try searching for files again {}".format(err.args[0]))
+            return
+        
         self._updateStatus('Loading file: {0}'.format(hpc_path))
         try:
             self.hpc_check.loadHpcFile(hpc_path)
+            self.current_hpc_filename = hpc_path
             self.updateHpcGraph()
         except Exception as err:
             self._updateStatus('File load error: {0}'.format(hpc_path))

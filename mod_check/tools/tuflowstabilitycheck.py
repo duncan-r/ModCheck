@@ -14,6 +14,7 @@
 import os
 import sys
 import csv
+from pathlib import Path
 from pprint import pprint
 from PyQt5 import QtCore
 import numpy as np
@@ -36,6 +37,7 @@ class TuflowHpcCheck(QtCore.QObject):
             'nd': (6, 'Nd'),
             'eff': (7, 'Efficiency'),
         }
+        self.hpc_files = {}
         
     def findHpcFiles(self, root_folder):
         """
@@ -50,7 +52,10 @@ class TuflowHpcCheck(QtCore.QObject):
                 if 'hpc.dt.csv' in filepath:
                     hpc_paths.append(filepath)
 
-        return hpc_paths
+        for hpc in hpc_paths:
+            newpath = Path(hpc)
+            self.hpc_files[newpath.name] = newpath
+        return list(self.hpc_files.keys())
     
     def seriesColumn(self, column_name):
         if not column_name in self.series_columns.keys():

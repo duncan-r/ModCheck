@@ -443,6 +443,7 @@ class HpcCheckIndividualGraphicsView():
         self.results = np.empty(1)
         self.title = ""
         self.show_hover = True
+        self.p1 = None
         
     def _mouseMoved(self, evt):
         if not self.show_hover:
@@ -465,10 +466,12 @@ class HpcCheckIndividualGraphicsView():
             else:
                 self.display_text.hide()
         
-    def setupPlot(self, series_meta, results, title):
-        self.series_types = series_meta
-        self.results = results
-        self.title = title
+    # def setupPlot(self, series_meta, results, title):
+    def updatePlot(self):
+        # self.series_types = series_meta
+        # self.results = results
+        # self.title = title
+        if self.p1: self.p1.clear()
         highlight = rgbToHex(self.highlight_color)
         
         series_1 = self.series_types[0]
@@ -480,16 +483,16 @@ class HpcCheckIndividualGraphicsView():
         
         pen = pg.mkPen(color=self.highlight_color, width=1)
         self.p1.getAxis('left').setPen(pen)
-        self.p1.getAxis('bottom').setPen(pen)
         self.p1.getAxis('left').enableAutoSIPrefix(False)
+        self.p1.getAxis('bottom').setPen(pen)
         
         self.p1.setContentsMargins(5,10,5,5)
-        self.p1.vb.sigResized.connect(self.updateViews)
         self.p1.scene().sigMouseMoved.connect(self._mouseMoved)
-        self.updatePlot()
+        # self.updatePlot()
         
-    def updatePlot(self):
-        self.p1.clear()
+    # def updatePlot(self):
+        # self.p1.clear()
+        self.p1.removeItem("hpc")
         highlight = rgbToHex(self.highlight_color)
         series_1 = self.series_types[0]
         series_1_name = self.series_types[1]
@@ -503,9 +506,10 @@ class HpcCheckIndividualGraphicsView():
                 tol_max = 0.3
 
         self.p1.plot(
-            self.results[:,1], self.results[:,series_1],
+            self.results[:,1], self.results[:,series_1], name="hpc",
             pen=({'color': "b", 'width': 1}), antialias=True
         )
+        self.p1.vb.autoRange()
 
         self.p1.getAxis('left').setLabel(series_1_name, color=highlight, **{'font-size': '10pt'})
         # self.p1.getAxis('left').setLabel(series_1_name, **{'font-size': '12pt', 'color': highlight})
@@ -520,24 +524,21 @@ class HpcCheckIndividualGraphicsView():
         )
         self.display_text.hide()
         self.gv.addItem(self.display_text)
-        self.p1.vb.autoRange()
-        # self.updateViews()
+        # self.p1.vb.autoRange()
         
-    def updateViews(self):
-        pass
     
     def drawPlot(self, series_meta, results, title=""):
-        do_setup = False
-        if not series_meta: do_setup = True
-        elif results.any(): do_setup = True
+        # do_setup = False
+        # if not series_meta: do_setup = True
+        # elif results.any(): do_setup = True
         
-        if do_setup:
-            self.setupPlot(series_meta, results, title)
-        else:
-            self.series_types = series_meta
-            self.results = results
-            self.title = title
-            self.updatePlot()
+        # if do_setup:
+        #     self.setupPlot(series_meta, results, title)
+        # else:
+        self.series_types = series_meta
+        self.results = results
+        self.title = title
+        self.updatePlot()
 
         
 class FmpStabilityGeometryGraphicsView():
