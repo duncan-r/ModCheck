@@ -6,7 +6,7 @@
 name=ModCheck
 qgisMinimumVersion=3.30
 description=Review, interrogation and assessment tools for hydraulic models
-version=0.3.0
+version=0.3.1
 author=Duncan Runnacles
 email=duncan.runnacles@edenvaleyoung.com
 
