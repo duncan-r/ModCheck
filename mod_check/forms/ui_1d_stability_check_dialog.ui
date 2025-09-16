@@ -171,32 +171,6 @@
       </widget>
      </item>
      <item>
-      <widget class="QLabel" name="label_6">
-       <property name="text">
-        <string>Show series</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QComboBox" name="showSeriesCBox">
-       <item>
-        <property name="text">
-         <string>Both</string>
-        </property>
-       </item>
-       <item>
-        <property name="text">
-         <string>Flow</string>
-        </property>
-       </item>
-       <item>
-        <property name="text">
-         <string>Stage</string>
-        </property>
-       </item>
-      </widget>
-     </item>
-     <item>
       <widget class="QLabel" name="label_10">
        <property name="text">
         <string>Timestep</string>
@@ -322,6 +296,32 @@
                 <property name="text">
                  <string>Reset graph</string>
                 </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_6">
+                <property name="text">
+                 <string>Show series</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QComboBox" name="showSeriesCBox">
+                <item>
+                 <property name="text">
+                  <string>Both</string>
+                 </property>
+                </item>
+                <item>
+                 <property name="text">
+                  <string>Flow</string>
+                 </property>
+                </item>
+                <item>
+                 <property name="text">
+                  <string>Stage</string>
+                 </property>
+                </item>
                </widget>
               </item>
               <item>
