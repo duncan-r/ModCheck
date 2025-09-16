@@ -317,7 +317,7 @@ class FoundFiles():
                 
     def checkFile(self, f, check_files, ignore_case=False):
         if f.filepath.is_file():
-            return self.FILE_EXISTS, f.filepath
+            return self.FILE_EXISTS, f
 
         for check in check_files:
             if ignore_case:
