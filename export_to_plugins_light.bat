@@ -8,6 +8,7 @@ REM xcopy /q /y ".\mod_check\forms.py" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS
 REM xcopy /q /y ".\mod_check\mod_check_dialog_base.py" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\mod_check\mod_check_dialog_base.py"
 REM xcopy /q /y ".\mod_check\mod_check_dialog_base.ui" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\mod_check\mod_check_dialog_base.ui"
 
+xcopy /q /y ".\mod_check\profiling.py" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\mod_check\profiling.py"
 xcopy /q /y ".\mod_check\menu.py" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\mod_check\menu.py"
 xcopy /q /y ".\mod_check\olddialogs.py" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\mod_check\olddialogs.py"
 xcopy /q /y ".\mod_check\mod_check.py" "C:\Users\ermev\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins\mod_check\mod_check.py"

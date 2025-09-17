@@ -1170,6 +1170,10 @@ def readTlfFile(filepath):
         for k, v in params.items():
             if k.lower() == 'start 2d domain':
                 output['2D Domains'].append(v)
+            # elif k.lower() == 'bc event source':
+            #     variables.append(('BC Event Source', v))
+            # elif k.lower() == 'bc event text':
+            #     variables.append(('BC Event Text', v))
             else:
                 output[k] = v
 
@@ -1182,15 +1186,21 @@ def readTlfFile(filepath):
         variables = []
         scenarios = []
         for k, v in vars.items():
+            # Don't get the 'default' values without a number. They're the same as the '~s1~' or
+            # '~e1~' values anyway. Ignore so we don't get duplicates.
             if k.lower() == '~s~' or k.lower() == '~e~': continue
             if '~' in k:
-                scenarios.append({f'{k}': f'{v}'})
+                scenarios.append((f'{k}', f'{v}'))
+            elif k == 'BC Event Source':
+                variables.append((k, v))
             else:
-                variables.append({f'<<{k}>>': f'{v}'})
+                variables.append((f'<<{k}>>', f'{v}'))
         return variables, scenarios 
 
 
     entry_tcf = ''
+    home_folder = ''
+    home_found = False
     control_file_types = ['.tcf', '.ecf', '.tgc', '.tbc', '.tmf', '.tef', '.trf', '.tlf']
     param_lookup = [
         'bc database', 'bc event name', 'bc event source', 'start time (h)', 'end time (h)',
@@ -1251,13 +1261,25 @@ def readTlfFile(filepath):
             if ending_tbc_match(line):
                 in_tbc = False
             
-            # Must catch this first or will be picked up by the control file regex 
-            # Can have multiple tcfs, but only one 'main' entry point
-            if line.startswith('Reading .tcf File .. '):
-                line = line.replace('Reading .tcf File .. ', '')
-                # entry_tcf = line.strip()
-                entry_tcf = TuflowFile(line.strip(), parent_type='Root')
-                continue
+            if not home_found:
+                # Must catch this first or will be picked up by the control file regex 
+                # Can have multiple tcfs, but only one 'main' entry point
+                if line.startswith('Reading .tcf File .. '):
+                    line = line.replace('Reading .tcf File .. ', '')
+                    entry_tcf = TuflowFile(line.strip(), parent_type='Root')
+                    continue
+                
+                # Root path (tcf directory) for the model
+                if line.startswith('Home Folder:'):
+                    home_folder = Path(line.strip()[13:])
+                    
+                    # Sometimes (rarely) tcfs can be a name only (don't know why, possibly only
+                    # happens in older versions of TUFLOW?). If it is, we join it to the home 
+                    # folder to create a full path. As far as I know, this always comes after the 
+                    # "Reading .tcf File" line
+                    if entry_tcf and not entry_tcf.filepath.is_absolute():
+                        entry_tcf = home_folder / entry_tcf
+                    home_found = True
                     
             # Pick up control files (tcf, tgc, etc)
             if control_file_match(control_file_regex, line):
@@ -1327,11 +1349,21 @@ def readTlfFile(filepath):
                     command = line.replace(' == ', '')
                     var = ''
 
-                if command == 'BC Database':
-                    # control_files.append(os.path.split(var)[1])
-                    if var not in found_files['control']:
-                        found_files['control'].append(var)
-                        control_files.append(TuflowFile(var, parent_type='TCF'))
+                if command.startswith('BC'):
+                    if command == 'BC Database':
+                        # control_files.append(os.path.split(var)[1])
+                        if var not in found_files['control']:
+                            found_files['control'].append(var)
+                            control_files.append(TuflowFile(var, parent_type='TCF'))
+                            
+                    elif command == 'BC Event Source':
+                        splitvar = var.split('|')
+                        if not 'BC Event Source' in variables.keys():
+                            variables['BC Event Source'] = {}
+                        variables['BC Event Source'][splitvar[0].strip()] = splitvar[1].strip()
+
+                    elif command == 'BC Event Text':
+                        variables.append(('BC Event Text', var))
 
                 elif command.lower() in param_lookup:
                     params[command] = var
@@ -1445,6 +1477,7 @@ def readTlfFile(filepath):
     # Create the output dictionary
     variables, scenarios = format_variables(variables)
     final_files = {
+        'home_folder': home_folder,
         'resolved_name': summary['resolved_name'],
         'entry_tcf': entry_tcf,
         'control': control_type_setter(control_files), 
@@ -1650,6 +1683,7 @@ class TuflowModel():
     
     def readTlf(self):
         tlf = readTlfFile(self.tlf_path)
+        self.home_folder = tlf['home_folder']
         self.resolved_name = tlf['resolved_name']
         self.tcf = tlf['entry_tcf']
         self.control_files = tlf['control']

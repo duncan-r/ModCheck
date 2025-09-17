@@ -182,6 +182,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
         if not fm.loaded:
             return
 
+        # VARIABLES
         self.variablesTable.setSortingEnabled(False)
         row_position = 0
         self.variablesTable.setRowCount(row_position)
@@ -196,6 +197,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
         self.variablesTable.resizeColumnsToContents()
         self.variablesTable.setSortingEnabled(True)
 
+        # FILES
         self.modelFilesTable.setSortingEnabled(False)
         row_position = 0
         self.modelFilesTable.setRowCount(row_position)
@@ -210,6 +212,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
         self.modelFilesTable.resizeColumnsToContents()
         self.modelFilesTable.setSortingEnabled(True)
 
+        # MISSING FILES
         self.modelFilesMissingTable.setSortingEnabled(False)
         row_position = 0
         self.modelFilesMissingTable.setRowCount(row_position)
@@ -222,6 +225,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
         self.modelFilesMissingTable.resizeColumnsToContents()
         self.modelFilesMissingTable.setSortingEnabled(True)
 
+        # DIAGNOSTICS - VARIABLES / CONFIGURATION
         self.diagnosticDetailsTable.setSortingEnabled(False)
         row_position = 0
         self.diagnosticDetailsTable.setRowCount(row_position)
@@ -234,6 +238,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
         self.diagnosticDetailsTable.resizeColumnsToContents()
         self.diagnosticDetailsTable.setSortingEnabled(True)
 
+        # DIAGNOSTICS - WARNINGS / ERRORS
         self.diagnosticWarningTable.setSortingEnabled(False)
         row_position = 0
         self.diagnosticWarningTable.setRowCount(row_position)
@@ -257,18 +262,19 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
         if not tuflow.loaded:
             return
 
+        # VARIABLES
         self.variablesTable.setSortingEnabled(False)
         row_position = 0
         self.variablesTable.setRowCount(row_position)
         for var in tuflow.all_variables:
-            for k, v in var.items():
-                self.variablesTable.insertRow(row_position)
-                self.variablesTable.setItem(row_position, 0, QTableWidgetItem(k))
-                self.variablesTable.setItem(row_position, 1, QTableWidgetItem(''))
-                self.variablesTable.setItem(row_position, 2, QTableWidgetItem(str(v)))
-                self.variablesTable.setItem(row_position, 3, QTableWidgetItem(''))
-                self.variablesTable.setItem(row_position, 4, QTableWidgetItem(''))
-                row_position += 1
+            # for k, v in var.items():
+            self.variablesTable.insertRow(row_position)
+            self.variablesTable.setItem(row_position, 0, QTableWidgetItem(var[0]))
+            self.variablesTable.setItem(row_position, 1, QTableWidgetItem(''))
+            self.variablesTable.setItem(row_position, 2, QTableWidgetItem(str(var[1])))
+            self.variablesTable.setItem(row_position, 3, QTableWidgetItem(''))
+            self.variablesTable.setItem(row_position, 4, QTableWidgetItem(''))
+            row_position += 1
 
         for k, v in tuflow.non_defaults.items():
             self.variablesTable.insertRow(row_position)
@@ -281,6 +287,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
         self.variablesTable.resizeColumnsToContents()
         self.variablesTable.setSortingEnabled(True)
         
+        # FILES
         self.modelFilesTable.setSortingEnabled(False)
         row_position = 0
         self.modelFilesTable.setRowCount(row_position)
@@ -300,6 +307,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
         self.modelFilesTable.resizeColumnsToContents()
         self.modelFilesTable.setSortingEnabled(True)
 
+        # MISSING FILES
         self.modelFilesMissingTable.setSortingEnabled(False)
         row_position = 0
         self.modelFilesMissingTable.setRowCount(row_position)
@@ -317,6 +325,7 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
         self.modelFilesMissingTable.resizeColumnsToContents()
         self.modelFilesMissingTable.setSortingEnabled(True)
         
+        # DIAGNOSTICS - VARIABLES / CONFIGURATION
         self.diagnosticDetailsTable.setSortingEnabled(False)
         row_position = 0
         self.diagnosticDetailsTable.setRowCount(row_position)
@@ -329,11 +338,11 @@ class ModelVarsFilesCheckDialog(DialogBase, modelcheck_ui.Ui_ModelVarsFilesCheck
         self.diagnosticDetailsTable.resizeColumnsToContents()
         self.diagnosticDetailsTable.setSortingEnabled(True)
         
+        # DIAGNOSTICS - WARNINGS / ERRORS
         self.diagnosticWarningTable.setSortingEnabled(False)
         row_position = 0
         self.diagnosticWarningTable.setRowCount(row_position)
         for d in tuflow.diagnostics:
-            # for k, d in dtype.items():
             self.diagnosticWarningTable.insertRow(row_position)
             self.diagnosticWarningTable.setItem(row_position, 0, QTableWidgetItem(d['type']))
             self.diagnosticWarningTable.setItem(row_position, 1, QTableWidgetItem(str(d['count'])))

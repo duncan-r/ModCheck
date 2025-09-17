@@ -483,12 +483,16 @@ or not. The following classification is used:
 - "No (1)": The file has a strong match and is very likely the correct one. 
 - "No (2)": The file has a good match and is quite likely the correct one. 
 - "No (3)": The file name matched, but nothing else. Double-check these. 
+- "No (GPKG)": The .gpkg database was found, but the layer is missing.
 
 The classification is based on the number of parent directories. The more
 parent matches, the greater the certainty that the file is in the correct
 location, it's just on a different computer (as expected). If only the file name
 matches ("No (3)"), it is either a top level file in the chosen folder, or it
 has been moved / misplaced within the folder hierachy.
+The "No (GPKG)" classification will (should!) only occur in models that use the 
+Geopackage format. It notes that the Geopackage database exists, but the 
+referenced layer name could not be found in the database. 
 
 
 Variables tab:
